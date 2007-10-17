@@ -1,0 +1,48 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## moo.dpatch by Alexander Wirt <formorer@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Add moo feature
+
+@DPATCH@
+diff -urNad iproute-20060323~/ip/ip.c iproute-20060323/ip/ip.c
+--- iproute-20060323~/ip/ip.c	2006-01-10 19:43:32.000000000 +0100
++++ iproute-20060323/ip/ip.c	2006-09-08 18:33:17.000000000 +0200
+@@ -46,7 +46,7 @@
+ "Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n"
+ "       ip [ -force ] [-batch filename\n"
+ "where  OBJECT := { link | addr | route | rule | neigh | ntable | tunnel |\n"
+-"                   maddr | mroute | monitor | xfrm }\n"
++"                   maddr | mroute | monitor | xfrm | moo }\n"
+ "       OPTIONS := { -V[ersion] | -s[tatistics] | -r[esolve] |\n"
+ "                    -f[amily] { inet | inet6 | ipx | dnet | link } |\n"
+ "                    -o[neline] | -t[imestamp] }\n");
+@@ -58,6 +58,20 @@
+ 	usage();
+ }
+ 
++static int do_moo(int argc, char **argv)
++{
++	
++fprintf(stderr,
++"\n"
++" _ __ ___   ___   ___\n"
++"| '_ ` _ \\ / _ \\ / _ \\\n"
++"| | | | | | (_) | (_) |\n"
++"|_| |_| |_|\\___/ \\___/\n"
++"\n\n"
++"P.S. no real cows were harmed for this moo\n");
++	exit(1);
++}
++                       
+ static const struct cmd {
+ 	const char *cmd;
+ 	int (*func)(int argc, char **argv);
+@@ -77,6 +91,7 @@
+ 	{ "xfrm",	do_xfrm },
+ 	{ "mroute",	do_multiroute },
+ 	{ "help",	do_help },
++	{ "moo",	do_moo }, 
+ 	{ 0 }
+ };
+ 

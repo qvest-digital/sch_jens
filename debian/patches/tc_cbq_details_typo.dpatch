@@ -1,0 +1,19 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## tc_cbq_details_typo.dpatch by  <formorer@lisa.springfield.lan>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description.
+
+@DPATCH@
+diff -urNad iproute-20070313~/man/man8/tc-cbq-details.8 iproute-20070313/man/man8/tc-cbq-details.8
+--- iproute-20070313~/man/man8/tc-cbq-details.8	2007-06-10 19:25:18.000000000 +0200
++++ iproute-20070313/man/man8/tc-cbq-details.8	2007-06-10 19:25:58.000000000 +0200
+@@ -210,7 +210,7 @@
+ priority. If found, choose it, and terminate.
+ .TP
+ (iii)
+-Choose the class at which break out to the fallback algorithm occured. Terminate.
++Choose the class at which break out to the fallback algorithm occurred. Terminate.
+ .P
+ The packet is enqueued to the class which was chosen when either algorithm 
+ terminated. It is therefore possible for a packet to be enqueued *not* at a

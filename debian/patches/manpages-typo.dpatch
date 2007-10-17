@@ -1,0 +1,44 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## manpages-typo.dpatch by Alexander Wirt <formorer@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description.
+
+@DPATCH@
+diff -urNad iproute-20061002~/man/man8/tc-prio.8 iproute-20061002/man/man8/tc-prio.8
+--- iproute-20061002~/man/man8/tc-prio.8	2006-10-15 17:06:41.000000000 +0200
++++ iproute-20061002/man/man8/tc-prio.8	2006-10-15 17:10:52.000000000 +0200
+@@ -30,7 +30,7 @@
+ On creation with 'tc qdisc add', a fixed number of bands is created. Each
+ band is a class, although is not possible to add classes with 'tc qdisc
+ add', the number of bands to be created must instead be specified on the
+-commandline attaching PRIO to its root.
++command line attaching PRIO to its root.
+ 
+ When dequeueing, band 0 is tried first and only if it did not deliver a
+ packet does PRIO try band 1, and so onwards. Maximum reliability packets
+@@ -88,7 +88,7 @@
+ The four TOS bits (the 'TOS field') are defined as:
+ 
+ .nf
+-Binary Decimcal  Meaning
++Binary Decimal  Meaning
+ -----------------------------------------
+ 1000   8         Minimize delay (md)
+ 0100   4         Maximize throughput (mt)
+@@ -125,13 +125,13 @@
+ 
+ The second column contains the value of the relevant
+ four TOS bits, followed by their translated meaning. For example, 15 stands
+-for a packet wanting Minimal Montetary Cost, Maximum Reliability, Maximum
++for a packet wanting Minimal Monetary Cost, Maximum Reliability, Maximum
+ Throughput AND Minimum Delay. 
+ 
+ The fourth column lists the way the Linux kernel interprets the TOS bits, by
+ showing to which Priority they are mapped.
+ 
+-The last column shows the result of the default priomap. On the commandline,
++The last column shows the result of the default priomap. On the command line,
+ the default priomap looks like this:
+ 
+     1, 2, 2, 2, 1, 2, 0, 0 , 1, 1, 1, 1, 1, 1, 1, 1

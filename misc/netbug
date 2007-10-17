@@ -1,23 +1,16 @@
 #! /bin/bash
 
+set -e
+
 echo -n "Send network configuration summary to [ENTER means kuznet@ms2.inr.ac.ru] "
 IFS="" read mail || exit 1
 [ -z "$mail" ] && mail=kuznet@ms2.inr.ac.ru
 
+netbug=`mktemp -d -t netbug.XXXXXX` || {echo "$0: Cannot create temporary directory" >&2; exit 1;  }
+netbugtar=`tempfile -d $netbug --suffix=tar.gz` || {echo "$0: Cannot create temporary file" >&2; exit 1;  }
+tmppath=$netbug
+trap "/bin/rm -rf $netbug $netbugtar" 0 1 2 3 13 15
 
-netbug=""
-while [ "$netbug" = "" ]; do
-	netbug=`echo netbug.$$.$RANDOM`
-	if [ -e /tmp/$netbug ]; then
-		netbug=""
-	fi
-done
-
-tmppath=/tmp/$netbug
-
-trap "rm -rf $tmppath $tmppath.tar.gz" 0 SIGINT
-
-mkdir $tmppath
 mkdir $tmppath/net
 
 cat /proc/slabinfo > $tmppath/slabinfo
@@ -44,9 +37,8 @@ if [ -e /proc/net/tcp6 ]; then
 fi
 
 cd /tmp
-tar c $netbug | gzip -9c > $netbug.tar.gz
-
-uuencode $netbug.tar.gz $netbug.tar.gz | mail -s $netbug "$mail"
+tar c $tmppath | gzip -9c > $netbugtar
+uuencode $netbugtar $netbugtar | mail -s $netbug "$mail"
 
 echo "Sending to <$mail>; subject is $netbug"
 

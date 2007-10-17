@@ -1,0 +1,19 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## ip_route_usage.dpatch by Alexander Wirt <formorer@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description.
+
+@DPATCH@
+diff -urNad iproute-20061002~/ip/iproute.c iproute-20061002/ip/iproute.c
+--- iproute-20061002~/ip/iproute.c	2006-10-15 16:44:25.000000000 +0200
++++ iproute-20061002/ip/iproute.c	2006-10-15 16:50:29.000000000 +0200
+@@ -73,7 +73,7 @@
+ 	fprintf(stderr, "OPTIONS := FLAGS [ mtu NUMBER ] [ advmss NUMBER ]\n");
+ 	fprintf(stderr, "           [ rtt NUMBER ] [ rttvar NUMBER ]\n");
+ 	fprintf(stderr, "           [ window NUMBER] [ cwnd NUMBER ] [ initcwnd NUMBER ]\n");
+-	fprintf(stderr, "           [ ssthresh NUMBER ] [ realms REALM ]\n");
++	fprintf(stderr, "           [ ssthresh NUMBER ] [ realms REALM ] [ src ADDRESS ]\n");
+ 	fprintf(stderr, "TYPE := [ unicast | local | broadcast | multicast | throw |\n");
+ 	fprintf(stderr, "          unreachable | prohibit | blackhole | nat ]\n");
+ 	fprintf(stderr, "TABLE_ID := [ local | main | default | all | NUMBER ]\n");

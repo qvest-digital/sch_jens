@@ -1,0 +1,47 @@
+#! /bin/sh -e
+## 
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: add references to lartc
+## DP: also drop bogus reference to tc-filters
+
+[ -f debian/patches/00patch-opts ] && . debian/patches/00patch-opts
+patch_opts="${patch_opts:--f --no-backup-if-mismatch}"
+
+if [ $# -ne 1 ]; then
+    echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+    exit 1
+fi
+case "$1" in
+       -patch) patch $patch_opts -p1 < $0;;
+       -unpatch) patch $patch_opts -p1 -R < $0;;
+        *)
+                echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+                exit 1;;
+esac
+
+exit 0
+@DPATCH@
+diff -urNad iproute-20041019/tc/normal.c /tmp/dpep.9YHbob/iproute-20041019/tc/normal.c
+--- iproute-20041019/tc/normal.c	2004-10-19 14:49:02.000000000 -0600
++++ /tmp/dpep.9YHbob/iproute-20041019/tc/normal.c	2005-09-06 15:48:45.000000000 -0600
+@@ -26,7 +26,7 @@
+ 	double x, *table;
+ 	int i, n;
+ 
+-	table = calloc(sizeof(double), TABLESIZE);
++	table = calloc(TABLESIZE+1, sizeof(double));
+ 	if (!table) {
+ 		fprintf(stderr, "Not enough memory\n");
+ 		return 1;
+diff -urNad iproute-20041019/tc/paretonormal.c /tmp/dpep.9YHbob/iproute-20041019/tc/paretonormal.c
+--- iproute-20041019/tc/paretonormal.c	2004-10-19 14:49:02.000000000 -0600
++++ /tmp/dpep.9YHbob/iproute-20041019/tc/paretonormal.c	2005-09-06 15:49:01.000000000 -0600
+@@ -54,7 +54,7 @@
+ 	double *table;
+ 	int i,n;
+ 
+-	table = calloc(TABLESIZE, sizeof(double));
++	table = calloc(TABLESIZE+1, sizeof(double));
+ 	if (!table) {
+ 		fprintf(stderr, "Out of memory!\n");
+ 		exit(1);

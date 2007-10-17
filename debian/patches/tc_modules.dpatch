@@ -1,0 +1,19 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## tc_modules.dpatch by  <formorer@lisa.springfield.lan>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description.
+
+@DPATCH@
+diff -urNad iproute-20070313~/include/iptables.h iproute-20070313/include/iptables.h
+--- iproute-20070313~/include/iptables.h	2007-03-13 22:50:56.000000000 +0100
++++ iproute-20070313/include/iptables.h	2007-06-10 17:56:38.000000000 +0200
+@@ -5,7 +5,7 @@
+ #include "libiptc/libiptc.h"
+ 
+ #ifndef IPT_LIB_DIR
+-#define IPT_LIB_DIR "/usr/local/lib/iptables"
++#define IPT_LIB_DIR "/lib/iptables"
+ #endif
+ 
+ #ifndef IPPROTO_SCTP

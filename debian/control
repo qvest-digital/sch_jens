@@ -1,0 +1,42 @@
+Source: iproute
+Section: net
+Priority: optional
+Maintainer: Alexander Wirt <formorer@debian.org>
+Uploaders: Andreas Barth <aba@not.so.argh.org>
+Standards-Version: 3.7.2.0
+Build-Depends: texlive-latex-base, texlive-latex-recommended, libatm1-dev, bison, libdb4.3-dev, linuxdoc-tools, linux-kernel-headers, debhelper (>= 5), lynx, dpatch, flex
+
+Package: iproute
+Architecture: any
+Provides: arpd
+Conflicts: arpd
+Depends: ${shlibs:Depends}
+Suggests: iproute-doc
+Description: Professional tools to control the networking in Linux kernels
+ This is `iproute', the professional set of tools to control the
+ networking behavior in kernels 2.2.x and later.
+ .
+ At least, the options CONFIG_NETLINK and CONFIG_NETLINK_DEV (or
+ CONFIG_RTNETLINK) must be compiled into the running kernel.
+ .
+ This package is also known as iproute2 upstream and in some
+ documentation.
+
+Package: iproute-doc
+Section: doc
+Architecture: any
+Description: Professional tools to control the networking in Linux kernels
+ This package contains the documentation for the iproute package. 
+ .
+ iproute is the professional set of tools to control the
+ networking behavior in kernels 2.2.x and late
+
+Package: iproute-dev
+Section: libdevel
+Architecture: any
+Description: Development package for iproute
+ This package contains the header files and static libs for developing
+ iproute additions. iproute is the professional set of tools to control the
+ networking behavior in kernels 2.2.x and later.
+ .
+ You don't need this package unless doing development.

@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+
+# created by Andreas Barth <aba@not.so.argh.org> 2004
+
+build: build-arch
+
+include /usr/share/dpatch/dpatch.make
+
+clean: clean-patched unpatch
+clean-patched:
+	-rm stamp-build
+	dh_testdir
+	dh_testroot
+	dh_clean
+	make clean
+
+binary: binary-indep binary-arch
+
+binary-indep build-indep:
+
+binary-arch: build-arch
+	dh_testdir
+	dh_testroot
+	dh_install --fail-missing
+	dh_link
+	dh_installexamples -p iproute-doc examples/*
+	dh_installman
+	dh_installdocs
+	dh_installchangelogs
+	dh_compress
+	dh_strip
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_builddeb
+
+build-arch: stamp-build
+stamp-build: patch
+	$(MAKE) KERNEL_INCLUDE=./include
+	$(MAKE) -C doc all txt
+	touch stamp-build
+
+.PHONY: build binary binary-arch binary-indep clean

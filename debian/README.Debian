@@ -1,0 +1,7 @@
+This version of "iproute" includes the HTB Linux queuing discipline
+explained in http://luxik.cdi.cz/~devik/qos/htb/
+
+You need kernel version 2.4.21 or newer in order to use it.
+
+Please see the Advanced Routing HOWTO on http://lartc.org/ for lots
+of hints.

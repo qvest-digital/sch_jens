@@ -20,10 +20,10 @@ esac
 
 exit 0
 @DPATCH@
-diff -urN iproute-20041019.orig/include/linux/pkt_sched.h iproute-20041019/include/linux/pkt_sched.h
---- iproute-20041019.orig/include/linux/pkt_sched.h	2005-01-06 00:42:42.000000000 +0100
-+++ iproute-20041019/include/linux/pkt_sched.h	2005-01-06 00:38:06.000000000 +0100
-@@ -837,4 +837,116 @@
+diff -urNad pkg-iproute~/include/linux/pkt_sched.h pkg-iproute/include/linux/pkt_sched.h
+--- pkg-iproute~/include/linux/pkt_sched.h	2007-10-18 14:04:18.000000000 +0200
++++ pkg-iproute/include/linux/pkt_sched.h	2007-10-18 14:05:10.000000000 +0200
+@@ -881,4 +881,116 @@
  
  #define NETEM_DIST_SCALE	8192
  
@@ -140,20 +140,20 @@ diff -urN iproute-20041019.orig/include/linux/pkt_sched.h iproute-20041019/inclu
 +};
 +
  #endif
-diff -urN iproute-20041019.orig/tc/Makefile iproute-20041019/tc/Makefile
---- iproute-20041019.orig/tc/Makefile	2004-10-19 22:49:02.000000000 +0200
-+++ iproute-20041019/tc/Makefile	2005-01-06 00:33:47.000000000 +0100
-@@ -10,6 +10,7 @@
+diff -urNad pkg-iproute~/tc/Makefile pkg-iproute/tc/Makefile
+--- pkg-iproute~/tc/Makefile	2007-10-18 11:48:11.000000000 +0200
++++ pkg-iproute/tc/Makefile	2007-10-18 14:05:43.000000000 +0200
+@@ -11,6 +11,7 @@
  TCMODULES += q_prio.o
  TCMODULES += q_tbf.o
  TCMODULES += q_cbq.o
 +TCMODULES += q_wrr.o
+ TCMODULES += q_netem.o
  TCMODULES += f_rsvp.o
  TCMODULES += f_u32.o
- TCMODULES += f_route.o
-diff -urN iproute-20041019.orig/tc/q_wrr.c iproute-20041019/tc/q_wrr.c
---- iproute-20041019.orig/tc/q_wrr.c	1970-01-01 01:00:00.000000000 +0100
-+++ iproute-20041019/tc/q_wrr.c	2005-01-06 00:34:06.000000000 +0100
+diff -urNad pkg-iproute~/tc/q_wrr.c pkg-iproute/tc/q_wrr.c
+--- pkg-iproute~/tc/q_wrr.c	1970-01-01 01:00:00.000000000 +0100
++++ pkg-iproute/tc/q_wrr.c	2007-10-18 14:05:10.000000000 +0200
 @@ -0,0 +1,322 @@
 +#include <stdio.h>
 +#include <stdlib.h>

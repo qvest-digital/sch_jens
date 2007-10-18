@@ -5,19 +5,10 @@
 ## DP: Add moo feature
 
 @DPATCH@
-diff -urNad iproute-20060323~/ip/ip.c iproute-20060323/ip/ip.c
---- iproute-20060323~/ip/ip.c	2006-01-10 19:43:32.000000000 +0100
-+++ iproute-20060323/ip/ip.c	2006-09-08 18:33:17.000000000 +0200
-@@ -46,7 +46,7 @@
- "Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n"
- "       ip [ -force ] [-batch filename\n"
- "where  OBJECT := { link | addr | route | rule | neigh | ntable | tunnel |\n"
--"                   maddr | mroute | monitor | xfrm }\n"
-+"                   maddr | mroute | monitor | xfrm | moo }\n"
- "       OPTIONS := { -V[ersion] | -s[tatistics] | -r[esolve] |\n"
- "                    -f[amily] { inet | inet6 | ipx | dnet | link } |\n"
- "                    -o[neline] | -t[imestamp] }\n");
-@@ -58,6 +58,20 @@
+diff -urNad pkg-iproute~/ip/ip.c pkg-iproute/ip/ip.c
+--- pkg-iproute~/ip/ip.c	2007-10-18 11:48:11.000000000 +0200
++++ pkg-iproute/ip/ip.c	2007-10-18 14:14:20.000000000 +0200
+@@ -59,6 +59,20 @@
  	usage();
  }
  
@@ -38,7 +29,7 @@ diff -urNad iproute-20060323~/ip/ip.c iproute-20060323/ip/ip.c
  static const struct cmd {
  	const char *cmd;
  	int (*func)(int argc, char **argv);
-@@ -77,6 +91,7 @@
+@@ -78,6 +92,7 @@
  	{ "xfrm",	do_xfrm },
  	{ "mroute",	do_multiroute },
  	{ "help",	do_help },

@@ -16,11 +16,16 @@ iproute (20071016-1) UNRELEASED; urgency=low
   * Update patches to apply:
     - wrr-qdisc, moo, ip_route_usage
   * Don't install removed netbug script.
+  * Fix corruption when using batch files with comments and broken
+    lines. (cherry-picked from upstream. Closes: #398912)
 
   [ Ben Finney ]
   * Add dh_md5sums to generate md5sums control file (Closes: #439439)
 
- -- Andreas Henriksson <andreas@fatal.se>  Thu, 18 Oct 2007 19:53:43 +0200
+  [ Justin Pryzby ]
+  * ss(8) manpage formatting breaks EXAMPLE (Closes: #443071)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 18 Oct 2007 20:10:16 +0200
 
 iproute (20070313-1) unstable; urgency=low
 

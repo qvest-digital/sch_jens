@@ -1,3 +1,18 @@
+iproute (20071016-1) UNRELEASED; urgency=low
+
+  [ Andreas Henriksson ]
+  * New upstream release (v2.6.23 aka snapshot 071016)
+    - time2tick overflow patch applied upstream (Closes: #175462)
+    - tc ematch cmp/nbyte help patch applied upstream (Closes: #438653)
+    - mpath support dropped upstream (Closes: #428440, #428442)
+  * Drop patches which has been applied upstream or deprecated by
+    upstream changes.
+    - debian/patches/lartc applied upstream.
+    - debian/patches/netbug_fix deprecated, upstream dropped netbug script.
+    - debian/patches/empty_linkname.dpatch deprecated, fixed upstream.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 18 Oct 2007 12:02:41 +0200
+
 iproute (20070313-1) unstable; urgency=low
 
   * New upstream release

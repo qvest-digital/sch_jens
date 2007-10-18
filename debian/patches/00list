@@ -1,15 +1,12 @@
 ip.8-typo
-lartc
 okey-ikey
 wrr-qdisc
-netbug_fix
 ip_rule_usage.dpatch
 manpages-typo.dpatch
 ip_address
 tc_modules.dpatch
 moo.dpatch
 ip_route_usage.dpatch
-empty_linkname.dpatch
 ip_address_flush_loop.dpatch
 tc_cbq_details_typo.dpatch
 libnetlink_typo.dpatch

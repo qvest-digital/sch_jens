@@ -28,7 +28,6 @@
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <linux/in_route.h>
-#include <linux/ip_mp_alg.h>
 
 #include "rt_names.h"
 #include "utils.h"
@@ -51,6 +50,7 @@ static const char *mx_names[RTAX_MAX+1] = {
 	[RTAX_HOPLIMIT] = "hoplimit",
 	[RTAX_INITCWND] = "initcwnd",
 	[RTAX_FEATURES] = "features",
+	[RTAX_RTO_MIN]	= "rto_min",
 };
 static void usage(void) __attribute__((noreturn));
 
@@ -67,13 +67,13 @@ static void usage(void)
 	fprintf(stderr, "NODE_SPEC := [ TYPE ] PREFIX [ tos TOS ]\n");
 	fprintf(stderr, "             [ table TABLE_ID ] [ proto RTPROTO ]\n");
 	fprintf(stderr, "             [ scope SCOPE ] [ metric METRIC ]\n");
-	fprintf(stderr, "             [ mpath MP_ALGO ]\n");
 	fprintf(stderr, "INFO_SPEC := NH OPTIONS FLAGS [ nexthop NH ]...\n");
 	fprintf(stderr, "NH := [ via ADDRESS ] [ dev STRING ] [ weight NUMBER ] NHFLAGS\n");
 	fprintf(stderr, "OPTIONS := FLAGS [ mtu NUMBER ] [ advmss NUMBER ]\n");
-	fprintf(stderr, "           [ rtt NUMBER ] [ rttvar NUMBER ]\n");
+	fprintf(stderr, "           [ rtt TIME ] [ rttvar TIME ]\n");
 	fprintf(stderr, "           [ window NUMBER] [ cwnd NUMBER ] [ initcwnd NUMBER ]\n");
 	fprintf(stderr, "           [ ssthresh NUMBER ] [ realms REALM ]\n");
+	fprintf(stderr, "           [ rto_min TIME ]\n");
 	fprintf(stderr, "TYPE := [ unicast | local | broadcast | multicast | throw |\n");
 	fprintf(stderr, "          unreachable | prohibit | blackhole | nat ]\n");
 	fprintf(stderr, "TABLE_ID := [ local | main | default | all | NUMBER ]\n");
@@ -82,6 +82,7 @@ static void usage(void)
 	fprintf(stderr, "MP_ALGO := { rr | drr | random | wrandom }\n");
 	fprintf(stderr, "NHFLAGS := [ onlink | pervasive ]\n");
 	fprintf(stderr, "RTPROTO := [ kernel | boot | static | NUMBER ]\n");
+	fprintf(stderr, "TIME := NUMBER[s|ms|us|ns|j]\n");
 	exit(-1);
 }
 
@@ -108,14 +109,6 @@ static struct
 	inet_prefix rsrc;
 	inet_prefix msrc;
 } filter;
-
-static char *mp_alg_names[IP_MP_ALG_MAX+1] = {
-	[IP_MP_ALG_NONE] = "none",
-	[IP_MP_ALG_RR] = "rr",
-	[IP_MP_ALG_DRR] = "drr",
-	[IP_MP_ALG_RANDOM] = "random",
-	[IP_MP_ALG_WRANDOM] = "wrandom"
-};
 
 static int flush_update(void)
 {
@@ -178,7 +171,7 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				return 0;
 		}
 		if (filter.tb) {
-			if (r->rtm_flags&RTM_F_CLONED)
+			if (!filter.cloned && r->rtm_flags&RTM_F_CLONED)
 				return 0;
 			if (filter.tb == RT_TABLE_LOCAL) {
 				if (r->rtm_type != RTN_LOCAL)
@@ -191,6 +184,10 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 			}
 		}
 	} else {
+		if (filter.cloned) {
+			if (!(r->rtm_flags&RTM_F_CLONED))
+				return 0;
+		}
 		if (filter.tb > 0 && filter.tb != table)
 			return 0;
 	}
@@ -354,14 +351,6 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 		fprintf(fp, "tos %s ", rtnl_dsfield_n2a(r->rtm_tos, b1, sizeof(b1)));
 	}
 
-	if (tb[RTA_MP_ALGO]) {
-		__u32 mp_alg = *(__u32*) RTA_DATA(tb[RTA_MP_ALGO]);
-		if (mp_alg > IP_MP_ALG_NONE) {
-			fprintf(fp, "mpath %s ",
-			    mp_alg < IP_MP_ALG_MAX ? mp_alg_names[mp_alg] : "unknown");
-		}
-	}
-
 	if (tb[RTA_GATEWAY] && filter.rvia.bitlen != host_len) {
 		fprintf(fp, "via %s ",
 			format_host(r->rtm_family,
@@ -516,7 +505,8 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 			if (mxlock & (1<<i))
 				fprintf(fp, " lock");
 
-			if (i != RTAX_RTT && i != RTAX_RTTVAR)
+			if (i != RTAX_RTT && i != RTAX_RTTVAR &&
+			    i != RTAX_RTO_MIN)
 				fprintf(fp, " %u", *(unsigned*)RTA_DATA(mxrta[i]));
 			else {
 				unsigned val = *(unsigned*)RTA_DATA(mxrta[i]);
@@ -524,7 +514,7 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				val *= 1000;
 				if (i == RTAX_RTT)
 					val /= 8;
-				else
+				else if (i == RTAX_RTTVAR)
 					val /= 4;
 				if (val >= hz)
 					fprintf(fp, " %ums", val/hz);
@@ -689,6 +679,7 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 	int table_ok = 0;
 	int proto_ok = 0;
 	int type_ok = 0;
+	int raw = 0;
 
 	memset(&req, 0, sizeof(req));
 
@@ -820,9 +811,19 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 				mxlock |= (1<<RTAX_RTT);
 				NEXT_ARG();
 			}
-			if (get_unsigned(&rtt, *argv, 0))
+			if (get_jiffies(&rtt, *argv, 0, &raw))
 				invarg("\"rtt\" value is invalid\n", *argv);
-			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_RTT, rtt);
+			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_RTT, 
+				(raw) ? rtt : rtt * 8);
+		} else if (strcmp(*argv, "rto_min") == 0) {
+			unsigned rto_min;
+			NEXT_ARG();
+			mxlock |= (1<<RTAX_RTO_MIN);
+			if (get_jiffies(&rto_min, *argv, 0, &raw))
+				invarg("\"rto_min\" value is invalid\n",
+				       *argv);
+			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_RTO_MIN,
+				      rto_min);
 		} else if (matches(*argv, "window") == 0) {
 			unsigned win;
 			NEXT_ARG();
@@ -860,9 +861,10 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 				mxlock |= (1<<RTAX_RTTVAR);
 				NEXT_ARG();
 			}
-			if (get_unsigned(&win, *argv, 0))
+			if (get_jiffies(&win, *argv, 0, &raw))
 				invarg("\"rttvar\" value is invalid\n", *argv);
-			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_RTTVAR, win);
+			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_RTTVAR,
+				(raw) ? win : win * 4);
 		} else if (matches(*argv, "ssthresh") == 0) {
 			unsigned win;
 			NEXT_ARG();
@@ -910,18 +912,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			   strcmp(*argv, "oif") == 0) {
 			NEXT_ARG();
 			d = *argv;
-		} else if (strcmp(*argv, "mpath") == 0 ||
-			   strcmp(*argv, "mp") == 0) {
-			int i;
-			__u32 mp_alg = IP_MP_ALG_NONE;
-
-			NEXT_ARG();
-			for (i = 1; i < ARRAY_SIZE(mp_alg_names); i++)
-				if (strcmp(*argv, mp_alg_names[i]) == 0)
-					mp_alg = i;
-			if (mp_alg == IP_MP_ALG_NONE)
-				invarg("\"mpath\" value is invalid\n", *argv);
-			addattr_l(&req.n, sizeof(req), RTA_MP_ALGO, &mp_alg, sizeof(mp_alg));
 		} else {
 			int type;
 			inet_prefix dst;

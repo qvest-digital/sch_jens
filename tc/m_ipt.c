@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <linux/if.h>
 #include <iptables.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
 #include "utils.h"
@@ -505,6 +506,10 @@ print_ipt(struct action_util *au,FILE * f, struct rtattr *arg)
 
 	if (arg == NULL)
 		return -1;
+
+	lib_dir = getenv("IPTABLES_LIB_DIR");
+	if (!lib_dir)
+		lib_dir = IPT_LIB_DIR;
 
 	parse_rtattr_nested(tb, TCA_IPT_MAX, arg);
 

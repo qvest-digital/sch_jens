@@ -62,8 +62,9 @@ static void usage(void)
 	fprintf(stderr, "        [ min SPI max SPI ]\n");
 	fprintf(stderr, "Usage: ip xfrm state { delete | get } ID\n");
 	fprintf(stderr, "Usage: ip xfrm state { deleteall | list } [ ID ] [ mode MODE ] [ reqid REQID ]\n");
-	fprintf(stderr, "        [ flag FLAG_LIST ]\n");
+	fprintf(stderr, "        [ flag FLAG-LIST ]\n");
 	fprintf(stderr, "Usage: ip xfrm state flush [ proto XFRM_PROTO ]\n");
+	fprintf(stderr, "Usage: ip xfrm state count \n");
 
 	fprintf(stderr, "ID := [ src ADDR ] [ dst ADDR ] [ proto XFRM_PROTO ] [ spi SPI ]\n");
 	//fprintf(stderr, "XFRM_PROTO := [ esp | ah | comp ]\n");
@@ -81,7 +82,7 @@ static void usage(void)
  	//fprintf(stderr, "REQID - number(default=0)\n");
 
 	fprintf(stderr, "FLAG-LIST := [ FLAG-LIST ] FLAG\n");
-	fprintf(stderr, "FLAG := [ noecn | decap-dscp | wildrecv ]\n");
+	fprintf(stderr, "FLAG := [ noecn | decap-dscp | nopmtudisc | wildrecv ]\n");
 
         fprintf(stderr, "ENCAP := ENCAP-TYPE SPORT DPORT OADDR\n");
         fprintf(stderr, "ENCAP-TYPE := espinudp | espinudp-nonike\n");
@@ -202,6 +203,8 @@ static int xfrm_state_flag_parse(__u8 *flags, int *argcp, char ***argvp)
 				*flags |= XFRM_STATE_NOECN;
 			else if (strcmp(*argv, "decap-dscp") == 0)
 				*flags |= XFRM_STATE_DECAP_DSCP;
+			else if (strcmp(*argv, "nopmtudisc") == 0)
+				*flags |= XFRM_STATE_NOPMTUDISC;
 			else if (strcmp(*argv, "wildrecv") == 0)
 				*flags |= XFRM_STATE_WILDRECV;
 			else {
@@ -214,8 +217,6 @@ static int xfrm_state_flag_parse(__u8 *flags, int *argcp, char ***argvp)
 			NEXT_ARG();
 		}
 	}
-
-	filter.state_flags_mask = XFRM_FILTER_MASK_FULL;
 
 	*argcp = argc;
 	*argvp = argv;
@@ -685,7 +686,7 @@ int xfrm_state_print(const struct sockaddr_nl *who, struct nlmsghdr *n,
 			fprintf(stderr, "Buggy XFRM_MSG_DELPOLICY: too short XFRMA_POLICY len\n");
 			return -1;
 		}
-		xsinfo = (struct xfrm_usersa_info *)RTA_DATA(tb[XFRMA_SA]);
+		xsinfo = RTA_DATA(tb[XFRMA_SA]);
 	}
 
 	xfrm_state_info_print(xsinfo, tb, fp, NULL, NULL);
@@ -933,6 +934,83 @@ static int xfrm_state_list_or_deleteall(int argc, char **argv, int deleteall)
 	exit(0);
 }
 
+int print_sadinfo(struct nlmsghdr *n, void *arg)
+{
+	FILE *fp = (FILE*)arg;
+	__u32 *f = NLMSG_DATA(n);
+	struct rtattr *tb[XFRMA_SAD_MAX+1];
+	struct rtattr *rta;
+	__u32 *cnt;
+
+	int len = n->nlmsg_len;
+
+	len -= NLMSG_LENGTH(sizeof(__u32));
+	if (len < 0) {
+		fprintf(stderr, "SADinfo: Wrong len %d\n", len);
+		return -1;
+	}
+
+	rta = XFRMSAPD_RTA(f);
+	parse_rtattr(tb, XFRMA_SAD_MAX, rta, len);
+
+	if (tb[XFRMA_SAD_CNT]) {
+		fprintf(fp,"\t SAD");
+		cnt = (__u32 *)RTA_DATA(tb[XFRMA_SAD_CNT]);
+		fprintf(fp," count %d", *cnt);
+	} else {
+		fprintf(fp,"BAD SAD info returned\n");
+		return -1;
+	}
+
+	if (show_stats) {
+		if (tb[XFRMA_SAD_HINFO]) {
+			struct xfrmu_sadhinfo *si;
+
+			if (RTA_PAYLOAD(tb[XFRMA_SAD_HINFO]) < sizeof(*si)) {
+				fprintf(fp,"BAD SAD length returned\n");
+				return -1;
+			}
+				
+			si = RTA_DATA(tb[XFRMA_SAD_HINFO]);
+			fprintf(fp," (buckets ");
+			fprintf(fp,"count %d", si->sadhcnt);
+			fprintf(fp," Max %d", si->sadhmcnt);
+			fprintf(fp,")");
+		}
+	}
+	fprintf(fp,"\n");
+
+        return 0;
+}
+
+static int xfrm_sad_getinfo(int argc, char **argv)
+{
+	struct rtnl_handle rth;
+	struct {
+		struct nlmsghdr			n;
+		__u32				flags;
+		char				ans[64];
+	} req;
+
+	memset(&req, 0, sizeof(req));
+	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(req.flags));
+	req.n.nlmsg_flags = NLM_F_REQUEST;
+	req.n.nlmsg_type = XFRM_MSG_GETSADINFO;
+	req.flags = 0XFFFFFFFF;
+
+	if (rtnl_open_byproto(&rth, 0, NETLINK_XFRM) < 0)
+		exit(1);
+
+	if (rtnl_talk(&rth, &req.n, 0, 0, &req.n, NULL, NULL) < 0)
+		exit(2);
+
+	print_sadinfo(&req.n, (void*)stdout);
+
+	rtnl_close(&rth);
+
+	return 0;
+}
+
 static int xfrm_state_flush(int argc, char **argv)
 {
 	struct rtnl_handle rth;
@@ -975,7 +1053,6 @@ static int xfrm_state_flush(int argc, char **argv)
 
 	if (show_stats > 1)
 		fprintf(stderr, "Flush state proto=%s\n",
-			(req.xsf.proto == IPSEC_PROTO_ANY) ? "any" :
 			strxf_xfrmproto(req.xsf.proto));
 
 	if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0)
@@ -1010,6 +1087,9 @@ int do_xfrm_state(int argc, char **argv)
 		return xfrm_state_get_or_delete(argc-1, argv+1, 0);
 	if (matches(*argv, "flush") == 0)
 		return xfrm_state_flush(argc-1, argv+1);
+	if (matches(*argv, "count") == 0) {
+		return xfrm_sad_getinfo(argc, argv);
+	}
 	if (matches(*argv, "help") == 0)
 		usage();
 	fprintf(stderr, "Command \"%s\" is unknown, try \"ip xfrm state help\".\n", *argv);

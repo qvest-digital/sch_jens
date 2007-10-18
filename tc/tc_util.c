@@ -24,6 +24,17 @@
 #include "utils.h"
 #include "tc_util.h"
 
+const char *get_tc_lib(void)
+{
+	const char *lib_dir;
+
+	lib_dir = getenv("TC_LIB_DIR");
+	if (!lib_dir)
+		lib_dir = "/usr/lib/tc";
+
+	return lib_dir;
+}
+
 int get_qdisc_handle(__u32 *h, const char *str)
 {
 	__u32 maj;
@@ -228,9 +239,6 @@ int get_time(unsigned *time, const char *str)
 		else if (strcasecmp(p, "us") == 0 || strcasecmp(p, "usec")==0 ||
 			 strcasecmp(p, "usecs") == 0)
 			t *= TIME_UNITS_PER_SEC/1000000;
-		else if (strcasecmp(p, "ns") == 0 || strcasecmp(p, "nsec")==0 ||
-			 strcasecmp(p, "nsecs") == 0)
-			t *= TIME_UNITS_PER_SEC/1000000000;
 		else
 			return -1;
 	}
@@ -248,10 +256,8 @@ void print_time(char *buf, int len, __u32 time)
 		snprintf(buf, len, "%.1fs", tmp/TIME_UNITS_PER_SEC);
 	else if (tmp >= TIME_UNITS_PER_SEC/1000)
 		snprintf(buf, len, "%.1fms", tmp/(TIME_UNITS_PER_SEC/1000));
-	else if (tmp >= TIME_UNITS_PER_SEC/1000000)
-		snprintf(buf, len, "%.1fus", tmp/(TIME_UNITS_PER_SEC/1000000));
 	else
-		snprintf(buf, len, "%uns", time);
+		snprintf(buf, len, "%uus", time);
 }
 
 char * sprint_time(__u32 time, char *buf)

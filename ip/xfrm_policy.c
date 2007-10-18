@@ -54,12 +54,12 @@ static void usage(void) __attribute__((noreturn));
 static void usage(void)
 {
 	fprintf(stderr, "Usage: ip xfrm policy { add | update } dir DIR SELECTOR [ index INDEX ] [ ptype PTYPE ]\n");
-	fprintf(stderr, "        [ action ACTION ] [ priority PRIORITY ] [ LIMIT-LIST ] [ TMPL-LIST ]\n");
+	fprintf(stderr, "        [ action ACTION ] [ priority PRIORITY ] [ flag FLAG-LIST ] [ LIMIT-LIST ] [ TMPL-LIST ]\n");
 	fprintf(stderr, "Usage: ip xfrm policy { delete | get } dir DIR [ SELECTOR | index INDEX ] [ ptype PTYPE ]\n");
 	fprintf(stderr, "Usage: ip xfrm policy { deleteall | list } [ dir DIR ] [ SELECTOR ]\n");
-	fprintf(stderr, "        [ index INDEX ] [ action ACTION ] [ priority PRIORITY ]\n");
+	fprintf(stderr, "        [ index INDEX ] [ action ACTION ] [ priority PRIORITY ]  [ flag FLAG-LIST ]\n");
 	fprintf(stderr, "Usage: ip xfrm policy flush [ ptype PTYPE ]\n");
-
+	fprintf(stderr, "Usage: ip xfrm count\n");
 	fprintf(stderr, "PTYPE := [ main | sub ](default=main)\n");
 	fprintf(stderr, "DIR := [ in | out | fwd ]\n");
 
@@ -73,6 +73,9 @@ static void usage(void)
 	fprintf(stderr, "ACTION := [ allow | block ](default=allow)\n");
 
 	//fprintf(stderr, "PRIORITY - priority value(default=0)\n");
+
+	fprintf(stderr, "FLAG-LIST := [ FLAG-LIST ] FLAG\n");
+	fprintf(stderr, "FLAG := [ localok ]\n");
 
 	fprintf(stderr, "LIMIT-LIST := [ LIMIT-LIST ] | [ limit LIMIT ]\n");
 	fprintf(stderr, "LIMIT := [ [time-soft|time-hard|time-use-soft|time-use-hard] SECONDS ] |\n");
@@ -128,6 +131,39 @@ static int xfrm_policy_ptype_parse(__u8 *ptype, int *argcp, char ***argvp)
 		*ptype = XFRM_POLICY_TYPE_SUB;
 	else
 		invarg("\"PTYPE\" is invalid", *argv);
+
+	*argcp = argc;
+	*argvp = argv;
+
+	return 0;
+}
+
+static int xfrm_policy_flag_parse(__u8 *flags, int *argcp, char ***argvp)
+{
+	int argc = *argcp;
+	char **argv = *argvp;
+	int len = strlen(*argv);
+
+	if (len > 2 && strncmp(*argv, "0x", 2) == 0) {
+		__u8 val = 0;
+
+		if (get_u8(&val, *argv, 16))
+			invarg("\"FLAG\" is invalid", *argv);
+		*flags = val;
+	} else {
+		while (1) {
+			if (strcmp(*argv, "localok") == 0)
+				*flags |= XFRM_POLICY_LOCALOK;
+			else {
+				PREV_ARG(); /* back track */
+				break;
+			}
+
+			if (!NEXT_ARG_OK())
+				break;
+			NEXT_ARG();
+		}
+	}
 
 	*argcp = argc;
 	*argvp = argv;
@@ -222,16 +258,10 @@ static int xfrm_policy_modify(int cmd, unsigned flags, int argc, char **argv)
 
 			NEXT_ARG();
 			xfrm_policy_dir_parse(&req.xpinfo.dir, &argc, &argv);
-
-			filter.dir_mask = XFRM_FILTER_MASK_FULL;
-
 		} else if (strcmp(*argv, "index") == 0) {
 			NEXT_ARG();
 			if (get_u32(&req.xpinfo.index, *argv, 0))
 				invarg("\"INDEX\" is invalid", *argv);
-
-			filter.index_mask = XFRM_FILTER_MASK_FULL;
-
 		} else if (strcmp(*argv, "ptype") == 0) {
 			if (ptypep)
 				duparg("ptype", *argv);
@@ -239,9 +269,6 @@ static int xfrm_policy_modify(int cmd, unsigned flags, int argc, char **argv)
 
 			NEXT_ARG();
 			xfrm_policy_ptype_parse(&upt.type, &argc, &argv);
-
-			filter.dir_mask = XFRM_FILTER_MASK_FULL;
-
 		} else if (strcmp(*argv, "action") == 0) {
 			NEXT_ARG();
 			if (strcmp(*argv, "allow") == 0)
@@ -250,16 +277,14 @@ static int xfrm_policy_modify(int cmd, unsigned flags, int argc, char **argv)
 				req.xpinfo.action = XFRM_POLICY_BLOCK;
 			else
 				invarg("\"action\" value is invalid\n", *argv);
-
-			filter.action_mask = XFRM_FILTER_MASK_FULL;
-
 		} else if (strcmp(*argv, "priority") == 0) {
 			NEXT_ARG();
 			if (get_u32(&req.xpinfo.priority, *argv, 0))
 				invarg("\"PRIORITY\" is invalid", *argv);
-
-			filter.priority_mask = XFRM_FILTER_MASK_FULL;
-
+		} else if (strcmp(*argv, "flag") == 0) {
+			NEXT_ARG();
+			xfrm_policy_flag_parse(&req.xpinfo.flags, &argc,
+					       &argv);
 		} else if (strcmp(*argv, "limit") == 0) {
 			NEXT_ARG();
 			xfrm_lifetime_cfg_parse(&req.xpinfo.lft, &argc, &argv);
@@ -371,6 +396,10 @@ static int xfrm_policy_filter_match(struct xfrm_userpolicy_info *xpinfo,
 
 	if ((xpinfo->priority^filter.xpinfo.priority)&filter.priority_mask)
 		return 0;
+
+	if (filter.policy_flags_mask)
+		if ((xpinfo->flags & filter.xpinfo.flags) == 0)
+			return 0;
 
 	return 1;
 }
@@ -699,6 +728,13 @@ static int xfrm_policy_list_or_deleteall(int argc, char **argv, int deleteall)
 
 			filter.priority_mask = XFRM_FILTER_MASK_FULL;
 
+		} else if (strcmp(*argv, "flag") == 0) {
+			NEXT_ARG();
+			xfrm_policy_flag_parse(&filter.xpinfo.flags, &argc,
+					       &argv);
+
+			filter.policy_flags_mask = XFRM_FILTER_MASK_FULL;
+
 		} else {
 			if (selp)
 				invarg("unknown", *argv);
@@ -774,6 +810,95 @@ static int xfrm_policy_list_or_deleteall(int argc, char **argv, int deleteall)
 	exit(0);
 }
 
+int print_spdinfo( struct nlmsghdr *n, void *arg)
+{
+	FILE *fp = (FILE*)arg;
+	__u32 *f = NLMSG_DATA(n);
+	struct rtattr * tb[XFRMA_SPD_MAX+1];
+	struct rtattr * rta;
+
+	int len = n->nlmsg_len;
+
+	len -= NLMSG_LENGTH(sizeof(__u32));
+	if (len < 0) {
+		fprintf(stderr, "SPDinfo: Wrong len %d\n", len);
+		return -1;
+	}
+
+	rta = XFRMSAPD_RTA(f);
+	parse_rtattr(tb, XFRMA_SPD_MAX, rta, len);
+
+	fprintf(fp,"\t SPD");
+	if (tb[XFRMA_SPD_INFO]) {
+		struct xfrmu_spdinfo *si;
+
+		if (RTA_PAYLOAD(tb[XFRMA_SPD_INFO]) < sizeof(*si)) {
+			fprintf(stderr, "SPDinfo: Wrong len %d\n", len);
+			return -1;
+		}
+		si = RTA_DATA(tb[XFRMA_SPD_INFO]);
+		fprintf(fp," IN  %d", si->incnt);
+		fprintf(fp," OUT %d", si->outcnt);
+		fprintf(fp," FWD %d", si->fwdcnt);
+
+		if (show_stats) {
+			fprintf(fp," (Sock:");
+			fprintf(fp," IN %d", si->inscnt);
+			fprintf(fp," OUT %d", si->outscnt);
+			fprintf(fp," FWD %d", si->fwdscnt);
+			fprintf(fp,")");
+		}
+
+		fprintf(fp,"\n");
+	}
+	if (show_stats > 1) {
+		struct xfrmu_spdhinfo *sh;
+
+		if (tb[XFRMA_SPD_HINFO]) {
+			if (RTA_PAYLOAD(tb[XFRMA_SPD_HINFO]) < sizeof(*sh)) {
+				fprintf(stderr, "SPDinfo: Wrong len %d\n", len);
+				return -1;
+			}
+			sh = RTA_DATA(tb[XFRMA_SPD_HINFO]);
+			fprintf(fp,"\t SPD buckets:");
+			fprintf(fp," count %d", sh->spdhcnt);
+			fprintf(fp," Max %d", sh->spdhmcnt);
+		}
+	}
+	fprintf(fp,"\n");
+
+        return 0;
+}
+
+static int xfrm_spd_getinfo(int argc, char **argv)
+{
+	struct rtnl_handle rth;
+	struct {
+		struct nlmsghdr			n;
+		__u32				flags;
+		char 				ans[128];
+	} req;
+
+	memset(&req, 0, sizeof(req));
+
+	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(__u32));
+	req.n.nlmsg_flags = NLM_F_REQUEST;
+	req.n.nlmsg_type = XFRM_MSG_GETSPDINFO;
+	req.flags = 0XFFFFFFFF;
+
+	if (rtnl_open_byproto(&rth, 0, NETLINK_XFRM) < 0)
+		exit(1);
+
+	if (rtnl_talk(&rth, &req.n, 0, 0, &req.n, NULL, NULL) < 0)
+		exit(2);
+
+	print_spdinfo(&req.n, (void*)stdout);
+
+	rtnl_close(&rth);
+
+	return 0;
+}
+
 static int xfrm_policy_flush(int argc, char **argv)
 {
 	struct rtnl_handle rth;
@@ -799,8 +924,6 @@ static int xfrm_policy_flush(int argc, char **argv)
 
 			NEXT_ARG();
 			xfrm_policy_ptype_parse(&upt.type, &argc, &argv);
-
-			filter.dir_mask = XFRM_FILTER_MASK_FULL;
 		} else
 			invarg("unknown", *argv);
 
@@ -848,6 +971,8 @@ int do_xfrm_policy(int argc, char **argv)
 		return xfrm_policy_get(argc-1, argv+1);
 	if (matches(*argv, "flush") == 0)
 		return xfrm_policy_flush(argc-1, argv+1);
+	if (matches(*argv, "count") == 0)
+		return xfrm_spd_getinfo(argc, argv);
 	if (matches(*argv, "help") == 0)
 		usage();
 	fprintf(stderr, "Command \"%s\" is unknown, try \"ip xfrm policy help\".\n", *argv);

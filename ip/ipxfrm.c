@@ -32,7 +32,6 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <netdb.h>
-#include <net/if.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <linux/xfrm.h>
@@ -115,6 +114,7 @@ struct typeent {
 static const struct typeent xfrmproto_types[]= {
 	{ "esp", IPPROTO_ESP }, { "ah", IPPROTO_AH }, { "comp", IPPROTO_COMP },
 	{ "route2", IPPROTO_ROUTING }, { "hao", IPPROTO_DSTOPTS },
+	{ "ipsec-any", IPSEC_PROTO_ANY },
 	{ NULL, -1 }
 };
 
@@ -136,6 +136,7 @@ int xfrm_xfrmproto_getbyname(char *name)
 
 const char *strxf_xfrmproto(__u8 proto)
 {
+	static char str[16];
 	int i;
 
 	for (i = 0; ; i++) {
@@ -147,7 +148,8 @@ const char *strxf_xfrmproto(__u8 proto)
 			return t->t_name;
 	}
 
-	return NULL;
+	sprintf(str, "%u", proto);
+	return str;
 }
 
 static const struct typeent algo_types[]= {
@@ -173,6 +175,7 @@ int xfrm_algotype_getbyname(char *name)
 
 const char *strxf_algotype(int type)
 {
+	static char str[32];
 	int i;
 
 	for (i = 0; ; i++) {
@@ -184,7 +187,8 @@ const char *strxf_algotype(int type)
 			return t->t_name;
 	}
 
-	return NULL;
+	sprintf(str, "%d", type);
+	return str;
 }
 
 const char *strxf_mask8(__u8 mask)
@@ -250,6 +254,25 @@ const char *strxf_proto(__u8 proto)
 	}
 
 	return p;
+}
+
+const char *strxf_ptype(__u8 ptype)
+{
+	static char str[16];
+
+	switch (ptype) {
+	case XFRM_POLICY_TYPE_MAIN:
+		strcpy(str, "main");
+		break;
+	case XFRM_POLICY_TYPE_SUB:
+		strcpy(str, "sub");
+		break;
+	default:
+		sprintf(str, "%u", ptype);
+		break;
+	}
+
+	return str;
 }
 
 void xfrm_id_info_print(xfrm_address_t *saddr, struct xfrm_id *id,
@@ -493,13 +516,8 @@ void xfrm_selector_print(struct xfrm_selector *sel, __u16 family,
 		break;
 	}
 
-	if (sel->ifindex > 0) {
-		char buf[IFNAMSIZ];
-
-		memset(buf, '\0', sizeof(buf));
-		if_indextoname(sel->ifindex, buf);
-		fprintf(fp, "dev %s ", buf);
-	}
+	if (sel->ifindex > 0)
+		fprintf(fp, "dev %s ", ll_index_to_name(sel->ifindex));
 
 	if (show_stats > 0)
 		fprintf(fp, "uid %u", sel->user);
@@ -751,12 +769,13 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 		fprintf(fp, "flag ");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_NOECN, "noecn");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_DECAP_DSCP, "decap-dscp");
+		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_NOPMTUDISC, "nopmtudisc");
 		XFRM_FLAG_PRINT(fp, flags, XFRM_STATE_WILDRECV, "wildrecv");
 		if (flags)
 			fprintf(fp, "%x", flags);
-		if (show_stats > 0)
-			fprintf(fp, " (0x%s)", strxf_mask8(flags));
 	}
+	if (show_stats > 0)
+		fprintf(fp, " (0x%s)", strxf_mask8(xsinfo->flags));
 	fprintf(fp, "%s", _SL_);
 
 	xfrm_xfrma_print(tb, xsinfo->family, fp, buf);
@@ -781,7 +800,6 @@ void xfrm_policy_info_print(struct xfrm_userpolicy_info *xpinfo,
 			    const char *title)
 {
 	char buf[STRBUF_SIZE];
-	__u8 ptype = XFRM_POLICY_TYPE_MAIN;
 
 	memset(buf, '\0', sizeof(buf));
 
@@ -826,35 +844,31 @@ void xfrm_policy_info_print(struct xfrm_userpolicy_info *xpinfo,
 		fprintf(fp, "index %u ", xpinfo->index);
 	fprintf(fp, "priority %u ", xpinfo->priority);
 
-	fprintf(fp, "ptype ");
-
 	if (tb[XFRMA_POLICY_TYPE]) {
 		struct xfrm_userpolicy_type *upt;
+
+		fprintf(fp, "ptype ");
 
 		if (RTA_PAYLOAD(tb[XFRMA_POLICY_TYPE]) < sizeof(*upt))
 			fprintf(fp, "(ERROR truncated)");
 
 		upt = (struct xfrm_userpolicy_type *)RTA_DATA(tb[XFRMA_POLICY_TYPE]);
-		ptype = upt->type;
+		fprintf(fp, "%s ", strxf_ptype(upt->type));
 	}
 
-	switch (ptype) {
-	case XFRM_POLICY_TYPE_MAIN:
-		fprintf(fp, "main");
-		break;
-	case XFRM_POLICY_TYPE_SUB:
-		fprintf(fp, "sub");
-		break;
-	default:
-		fprintf(fp, "%u", ptype);
-		break;
-	}
-	fprintf(fp, " ");
-
-	if (show_stats > 0) {
+	if (show_stats > 0)
 		fprintf(fp, "share %s ", strxf_share(xpinfo->share));
-		fprintf(fp, "flag 0x%s", strxf_mask8(xpinfo->flags));
+
+	if (show_stats > 0 || xpinfo->flags) {
+		__u8 flags = xpinfo->flags;
+
+		fprintf(fp, "flag ");
+		XFRM_FLAG_PRINT(fp, flags, XFRM_POLICY_LOCALOK, "localok");
+		if (flags)
+			fprintf(fp, "%x", flags);
 	}
+	if (show_stats > 0)
+		fprintf(fp, " (0x%s)", strxf_mask8(xpinfo->flags));
 	fprintf(fp, "%s", _SL_);
 
 	if (show_stats > 0)
@@ -1179,7 +1193,7 @@ int xfrm_selector_parse(struct xfrm_selector *sel, int *argcp, char ***argvp)
 			if (strcmp(*argv, "none") == 0)
 				ifindex = 0;
 			else {
-				ifindex = if_nametoindex(*argv);
+				ifindex = ll_name_to_index(*argv);
 				if (ifindex <= 0)
 					invarg("\"DEV\" is invalid", *argv);
 			}

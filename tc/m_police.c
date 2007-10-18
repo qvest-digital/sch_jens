@@ -37,7 +37,7 @@ static void usage(void)
 	fprintf(stderr, "Usage: ... police rate BPS burst BYTES[/BYTES] [ mtu BYTES[/BYTES] ]\n");
 	fprintf(stderr, "                [ peakrate BPS ] [ avrate BPS ]\n");
 	fprintf(stderr, "                [ ACTIONTERM ]\n");
-	fprintf(stderr, "Old Syntax ACTIONTERM := action <EXCEEDACT>[/NOTEXCEEDACT] \n");
+	fprintf(stderr, "Old Syntax ACTIONTERM := <EXCEEDACT>[/NOTEXCEEDACT] \n");
 	fprintf(stderr, "New Syntax ACTIONTERM := conform-exceed <EXCEEDACT>[/NOTEXCEEDACT] \n");
 	fprintf(stderr, "Where: *EXCEEDACT := pipe | ok | reclassify | drop | continue \n");
 	fprintf(stderr, "Where:  pipe is only valid for new syntax \n");
@@ -227,7 +227,8 @@ int act_parse_police(struct action_util *a,int *argc_p, char ***argv_p, int tca_
 			p.action = TC_POLICE_OK;
 		} else if (matches(*argv, "pipe") == 0) {
 			p.action = TC_POLICE_PIPE;
-		} else if (strcmp(*argv, "conform-exceed") == 0) {
+		} else if (strcmp(*argv, "action") == 0 ||
+			   strcmp(*argv, "conform-exceed") == 0) {
 			NEXT_ARG();
 			if (get_police_result(&p.action, &presult, *argv)) {
 				fprintf(stderr, "Illegal \"action\"\n");
@@ -236,7 +237,8 @@ int act_parse_police(struct action_util *a,int *argc_p, char ***argv_p, int tca_
 		} else if (strcmp(*argv, "help") == 0) {
 			usage();
 		} else {
-			break;
+			fprintf(stderr, "What is \"%s\"?\n", *argv);
+			return -1;
 		}
 		ok++;
 		argc--; argv++;

@@ -10,8 +10,12 @@ iproute (20071016-1) UNRELEASED; urgency=low
     - debian/patches/lartc applied upstream.
     - debian/patches/netbug_fix deprecated, upstream dropped netbug script.
     - debian/patches/empty_linkname.dpatch deprecated, fixed upstream.
+  * Add .dpatch suffix to wrr-qdisc patch to make dpatch-edit-patch work.
+  * Update patches to apply:
+    - wrr-qdisc, moo, ip_route_usage
+  * Don't install removed netbug script.
 
- -- Andreas Henriksson <andreas@fatal.se>  Thu, 18 Oct 2007 12:02:41 +0200
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 18 Oct 2007 14:33:48 +0200
 
 iproute (20070313-1) unstable; urgency=low
 

@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Alexander Wirt <formorer@debian.org>
 Uploaders: Andreas Barth <aba@not.so.argh.org>
 Standards-Version: 3.7.2.0
-Build-Depends: texlive-latex-base, texlive-latex-recommended, libatm1-dev, bison, libdb4.3-dev, linuxdoc-tools, linux-kernel-headers, debhelper (>= 5), lynx, dpatch, flex
+Build-Depends: texlive-latex-base, texlive-latex-recommended, libatm1-dev, bison, libdb4.6-dev, linuxdoc-tools, linux-kernel-headers, debhelper (>= 5), lynx, dpatch, flex
 
 Package: iproute
 Architecture: any

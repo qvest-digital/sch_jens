@@ -18,6 +18,7 @@ iproute (20071016-1) UNRELEASED; urgency=low
   * Don't install removed netbug script.
   * Fix corruption when using batch files with comments and broken
     lines. (cherry-picked from upstream. Closes: #398912)
+  * Build against libdb4.6-dev instead of 4.3. (Closes: #442653)
 
   [ Ben Finney ]
   * Add dh_md5sums to generate md5sums control file (Closes: #439439)
@@ -25,7 +26,7 @@ iproute (20071016-1) UNRELEASED; urgency=low
   [ Justin Pryzby ]
   * ss(8) manpage formatting breaks EXAMPLE (Closes: #443071)
 
- -- Andreas Henriksson <andreas@fatal.se>  Thu, 18 Oct 2007 20:10:16 +0200
+ -- Andreas Henriksson <andreas@fatal.se>  Fri, 19 Oct 2007 11:23:42 +0200
 
 iproute (20070313-1) unstable; urgency=low
 

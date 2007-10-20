@@ -3,6 +3,9 @@ Section: net
 Priority: optional
 Maintainer: Alexander Wirt <formorer@debian.org>
 Uploaders: Andreas Barth <aba@not.so.argh.org>
+Homepage: http://www.linux-foundation.org/en/Net:Iproute2
+Vcs-Browser: http://git.debian.org/?p=collab-maint/pkg-iproute.git
+Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git
 Standards-Version: 3.7.2.0
 Build-Depends: texlive-latex-base, texlive-latex-recommended, libatm1-dev, bison, libdb4.6-dev, linuxdoc-tools, linux-libc-dev, debhelper (>= 5), lynx, dpatch, flex
 

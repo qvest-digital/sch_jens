@@ -24,6 +24,9 @@ iproute (20071016-1) UNRELEASED; urgency=low
   * Drop debian/patches/ip_address_flush_loop.dpatch,
     instead we'll use Daniel Silverstones patch imported from Ubuntu.
   * Add Homepage and Vcs-{Browser,Git} fields to debian/control.
+  * Remove dead/leftover code from tc/q_htb.c, include/linux/pkt_sched.h
+  * Remove outdated README.Debian.
+  * Drop our own (buggy) RTAX_INITCWND support, in favor of upstreams.
 
   [ Ben Finney ]
   * Add dh_md5sums to generate md5sums control file (Closes: #439439)
@@ -34,7 +37,7 @@ iproute (20071016-1) UNRELEASED; urgency=low
   [ Daniel Silverstone ]
   * Avoid infinite loop in ip addr flush.
 
- -- Andreas Henriksson <andreas@fatal.se>  Sun, 21 Oct 2007 13:34:16 +0200
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 23 Oct 2007 21:30:24 +0200
 
 iproute (20070313-1) unstable; urgency=low
 

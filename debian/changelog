@@ -19,7 +19,7 @@ iproute (20071016-1) UNRELEASED; urgency=low
   * Fix corruption when using batch files with comments and broken
     lines. (cherry-picked from upstream. Closes: #398912)
   * Update build-dependencies:
-    - libdb4.3-dev -> libdb4.6-dev. (Closes: #442653)
+    - libdb4.3-dev -> libdb-dev. (Closes: #442653)
     - linux-kernel-headers -> linux-libc-dev.
   * Drop debian/patches/ip_address_flush_loop.dpatch,
     instead we'll use Daniel Silverstones patch imported from Ubuntu.

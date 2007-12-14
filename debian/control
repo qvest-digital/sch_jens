@@ -2,7 +2,7 @@ Source: iproute
 Section: net
 Priority: optional
 Maintainer: Alexander Wirt <formorer@debian.org>
-Uploaders: Andreas Barth <aba@not.so.argh.org>
+Uploaders: Andreas Barth <aba@not.so.argh.org>, Andreas Henriksson <andreas@fatal.se>
 Homepage: http://www.linux-foundation.org/en/Net:Iproute2
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pkg-iproute.git
 Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git

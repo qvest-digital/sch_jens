@@ -38,9 +38,10 @@ iproute (20071016-1) UNRELEASED; urgency=low
   * Avoid infinite loop in ip addr flush.
 
   [ Alexander Wirt ]
-  * Add Andreas Henriksson to uploaders 
+  * Add Andreas Henriksson to uploaders
+  * Bump standards version 
 
- -- Alexander Wirt <formorer@debian.org>  Fri, 14 Dec 2007 17:40:03 +0100
+ -- Alexander Wirt <formorer@debian.org>  Sat, 15 Dec 2007 17:50:22 +0100
 
 iproute (20070313-1) unstable; urgency=low
 

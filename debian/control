@@ -6,7 +6,7 @@ Uploaders: Andreas Barth <aba@not.so.argh.org>, Andreas Henriksson <andreas@fata
 Homepage: http://www.linux-foundation.org/en/Net:Iproute2
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pkg-iproute.git
 Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git
-Standards-Version: 3.7.2.0
+Standards-Version: 3.7.3
 Build-Depends: texlive-latex-base, texlive-latex-recommended, libatm1-dev, bison, libdb-dev, linuxdoc-tools, linux-libc-dev, debhelper (>= 5), lynx, dpatch, flex
 
 Package: iproute

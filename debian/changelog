@@ -40,6 +40,8 @@ iproute (20071016-1) UNRELEASED; urgency=low
   [ Alexander Wirt ]
   * Add Andreas Henriksson to uploaders
   * Bump standards version 
+  * Support dotted-quad netmasks in iproute (Closes: #357172) (Cherry picked
+    from upstream)
 
  -- Alexander Wirt <formorer@debian.org>  Sat, 15 Dec 2007 17:50:22 +0100
 

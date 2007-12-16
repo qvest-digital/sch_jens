@@ -72,7 +72,7 @@ static int get_netmask(unsigned *val, const char *arg, int base)
 		u_int32_t mask;
 
 		*val=0;
-		for (mask = addr.data[0]; mask; mask >>= 1)
+		for (mask = ntohl(addr.data[0]); mask; mask <<= 1)
 			(*val)++;
 
 		if (is_valid_netmask(&addr))

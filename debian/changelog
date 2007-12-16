@@ -27,6 +27,8 @@ iproute (20071016-1) UNRELEASED; urgency=low
   * Remove dead/leftover code from tc/q_htb.c, include/linux/pkt_sched.h
   * Remove outdated README.Debian.
   * Drop our own (buggy) RTAX_INITCWND support, in favor of upstreams.
+  * fix dotted-quad support patch to work on big-endian.
+    (upstream applied a broken patch, which we cherry-picked for #357172)
 
   [ Ben Finney ]
   * Add dh_md5sums to generate md5sums control file (Closes: #439439)
@@ -39,11 +41,11 @@ iproute (20071016-1) UNRELEASED; urgency=low
 
   [ Alexander Wirt ]
   * Add Andreas Henriksson to uploaders
-  * Bump standards version 
+  * Bump standards version
   * Support dotted-quad netmasks in iproute (Closes: #357172) (Cherry picked
     from upstream)
 
- -- Alexander Wirt <formorer@debian.org>  Sat, 15 Dec 2007 17:50:22 +0100
+ -- Andreas Henriksson <andreas@fatal.se>  Sun, 16 Dec 2007 13:29:19 +0100
 
 iproute (20070313-1) unstable; urgency=low
 

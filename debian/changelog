@@ -1,7 +1,7 @@
 iproute (20071016-1) UNRELEASED; urgency=low
 
   [ Andreas Henriksson ]
-  * New upstream release (v2.6.23 aka snapshot 071016)
+  * New upstream release (v2.6.23 aka snapshot 071016) (Closes: #445944)
     - time2tick overflow patch applied upstream (Closes: #175462)
     - tc ematch cmp/nbyte help patch applied upstream (Closes: #438653)
     - mpath support dropped upstream (Closes: #428440, #428442)

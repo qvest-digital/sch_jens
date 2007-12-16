@@ -1,4 +1,4 @@
-iproute (20071016-1) UNRELEASED; urgency=low
+iproute (20071016-1) unstable; urgency=low
 
   [ Andreas Henriksson ]
   * New upstream release (v2.6.23 aka snapshot 071016) (Closes: #445944)
@@ -45,7 +45,7 @@ iproute (20071016-1) UNRELEASED; urgency=low
   * Support dotted-quad netmasks in iproute (Closes: #357172) (Cherry picked
     from upstream)
 
- -- Andreas Henriksson <andreas@fatal.se>  Sun, 16 Dec 2007 13:29:19 +0100
+ -- Alexander Wirt <formorer@debian.org>  Sun, 16 Dec 2007 14:30:31 +0100
 
 iproute (20070313-1) unstable; urgency=low
 

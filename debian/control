@@ -1,6 +1,6 @@
 Source: iproute
 Section: net
-Priority: optional
+Priority: important
 Maintainer: Alexander Wirt <formorer@debian.org>
 Uploaders: Andreas Barth <aba@not.so.argh.org>, Andreas Henriksson <andreas@fatal.se>
 Homepage: http://www.linux-foundation.org/en/Net:Iproute2
@@ -14,6 +14,7 @@ Architecture: any
 Provides: arpd
 Conflicts: arpd
 Depends: ${shlibs:Depends}
+Priority: important
 Suggests: iproute-doc
 Description: Professional tools to control the networking in Linux kernels
  This is `iproute', the professional set of tools to control the
@@ -28,6 +29,7 @@ Description: Professional tools to control the networking in Linux kernels
 Package: iproute-doc
 Section: doc
 Architecture: any
+Priority: optional
 Description: Professional tools to control the networking in Linux kernels
  This package contains the documentation for the iproute package. 
  .
@@ -37,6 +39,7 @@ Description: Professional tools to control the networking in Linux kernels
 Package: iproute-dev
 Section: libdevel
 Architecture: any
+Priority: optional
 Description: Development package for iproute
  This package contains the header files and static libs for developing
  iproute additions. iproute is the professional set of tools to control the

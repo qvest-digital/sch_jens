@@ -1,10 +1,10 @@
-iproute (20071016-2) UNRELEASED; urgency=low
+iproute (20071016-2) unstable; urgency=low
 
   [ Andreas Henriksson ]
   * fix incompatibility with older kernels (Closes: #457161)
     (Cherry picked from upstream)
 
- -- Andreas Henriksson <andreas@fatal.se>  Thu, 20 Dec 2007 14:26:02 +0100
+ -- Alexander Wirt <formorer@debian.org>  Thu, 20 Dec 2007 23:05:25 +0100
 
 iproute (20071016-1) unstable; urgency=low
 

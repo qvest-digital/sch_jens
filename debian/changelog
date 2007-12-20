@@ -3,8 +3,6 @@ iproute (20071016-2) UNRELEASED; urgency=low
   [ Andreas Henriksson ]
   * fix incompatibility with older kernels (Closes: #457161)
     (Cherry picked from upstream)
-  * Bump priority to important to prepare for ifupdown moving over
-    to iproute from net-tools.
 
  -- Andreas Henriksson <andreas@fatal.se>  Thu, 20 Dec 2007 14:26:02 +0100
 

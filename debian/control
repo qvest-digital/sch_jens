@@ -14,6 +14,7 @@ Architecture: any
 Provides: arpd
 Conflicts: arpd
 Depends: ${shlibs:Depends}
+Recommends: libatm1
 Suggests: iproute-doc
 Description: Professional tools to control the networking in Linux kernels
  This is `iproute', the professional set of tools to control the

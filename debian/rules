@@ -31,7 +31,7 @@ binary-arch: build-arch
 	dh_strip
 	dh_fixperms
 	dh_installdeb
-	dh_shlibdeps
+	dh_shlibdeps -Xq_atm.so
 	dh_gencontrol
 	dh_md5sums
 	dh_builddeb

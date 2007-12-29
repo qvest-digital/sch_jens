@@ -1,3 +1,17 @@
+iproute (20071016-3) UNRELEASED; urgency=low
+
+  * UNRELEASED
+
+  [ Alexander Wirt ]
+  * Prevent q_atm from being scanned by dh_shlibdeps
+  * Bump priority to important (Closes: #414086)
+
+  [ Andreas Henriksson ]
+  * Revert "fix dotted-quad support patch to work on big-endian",
+    and cherry-pick official upstream fix.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Sat, 29 Dec 2007 15:33:03 +0100
+
 iproute (20071016-2) unstable; urgency=low
 
   [ Andreas Henriksson ]

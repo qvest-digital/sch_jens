@@ -10,8 +10,10 @@ iproute (20071016-3) UNRELEASED; urgency=low
   * Revert "fix dotted-quad support patch to work on big-endian",
     and cherry-pick official upstream fix.
   * Revert "TC action parsing bug fix" (Closes: #458539)
+  * Add synonyms for ip rule options to ip(8) manpage,
+    and drop ip_rule_usage.dpatch (Closes: #433507)
 
- -- Andreas Henriksson <andreas@fatal.se>  Wed, 02 Jan 2008 11:17:42 +0100
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 02 Jan 2008 23:26:23 +0100
 
 iproute (20071016-2) unstable; urgency=low
 

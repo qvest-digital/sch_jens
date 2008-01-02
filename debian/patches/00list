@@ -1,6 +1,5 @@
 ip.8-typo
 wrr-qdisc.dpatch
-ip_rule_usage.dpatch
 manpages-typo.dpatch
 ip_address
 tc_modules.dpatch

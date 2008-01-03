@@ -5,4 +5,5 @@ bin/ip sbin/ip
 /usr/share/man/man8/lnstat.8.gz /usr/share/man/man8/rtstat.8.gz
 /usr/share/man/man8/lnstat.8.gz /usr/share/man/man8/ctstat.8.gz
 /usr/share/man/man8/rtacct.8.gz /usr/share/man/man8/nstat.8.gz
+/usr/share/man/man8/routel.8.gz /usr/share/man/man8/routef.8.gz
 

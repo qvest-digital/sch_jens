@@ -5,6 +5,7 @@ iproute (20071016-3) UNRELEASED; urgency=low
   [ Alexander Wirt ]
   * Prevent q_atm from being scanned by dh_shlibdeps
   * Bump priority to important (Closes: #414086)
+  * Make iproute-doc architecture all
 
   [ Andreas Henriksson ]
   * Revert "fix dotted-quad support patch to work on big-endian",

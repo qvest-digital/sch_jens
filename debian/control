@@ -28,7 +28,7 @@ Description: Professional tools to control the networking in Linux kernels
 
 Package: iproute-doc
 Section: doc
-Architecture: any
+Architecture: all
 Description: Professional tools to control the networking in Linux kernels
  This package contains the documentation for the iproute package. 
  .

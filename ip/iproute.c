@@ -780,18 +780,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 				invarg("\"reordering\" value is invalid\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_REORDERING, reord);
 #endif
-#ifdef RTAX_HOPLIMIT
-		} else if (strcmp(*argv, "hoplimit") == 0) {
-			unsigned hoplim;
-			NEXT_ARG();
-			if (strcmp(*argv, "lock") == 0) {
-				mxlock |= (1<<RTAX_HOPLIMIT);
-				NEXT_ARG();
-			}
-			if (get_unsigned(&hoplim, *argv, 0))
-				invarg("\"hoplimit\" value is invalid\n", *argv);
-			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_HOPLIMIT, hoplim);
-#endif
 		} else if (strcmp(*argv, "rtt") == 0) {
 			unsigned rtt;
 			NEXT_ARG();

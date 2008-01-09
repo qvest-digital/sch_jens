@@ -1,0 +1,74 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## hoplimit.dpatch by Andreas Henriksson <andreas@fatal.se>
+## Original author unknown, split out from a direct source edit.
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Add implementation for hoplimit option.
+
+@DPATCH@
+diff -urNad pkg-iproute~/doc/ip-cref.tex pkg-iproute/doc/ip-cref.tex
+--- pkg-iproute~/doc/ip-cref.tex	2008-01-09 21:32:40.000000000 +0100
++++ pkg-iproute/doc/ip-cref.tex	2008-01-09 21:34:21.000000000 +0100
+@@ -1315,6 +1315,19 @@
+     If it is not given, Linux uses the value selected with \verb|sysctl|
+     variable \verb|net/ipv4/tcp_reordering|.
+ 
++\item \verb|hoplimit NUMBER|
++
++--- [2.5.74+ only] Hop limit on the path to this destination. If it is not
++    given, Linux uses the value selected with \verb|sysctl| variable
++    \verb|net/ipv4/ip_default_ttl|.
++
++\item \verb|initcwnd NUMBER|
++
++--- [2.5.70+ only] Initial congestion window size when establishing
++    connections to this destination. This value is multiplied with the
++    MSS (``Maximal Segment Size'') for the connection to get the actual
++    window size. If it is not given (or set to zero), Linux uses the
++    values specified in~\cite{RFC2414}.
+ 
+ 
+ \item \verb|nexthop NEXTHOP|
+@@ -2644,6 +2657,9 @@
+ \bibitem{RFC-DHCP} R.~Droms.
+ ``Dynamic Host Configuration Protocol.'', RFC-2131
+ 
++\bibitem{RFC2414}  M.~Allman, S.~Floyd, C.~Partridge.
++``Increasing TCP's Initial Window'', RFC-2414.
++
+ \end{thebibliography}
+ 
+ 
+diff -urNad pkg-iproute~/ip/iproute.c pkg-iproute/ip/iproute.c
+--- pkg-iproute~/ip/iproute.c	2008-01-09 21:32:40.000000000 +0100
++++ pkg-iproute/ip/iproute.c	2008-01-09 21:34:21.000000000 +0100
+@@ -70,8 +70,8 @@
+ 	fprintf(stderr, "INFO_SPEC := NH OPTIONS FLAGS [ nexthop NH ]...\n");
+ 	fprintf(stderr, "NH := [ via ADDRESS ] [ dev STRING ] [ weight NUMBER ] NHFLAGS\n");
+ 	fprintf(stderr, "OPTIONS := FLAGS [ mtu NUMBER ] [ advmss NUMBER ]\n");
+-	fprintf(stderr, "           [ rtt TIME ] [ rttvar TIME ]\n");
+-	fprintf(stderr, "           [ window NUMBER] [ cwnd NUMBER ] [ initcwnd NUMBER ]\n");
++	fprintf(stderr, "           [ rtt TIME ] [ rttvar TIME ] [ window NUMBER]\n");
++	fprintf(stderr, "           [ cwnd NUMBER ] [ hoplimit NUMBER ] [ initcwnd NUMBER ]\n");
+ 	fprintf(stderr, "           [ ssthresh NUMBER ] [ realms REALM ] [ src ADDRESS ]\n");
+ 	fprintf(stderr, "           [ rto_min TIME ]\n");
+ 	fprintf(stderr, "TYPE := [ unicast | local | broadcast | multicast | throw |\n");
+@@ -780,6 +780,18 @@
+ 				invarg("\"reordering\" value is invalid\n", *argv);
+ 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_REORDERING, reord);
+ #endif
++#ifdef RTAX_HOPLIMIT
++		} else if (matches(*argv, "hoplimit") == 0) {
++			unsigned hoplim;
++			NEXT_ARG();
++			if (strcmp(*argv, "lock") == 0) {
++				mxlock |= (1<<RTAX_HOPLIMIT);
++				NEXT_ARG();
++			}
++			if (get_unsigned(&hoplim, *argv, 0))
++				invarg("\"hoplimit\" value is invalid\n", *argv);
++			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_HOPLIMIT, hoplim);
++#endif
+ 		} else if (strcmp(*argv, "rtt") == 0) {
+ 			unsigned rtt;
+ 			NEXT_ARG();

@@ -1,3 +1,15 @@
+iproute (20080108-1) UNRELEASED; urgency=low
+
+  * New upstream release v2.6.24-080108
+  * Drop debian/patches merged upstream.
+    fix_ss_typo.dpatch ip.8-typo ip_address libnetlink_typo.dpatch
+    manpages-typo.dpatch tcb_htb_typo.dpatch tc_cbq_details_typo.dpatch
+    ip_route_usage.dpatch remove_tc_filters_reference.dpatch
+  * Drop some of the unused debian/patches.
+    esfq-support.dpatch heap_corruptionfix tc_sample_fix
+
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 09 Jan 2008 18:40:25 +0100
+
 iproute (20071016-3) unstable; urgency=low
 
   [ Alexander Wirt ]

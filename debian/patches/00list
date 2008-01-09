@@ -1,12 +1,3 @@
-ip.8-typo
 wrr-qdisc.dpatch
-manpages-typo.dpatch
-ip_address
 tc_modules.dpatch
 moo.dpatch
-ip_route_usage.dpatch
-tc_cbq_details_typo.dpatch
-libnetlink_typo.dpatch
-tcb_htb_typo.dpatch 
-fix_ss_typo.dpatch
-remove_tc_filters_reference.dpatch

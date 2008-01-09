@@ -1,0 +1,45 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## txtdocs.dpatch by Andreas Henriksson <andreas@fatal.se>
+## Original author unknown, this was split out to a dpatch
+## from a direct source edit.
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Add make rules to build documentation in plain text format.
+## DP: This adds a build-dependency on lynx.
+
+@DPATCH@
+diff -urNad pkg-iproute~/doc/Makefile pkg-iproute/doc/Makefile
+--- pkg-iproute~/doc/Makefile	2008-01-09 21:24:37.000000000 +0100
++++ pkg-iproute/doc/Makefile	2008-01-09 21:24:46.000000000 +0100
+@@ -14,6 +14,7 @@
+ PAGESPERPAGE=2
+ 
+ HTMLFILES=$(subst .sgml,.html,$(shell echo *.sgml))
++TXTFILES=$(subst .sgml,.txt,$(shell echo *.sgml))
+ DVIFILES=$(subst .ps,.dvi,$(PSFILES))
+ 
+ 
+@@ -25,6 +26,8 @@
+ 
+ dvi: $(DVIFILES)
+ 
++txt: $(TXTFILES)
++
+ print: $(PSFILES)
+ 	$(LPR) $(PSFILES)
+ 
+@@ -47,9 +50,13 @@
+ %.html: %.sgml
+ 	$(SGML2HTML) $<
+ 
++%.txt: %.html
++	lynx -nolist -dump $< > $@
++		
++
+ install:
+ 	install -m 0644 $(shell echo *.tex) $(DESTDIR)$(DOCDIR)
+ 	install -m 0644 $(shell echo *.sgml) $(DESTDIR)$(DOCDIR)
+ 
+ clean:
+-	rm -f *.aux *.log *.toc $(PSFILES) $(DVIFILES) *.html
++	rm -f *.aux *.log *.toc $(PSFILES) $(DVIFILES) *.html $(TXTFILES)

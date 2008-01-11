@@ -339,6 +339,8 @@ int get_prefix_1(inet_prefix *dst, char *arg, int family)
 				dst->bitlen = 32;
 		}
 		if (slash) {
+			fprintf(stderr, "hu?")
+			exit(1)
 			if (get_netmask(&plen, slash+1, 0)
 					|| plen > dst->bitlen) {
 				err = -1;

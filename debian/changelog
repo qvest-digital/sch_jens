@@ -1,5 +1,6 @@
 iproute (20080108-1) UNRELEASED; urgency=low
 
+  [ Andreas Henriksson ]
   * New upstream release v2.6.24-080108
   * Drop debian/patches merged upstream.
     fix_ss_typo.dpatch ip.8-typo ip_address libnetlink_typo.dpatch
@@ -11,6 +12,7 @@ iproute (20080108-1) UNRELEASED; urgency=low
     - disabling build of ifstat (disable-ifstat.dpatch)
     - building txt documentation (txtdocs.dpatch)
     - hoplimit option (hoplimit.dpatch)
+  * Add patch to document the "promote secondaries" option. (#429689)
 
  -- Andreas Henriksson <andreas@fatal.se>  Wed, 09 Jan 2008 21:40:52 +0100
 

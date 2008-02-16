@@ -1,3 +1,12 @@
+iproute (20080108-2) UNRELEASED; urgency=low
+
+  * UNRELEASED
+
+  [ Justin B Rye ]
+  * Update package description (Closes: #464521)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Sat, 16 Feb 2008 11:08:15 +0100
+
 iproute (20080108-1) unstable; urgency=low
 
   [ Andreas Henriksson ]

@@ -16,31 +16,29 @@ Conflicts: arpd
 Depends: ${shlibs:Depends}
 Recommends: libatm1
 Suggests: iproute-doc
-Description: Professional tools to control the networking in Linux kernels
- This is `iproute', the professional set of tools to control the
- networking behavior in kernels 2.2.x and later.
+Description: networking and traffic control tools
+ The iproute suite, also knows as iproute2, is a collection of
+ utilities for networking and traffic control.
  .
- At least, the options CONFIG_NETLINK and CONFIG_NETLINK_DEV (or
- CONFIG_RTNETLINK) must be compiled into the running kernel.
- .
- This package is also known as iproute2 upstream and in some
- documentation.
+ These tools communicate with the Linux kernel via the (rt)netlink
+ interface, providing advanced features not available through the
+ legacy net-tools commands 'ifconfig' and 'route'.
 
 Package: iproute-doc
 Section: doc
 Architecture: all
-Description: Professional tools to control the networking in Linux kernels
- This package contains the documentation for the iproute package. 
+Description: networking and traffic control tools - documentation
+ The iproute suite, also knows as iproute2, is a collection of
+ utilities for networking and traffic control.
  .
- iproute is the professional set of tools to control the
- networking behavior in kernels 2.2.x and late
+ This package contains the documentation for iproute.
 
 Package: iproute-dev
 Section: libdevel
 Architecture: any
-Description: Development package for iproute
- This package contains the header files and static libs for developing
- iproute additions. iproute is the professional set of tools to control the
- networking behavior in kernels 2.2.x and later.
+Description: networking and traffic control tools - development files
+ The iproute suite, also knows as iproute2, is a collection of
+ utilities for networking and traffic control.
  .
- You don't need this package unless doing development.
+ This package contains the header files and static libraries for
+ compiling iproute extensions, and is needed only for development.

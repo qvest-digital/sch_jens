@@ -1,2 +1,2 @@
-*/*.h /usr/include/iproute/
+include/libnetlink.h /usr/include
 lib/libnetlink.a /usr/lib

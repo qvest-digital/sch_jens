@@ -1,3 +1,16 @@
+iproute (20080108-2) UNRELEASED; urgency=low
+
+  * UNRELEASED
+
+  [ Justin B Rye ]
+  * Update package description (Closes: #464521)
+
+  [ Andreas Henriksson ]
+  * Fix typo (syntax error) in ip(8) manpage (caught by lintian).
+  * Don't ship useless headers in iproute-dev (Closes: #467557)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Mon, 17 Mar 2008 16:14:56 +0100
+
 iproute (20080108-1) unstable; urgency=low
 
   [ Andreas Henriksson ]

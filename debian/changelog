@@ -6,6 +6,8 @@ iproute (20080417-1) UNRELEASED; urgency=low
   * New upstream release, v2.6.25 a.k.a. snapshot 20080417.
     - Initial documentation for xfrm (Partially fixes #451337)
     - Fixes manpage error caught by lintian!
+  * Fix another typo (syntax error) in ip(8) manpage.
+    - Introduced by upstream, caught by lintian yet again!
   * Don't ship useless headers in iproute-dev (Closes: #467557)
 
   [ Justin B Rye ]
@@ -14,7 +16,7 @@ iproute (20080417-1) UNRELEASED; urgency=low
   [ Alexander Wirt ]
   * Fix typo in short package description.
 
- -- Andreas Henriksson <andreas@fatal.se>  Sun, 20 Apr 2008 11:16:47 +0100
+ -- Andreas Henriksson <andreas@fatal.se>  Sun, 20 Apr 2008 11:26:23 +0200
 
 iproute (20080108-1) unstable; urgency=low
 

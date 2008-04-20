@@ -18,6 +18,7 @@ TCMODULES += f_u32.o
 TCMODULES += f_route.o
 TCMODULES += f_fw.o
 TCMODULES += f_basic.o
+TCMODULES += f_flow.o
 TCMODULES += q_dsmark.o
 TCMODULES += q_gred.o
 TCMODULES += f_tcindex.o
@@ -72,9 +73,9 @@ libtc.a: $(TCLIB)
 
 install: all
 	mkdir -p $(DESTDIR)/usr/lib/tc
-	install -m 0755 -s tc $(DESTDIR)$(SBINDIR)
+	install -m 0755 tc $(DESTDIR)$(SBINDIR)
 	for i in $(TCSO); \
-	do install -m 755 -s $$i $(DESTDIR)/usr/lib/tc; \
+	do install -m 755 $$i $(DESTDIR)/usr/lib/tc; \
 	done
 
 clean:

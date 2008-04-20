@@ -20,6 +20,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/errno.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
@@ -116,7 +117,20 @@ void print_link_flags(FILE *fp, unsigned flags, unsigned mdown)
 	fprintf(fp, "> ");
 }
 
-void print_queuelen(char *name)
+static const char *oper_states[] = {
+	"UNKNOWN", "NOTPRESENT", "DOWN", "LOWERLAYERDOWN", 
+	"TESTING", "DORMANT",	 "UP"
+};
+
+static void print_operstate(FILE *f, __u8 state)
+{
+	if (state >= sizeof(oper_states)/sizeof(oper_states[0]))
+		fprintf(f, "state %#x ", state);
+	else
+		fprintf(f, "state %s ", oper_states[state]);
+}
+
+static void print_queuelen(FILE *f, const char *name)
 {
 	struct ifreq ifr;
 	int s;
@@ -128,14 +142,14 @@ void print_queuelen(char *name)
 	memset(&ifr, 0, sizeof(ifr));
 	strcpy(ifr.ifr_name, name);
 	if (ioctl(s, SIOCGIFTXQLEN, &ifr) < 0) {
-		perror("SIOCGIFXQLEN");
+		fprintf(f, "ioctl(SIOCGIFXQLEN) failed: %s\n", strerror(errno));
 		close(s);
 		return;
 	}
 	close(s);
 
 	if (ifr.ifr_qlen)
-		printf("qlen %d", ifr.ifr_qlen);
+		fprintf(f, "qlen %d", ifr.ifr_qlen);
 }
 
 static void print_linktype(FILE *fp, struct rtattr *tb)
@@ -235,8 +249,11 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		fprintf(fp, "master %s ", ll_idx_n2a(*(int*)RTA_DATA(tb[IFLA_MASTER]), b1));
 	}
 #endif
+	if (tb[IFLA_OPERSTATE])
+		print_operstate(fp, *(__u8 *)RTA_DATA(tb[IFLA_OPERSTATE]));
+		
 	if (filter.showqueue)
-		print_queuelen((char*)RTA_DATA(tb[IFLA_IFNAME]));
+		print_queuelen(fp, (char*)RTA_DATA(tb[IFLA_IFNAME]));
 
 	if (!filter.family || filter.family == AF_PACKET) {
 		SPRINT_BUF(b1);
@@ -318,8 +335,8 @@ int print_linkinfo(const struct sockaddr_nl *who,
 
 static int flush_update(void)
 {
-	if (rtnl_send(&rth, filter.flushb, filter.flushp) < 0) {
-		perror("Failed to send flush request\n");
+	if (rtnl_send_check(&rth, filter.flushb, filter.flushp) < 0) {
+		perror("Failed to send flush request");
 		return -1;
 	}
 	filter.flushp = 0;
@@ -516,7 +533,7 @@ struct nlmsg_list
 	struct nlmsghdr	  h;
 };
 
-int print_selected_addrinfo(int ifindex, struct nlmsg_list *ainfo, FILE *fp)
+static int print_selected_addrinfo(int ifindex, struct nlmsg_list *ainfo, FILE *fp)
 {
 	for ( ;ainfo ;  ainfo = ainfo->next) {
 		struct nlmsghdr *n = &ainfo->h;
@@ -559,7 +576,7 @@ static int store_nlmsg(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	return 0;
 }
 
-int ipaddr_list_or_flush(int argc, char **argv, int flush)
+static int ipaddr_list_or_flush(int argc, char **argv, int flush)
 {
 	struct nlmsg_list *linfo = NULL;
 	struct nlmsg_list *ainfo = NULL;
@@ -799,7 +816,7 @@ void ipaddr_reset_filter(int oneline)
 	filter.oneline = oneline;
 }
 
-int default_scope(inet_prefix *lcl)
+static int default_scope(inet_prefix *lcl)
 {
 	if (lcl->family == AF_INET) {
 		if (lcl->bytelen >= 1 && *(__u8*)&lcl->data == 127)
@@ -808,7 +825,7 @@ int default_scope(inet_prefix *lcl)
 	return 0;
 }
 
-int ipaddr_modify(int cmd, int flags, int argc, char **argv)
+static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 {
 	struct {
 		struct nlmsghdr 	n;

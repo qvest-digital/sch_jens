@@ -35,8 +35,9 @@ struct action_util police_action_util = {
 static void usage(void)
 {
 	fprintf(stderr, "Usage: ... police rate BPS burst BYTES[/BYTES] [ mtu BYTES[/BYTES] ]\n");
-	fprintf(stderr, "                [ peakrate BPS ] [ avrate BPS ]\n");
-	fprintf(stderr, "                [ ACTIONTERM ]\n");
+	fprintf(stderr, "                [ peakrate BPS ] [ avrate BPS ] [ overhead BYTES ]\n");
+	fprintf(stderr, "                [ linklayer TYPE ] [ ACTIONTERM ]\n");
+
 	fprintf(stderr, "Old Syntax ACTIONTERM := action <EXCEEDACT>[/NOTEXCEEDACT] \n");
 	fprintf(stderr, "New Syntax ACTIONTERM := conform-exceed <EXCEEDACT>[/NOTEXCEEDACT] \n");
 	fprintf(stderr, "Where: *EXCEEDACT := pipe | ok | reclassify | drop | continue \n");
@@ -133,6 +134,8 @@ int act_parse_police(struct action_util *a,int *argc_p, char ***argv_p, int tca_
 	__u32 avrate = 0;
 	int presult = 0;
 	unsigned buffer=0, mtu=0, mpu=0;
+	unsigned short overhead=0;
+	unsigned int linklayer = LINKLAYER_ETHERNET; /* Assume ethernet */
 	int Rcell_log=-1, Pcell_log = -1;
 	struct rtattr *tail;
 
@@ -234,6 +237,16 @@ int act_parse_police(struct action_util *a,int *argc_p, char ***argv_p, int tca_
 				fprintf(stderr, "Illegal \"action\"\n");
 				return -1;
 			}
+		} else if (matches(*argv, "overhead") == 0) {
+			NEXT_ARG();
+			if (get_u16(&overhead, *argv, 10)) {
+				explain1("overhead"); return -1;
+			}
+		} else if (matches(*argv, "linklayer") == 0) {
+			NEXT_ARG();
+			if (get_linklayer(&linklayer, *argv)) {
+				explain1("linklayer"); return -1;
+			}
 		} else if (strcmp(*argv, "help") == 0) {
 			usage();
 		} else {
@@ -263,7 +276,8 @@ int act_parse_police(struct action_util *a,int *argc_p, char ***argv_p, int tca_
 
 	if (p.rate.rate) {
 		p.rate.mpu = mpu;
-		if (tc_calc_rtable(&p.rate, rtab, Rcell_log, mtu) < 0) {
+		p.rate.overhead = overhead;
+		if (tc_calc_rtable(&p.rate, rtab, Rcell_log, mtu, linklayer) < 0) {
 			fprintf(stderr, "TBF: failed to calculate rate table.\n");
 			return -1;
 		}
@@ -272,7 +286,8 @@ int act_parse_police(struct action_util *a,int *argc_p, char ***argv_p, int tca_
 	p.mtu = mtu;
 	if (p.peakrate.rate) {
 		p.peakrate.mpu = mpu;
-		if (tc_calc_rtable(&p.peakrate, ptab, Pcell_log, mtu) < 0) {
+		p.peakrate.overhead = overhead;
+		if (tc_calc_rtable(&p.peakrate, ptab, Pcell_log, mtu, linklayer) < 0) {
 			fprintf(stderr, "POLICE: failed to calculate peak rate table.\n");
 			return -1;
 		}
@@ -344,6 +359,7 @@ print_police(struct action_util *a, FILE *f, struct rtattr *arg)
 		fprintf(f, "/%s ", police_action_n2a(*(int*)RTA_DATA(tb[TCA_POLICE_RESULT]), b1, sizeof(b1)));
 	} else
 		fprintf(f, " ");
+	fprintf(f, "overhead %ub ", p->rate.overhead);
 	fprintf(f, "\nref %d bind %d\n",p->refcnt, p->bindcnt);
 
 	return 0;

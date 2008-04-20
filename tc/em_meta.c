@@ -34,9 +34,8 @@ static void meta_print_usage(FILE *fd)
 	    "       META_ID := id [ shift SHIFT ] [ mask MASK ]\n" \
 	    "\n" \
 	    "Example: meta(nfmark gt 24)\n" \
-	    "         meta(indev shift 1 eq \"ppp\"\n" \
+	    "         meta(indev shift 1 eq \"ppp\")\n" \
 	    "         meta(tcindex mask 0xf0 eq 0xf0)\n" \
-	    "         meta(dev eq indev)\n" \
 	    "\n" \
 	    "For a list of meta identifiers, use meta(list).\n");
 }
@@ -89,6 +88,7 @@ struct meta_entry {
 				"Routing ClassID (cls_route)"),
 	__A(RTIIF,		"rt_iif",	"i",
 				"Incoming interface index"),
+	__A(VLAN_TAG,		"vlan",		"i",	"Vlan tag"),
 
 	__A(SECTION,		"Sockets", "", ""),
 	__A(SK_FAMILY,		"sk_family",	"i",	"Address family"),

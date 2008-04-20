@@ -31,7 +31,7 @@ static void usage(void);
 static void usage(void)
 {
 	fprintf(stderr, "Usage: tc filter [ add | del | change | replace | show ] dev STRING\n");
-	fprintf(stderr, "       [ pref PRIO ] [ protocol PROTO ]\n");
+	fprintf(stderr, "       [ pref PRIO ] protocol PROTO\n");
 	fprintf(stderr, "       [ estimator INTERVAL TIME_CONSTANT ]\n");
 	fprintf(stderr, "       [ root | classid CLASSID ] [ handle FILTERID ]\n");
 	fprintf(stderr, "       [ [ FILTER_TYPE ] [ help | OPTIONS ] ]\n");
@@ -54,7 +54,8 @@ int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
 	} req;
 	struct filter_util *q = NULL;
 	__u32 prio = 0;
-	__u32 protocol = 0;
+	__u32 protocol = ETH_P_ALL;
+	int protocol_set = 0;
 	char *fhandle = NULL;
 	char  d[16];
 	char  k[16];
@@ -102,15 +103,16 @@ int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (prio)
 				duparg("priority", *argv);
 			if (get_u32(&prio, *argv, 0))
-				invarg(*argv, "invalid prpriority value");
+				invarg(*argv, "invalid priority value");
 		} else if (matches(*argv, "protocol") == 0) {
 			__u16 id;
 			NEXT_ARG();
-			if (protocol)
+			if (protocol_set)
 				duparg("protocol", *argv);
 			if (ll_proto_a2n(&id, *argv))
 				invarg(*argv, "invalid protocol");
 			protocol = id;
+			protocol_set = 1;
 		} else if (matches(*argv, "estimator") == 0) {
 			if (parse_estimator(&argc, &argv, &est) < 0)
 				return -1;

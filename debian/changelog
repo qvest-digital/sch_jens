@@ -9,6 +9,8 @@ iproute (20080417-1) UNRELEASED; urgency=low
   * Fix typos (syntax error) in ip(8) manpage.
     - Introduced by upstream, caught by lintian yet again!
   * Don't ship useless headers in iproute-dev (Closes: #467557)
+  * Cherry-pick "Fix bad hash calculation because of signed address" from
+    upstream. (Closes: #480173)
 
   [ Justin B Rye ]
   * Update package description (Closes: #464521)

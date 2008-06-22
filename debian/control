@@ -1,6 +1,6 @@
 Source: iproute
 Section: net
-Priority: optional
+Priority: important
 Maintainer: Debian iproute maintainers <ah-iproute@debian.org>
 Uploaders: Andreas Henriksson <andreas@fatal.se>, Alexander Wirt <formorer@debian.org>
 Homepage: http://www.linux-foundation.org/en/Net:Iproute2

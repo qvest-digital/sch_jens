@@ -5,8 +5,9 @@ iproute (20080725-1) UNRELEASED; urgency=low
   * Actually bump Priority in debian/control, which we claimed to do in
     20071016-3. The real bumping is apparently done by the ftpmaster though.
     (See: #487533)
+  * Fix syntax errors in ip(8) manpage.
 
- -- Andreas Henriksson <andreas@fatal.se>  Mon, 23 Jun 2008 00:12:07 +0200
+ -- Andreas Henriksson <andreas@fatal.se>  Sat, 26 Jul 2008 21:49:59 +0200
 
 iproute (20080417-1) unstable; urgency=low
 

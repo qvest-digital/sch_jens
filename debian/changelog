@@ -1,6 +1,7 @@
-iproute (20080417-2) UNRELEASED; urgency=low
+iproute (20080725-1) UNRELEASED; urgency=low
 
-  * NOT YET RELEASED
+  [ Andreas Henriksson ]
+  * New upstream release, v2.6.26 a.k.a. snapshot 080725.
   * Actually bump Priority in debian/control, which we claimed to do in
     20071016-3. The real bumping is apparently done by the ftpmaster though.
     (See: #487533)

@@ -1,3 +1,11 @@
+iproute (20080725-2) unstable; urgency=low
+
+  [ Andreas Henriksson ]
+  * Oops, only set Priority: important on the binary iproute package, the
+    -dev and -doc packages should still be optional.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Sun, 27 Jul 2008 14:38:07 +0200
+
 iproute (20080725-1) unstable; urgency=low
 
   [ Andreas Henriksson ]

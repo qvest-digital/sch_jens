@@ -1,4 +1,4 @@
-iproute (20080725-1) UNRELEASED; urgency=low
+iproute (20080725-1) unstable; urgency=low
 
   [ Andreas Henriksson ]
   * New upstream release, v2.6.26 a.k.a. snapshot 080725.
@@ -10,7 +10,7 @@ iproute (20080725-1) UNRELEASED; urgency=low
   [ Alexander Wirt ]
   * bump standards version (no changes) 
 
- -- Alexander Wirt <formorer@debian.org>  Sun, 27 Jul 2008 10:54:46 +0200
+ -- Alexander Wirt <formorer@debian.org>  Sun, 27 Jul 2008 14:02:50 +0200
 
 iproute (20080417-1) unstable; urgency=low
 

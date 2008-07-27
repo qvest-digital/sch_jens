@@ -7,7 +7,10 @@ iproute (20080725-1) UNRELEASED; urgency=low
     (See: #487533)
   * Fix syntax errors in ip(8) manpage.
 
- -- Andreas Henriksson <andreas@fatal.se>  Sat, 26 Jul 2008 21:49:59 +0200
+  [ Alexander Wirt ]
+  * bump standards version (no changes) 
+
+ -- Alexander Wirt <formorer@debian.org>  Sun, 27 Jul 2008 10:54:46 +0200
 
 iproute (20080417-1) unstable; urgency=low
 

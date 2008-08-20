@@ -1,3 +1,12 @@
+iproute (20080725-3) UNRELEASED; urgency=low
+
+  * NOT YET RELEASED!
+  * debian/rules: Make stamp-doc target depend on patch target.
+    - package fails to build binary-indep because of missing txt target
+      in doc/Makefile if invoked manually. Reported by Dean Gaudet.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 20 Aug 2008 23:01:17 +0200
+
 iproute (20080725-2) unstable; urgency=low
 
   [ Andreas Henriksson ]

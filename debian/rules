@@ -36,7 +36,7 @@ binary-indep: build-indep
 
 
 build-indep: stamp-doc
-stamp-doc:
+stamp-doc: patch
 	$(MAKE) -C doc all txt
 	touch stamp-doc
 

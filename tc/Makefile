@@ -45,6 +45,7 @@ TCLIB := tc_core.o
 TCLIB += tc_red.o
 TCLIB += tc_cbq.o
 TCLIB += tc_estimator.o
+TCLIB += tc_stab.o
 
 CFLAGS += -DCONFIG_GACT -DCONFIG_GACT_PROB
 
@@ -72,10 +73,10 @@ libtc.a: $(TCLIB)
 	$(AR) rcs $@ $(TCLIB)
 
 install: all
-	mkdir -p $(DESTDIR)/lib/tc
+	mkdir -p $(DESTDIR)$(LIBDIR)/tc
 	install -m 0755 tc $(DESTDIR)$(SBINDIR)
 	for i in $(TCSO); \
-	do install -m 755 $$i $(DESTDIR)/lib/tc; \
+	do install -m 755 $$i $(DESTDIR)$(LIBDIR)/tc; \
 	done
 
 clean:

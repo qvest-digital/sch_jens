@@ -33,27 +33,46 @@
 #include "ip_common.h"
 
 #define IPLINK_IOCTL_COMPAT	1
-#ifndef DESTDIR
-#define DESTDIR "/usr/"
+#ifndef LIBDIR
+#define LIBDIR "/usr/lib/"
 #endif
 
 static void usage(void) __attribute__((noreturn));
+static int iplink_have_newlink(void);
 
 void iplink_usage(void)
 {
-	fprintf(stderr, "Usage: ip link set DEVICE { up | down |\n");
-	fprintf(stderr, "	                     arp { on | off } |\n");
-	fprintf(stderr, "	                     dynamic { on | off } |\n");
-	fprintf(stderr, "	                     multicast { on | off } |\n");
-	fprintf(stderr, "	                     allmulticast { on | off } |\n");
-	fprintf(stderr, "	                     promisc { on | off } |\n");
-	fprintf(stderr, "	                     trailers { on | off } |\n");
-	fprintf(stderr, "	                     txqueuelen PACKETS |\n");
-	fprintf(stderr, "	                     name NEWNAME |\n");
-	fprintf(stderr, "	                     address LLADDR | broadcast LLADDR |\n");
-	fprintf(stderr, "	                     mtu MTU }\n");
-	fprintf(stderr, "	                     netns PID }\n");
+	if (iplink_have_newlink()) {
+		fprintf(stderr, "Usage: ip link add link DEV [ name ] NAME\n");
+		fprintf(stderr, "                   [ txqueuelen PACKETS ]\n");
+		fprintf(stderr, "                   [ address LLADDR ]\n");
+		fprintf(stderr, "                   [ broadcast LLADDR ]\n");
+		fprintf(stderr, "                   [ mtu MTU ]\n");
+		fprintf(stderr, "                   type TYPE [ ARGS ]\n");
+		fprintf(stderr, "       ip link delete DEV type TYPE [ ARGS ]\n");
+		fprintf(stderr, "\n");
+		fprintf(stderr, "       ip link set DEVICE [ { up | down } ]\n");
+	} else
+		fprintf(stderr, "Usage: ip link set DEVICE [ { up | down } ]\n");
+
+	fprintf(stderr, "	                  [ arp { on | off } ]\n");
+	fprintf(stderr, "	                  [ dynamic { on | off } ]\n");
+	fprintf(stderr, "	                  [ multicast { on | off } ]\n");
+	fprintf(stderr, "	                  [ allmulticast { on | off } ]\n");
+	fprintf(stderr, "	                  [ promisc { on | off } ]\n");
+	fprintf(stderr, "	                  [ trailers { on | off } ]\n");
+	fprintf(stderr, "	                  [ txqueuelen PACKETS ]\n");
+	fprintf(stderr, "	                  [ name NEWNAME ]\n");
+	fprintf(stderr, "	                  [ address LLADDR ]\n");
+	fprintf(stderr, "	                  [ broadcast LLADDR ]\n");
+	fprintf(stderr, "	                  [ mtu MTU ]\n");
+	fprintf(stderr, "	                  [ netns PID ]\n");
 	fprintf(stderr, "       ip link show [ DEVICE ]\n");
+
+	if (iplink_have_newlink()) {
+		fprintf(stderr, "\n");
+		fprintf(stderr, "TYPE := { vlan | veth | dummy | ifb | macvlan }\n");
+	}
 	exit(-1);
 }
 
@@ -81,7 +100,7 @@ struct link_util *get_link_kind(const char *id)
 		if (strcmp(l->id, id) == 0)
 			return l;
 
-	snprintf(buf, sizeof(buf), DESTDIR "/lib/ip/link_%s.so", id);
+	snprintf(buf, sizeof(buf), LIBDIR "/ip/link_%s.so", id);
 	dlh = dlopen(buf, RTLD_LAZY);
 	if (dlh == NULL) {
 		/* look in current binary, only open once */
@@ -274,6 +293,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			if (strcmp(*argv, "dev") == 0) {
 				NEXT_ARG();
 			}
+			if (matches(*argv, "help") == 0)
+				usage();
 			if (*dev)
 				duparg2("dev", *argv);
 			*dev = *argv;
@@ -334,6 +355,10 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 			return -1;
 		}
 		linkinfo->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)linkinfo;
+	} else if (flags & NLM_F_CREATE) {
+		fprintf(stderr, "Not enough information: \"type\" argument "
+				"is required\n");
+		return -1;
 	}
 
 	if (!(flags & NLM_F_CREATE)) {

@@ -24,8 +24,8 @@
 #include "utils.h"
 #include "tc_util.h"
 
-#ifndef DESTDIR
-#define DESTDIR "/usr/"
+#ifndef LIBDIR
+#define LIBDIR "/usr/lib/"
 #endif
 
 const char *get_tc_lib(void)
@@ -34,7 +34,7 @@ const char *get_tc_lib(void)
 
 	lib_dir = getenv("TC_LIB_DIR");
 	if (!lib_dir)
-		lib_dir = DESTDIR "/lib/tc";
+		lib_dir = LIBDIR "/tc/";
 
 	return lib_dir;
 }
@@ -439,7 +439,7 @@ int action_a2n(char *arg, int *result)
 	return 0;
 }
 
-int get_linklayer(unsigned int *val, const char *arg)
+int get_linklayer(unsigned *val, const char *arg)
 {
 	int res;
 
@@ -454,6 +454,30 @@ int get_linklayer(unsigned int *val, const char *arg)
 
 	*val = res;
 	return 0;
+}
+
+void print_linklayer(char *buf, int len, unsigned linklayer)
+{
+	switch (linklayer) {
+	case LINKLAYER_UNSPEC:
+		snprintf(buf, len, "%s", "unspec");
+		return;
+	case LINKLAYER_ETHERNET:
+		snprintf(buf, len, "%s", "ethernet");
+		return;
+	case LINKLAYER_ATM:
+		snprintf(buf, len, "%s", "atm");
+		return;
+	default:
+		snprintf(buf, len, "%s", "unknown");
+		return;
+	}
+}
+
+char *sprint_linklayer(unsigned linklayer, char *buf)
+{
+	print_linklayer(buf, SPRINT_BSIZE-1, linklayer);
+	return buf;
 }
 
 void print_tm(FILE * f, const struct tcf_t *tm)

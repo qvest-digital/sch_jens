@@ -7,7 +7,7 @@ iproute (20081027-1) UNRELEASED; urgency=low
     - package fails to build binary-indep because of missing txt target
       in doc/Makefile if invoked manually. Reported by Dean Gaudet.
   * New upstream release v2.6.27 (tagged but not tarball available yet).
-    - old ipv4 abbrevation compatability restored. (Closes: #497011)
+    - old ipv4 abbrevation compatibility restored. (Closes: #497011)
     - make it possible to use tunnel names matching "help", if specified
       with explicit "name" parameter before name. (Closes: #497278)
     - add new ip link parameters in usage text when running on

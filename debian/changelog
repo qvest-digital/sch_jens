@@ -1,4 +1,4 @@
-iproute (20081027-1) UNRELEASED; urgency=low
+iproute (20090115-1) UNRELEASED; urgency=low
 
   * NOT YET RELEASED!
 
@@ -6,13 +6,14 @@ iproute (20081027-1) UNRELEASED; urgency=low
   * debian/rules: Make stamp-doc target depend on patch target.
     - package fails to build binary-indep because of missing txt target
       in doc/Makefile if invoked manually. Reported by Dean Gaudet.
-  * New upstream release v2.6.27 (tagged but not tarball available yet).
+  * New upstream release v2.6.27 (aka 081027, tagged but no tarballs).
     - old ipv4 abbrevation compatibility restored. (Closes: #497011)
     - make it possible to use tunnel names matching "help", if specified
       with explicit "name" parameter before name. (Closes: #497278)
     - add new ip link parameters in usage text when running on
       a kernel that supports them. (Closes: #504064)
     - only print "Nothing to flush" when told to show stats. (Closes: #492196)
+  * New upstream release v2.6.28 (aka 090115).
 
  -- Andreas Henriksson <andreas@fatal.se>  Wed, 20 Aug 2008 23:01:17 +0200
 

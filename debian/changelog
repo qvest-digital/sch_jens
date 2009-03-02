@@ -1,6 +1,4 @@
-iproute (20090115-1) UNRELEASED; urgency=low
-
-  * NOT YET RELEASED!
+iproute (20090115-1) unstable; urgency=low
 
   [ Andreas Henriksson ]
   * debian/rules: Make stamp-doc target depend on patch target.

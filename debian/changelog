@@ -2,6 +2,8 @@ iproute (20090324-1) unstable; urgency=low
 
   * New upstream release v2.6.29-1 (includes "Fix headers needed for gre")
     - fixed to link against xtables rather then ipt. (Closes: #510924)
+  * Make sure clean drops any potential left-over files from WRR qdisc patch.
+  * Bump standards version to policy 3.8.1, no changes needed.
 
  -- Andreas Henriksson <andreas@fatal.se>  Thu, 26 Mar 2009 12:36:10 +0100
 

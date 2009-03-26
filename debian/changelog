@@ -1,3 +1,10 @@
+iproute (20090324-1) unstable; urgency=low
+
+  * New upstream release v2.6.29-1 (includes "Fix headers needed for gre")
+    - fixed to link against xtables rather then ipt. (Closes: #510924)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 26 Mar 2009 12:36:10 +0100
+
 iproute (20090115-1) unstable; urgency=low
 
   [ Andreas Henriksson ]

@@ -1,5 +1,5 @@
 /*
- * m_ipt.c	iptables based targets
+ * m_xt.c	xtables based targets
  * 		utilities mostly ripped from iptables <duh, its the linux way>
  *
  *		This program is free software; you can distribute it and/or
@@ -10,14 +10,18 @@
  * Authors:  J Hadi Salim (hadi@cyberus.ca)
  */
 
+/*XXX: in the future (xtables 1.4.3?) get rid of everything tagged
+ * as TC_CONFIG_XT_H */
+
 #include <syslog.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <linux/if.h>
-#include <iptables.h>
+#include <net/if.h>
+#include <limits.h>
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv4/ip_tables.h>
+#include <xtables.h>
 #include "utils.h"
 #include "tc_util.h"
 #include <linux/tc_act/tc_ipt.h>
@@ -34,10 +38,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#ifdef TC_CONFIG_XT_H
+#include "xt-internal.h"
+#endif
 
 static const char *pname = "tc-ipt";
 static const char *tname = "mangle";
-static const char *pversion = "0.1";
+static const char *pversion = "0.2";
 
 static const char *ipthooks[] = {
 	"NF_IP_PRE_ROUTING",
@@ -52,116 +59,23 @@ static struct option original_opts[] = {
 	{0, 0, 0, 0}
 };
 
-static struct iptables_target *t_list = NULL;
 static struct option *opts = original_opts;
 static unsigned int global_option_offset = 0;
+char *lib_dir;
+const char *program_version = XTABLES_VERSION;
+const char *program_name = "tc-ipt";
+struct afinfo afinfo = {
+	.family         = AF_INET,
+	.libprefix      = "libxt_",
+	.ipproto        = IPPROTO_IP,
+	.kmod           = "ip_tables",
+	.so_rev_target  = IPT_SO_GET_REVISION_TARGET,
+};
+
+
 #define OPTION_OFFSET 256
 
-char *lib_dir;
-
-void
-register_target(struct iptables_target *me)
-{
-/*      fprintf(stderr, "\nDummy register_target %s \n", me->name);
-*/
-	me->next = t_list;
-	t_list = me;
-
-}
-
-void
-xtables_register_target(struct iptables_target *me)
-{
-	me->next = t_list;
-	t_list = me;
-}
-
-void
-exit_tryhelp(int status)
-{
-	fprintf(stderr, "Try `%s -h' or '%s --help' for more information.\n",
-		pname, pname);
-	exit(status);
-}
-
-void
-exit_error(enum exittype status, char *msg, ...)
-{
-	va_list args;
-
-	va_start(args, msg);
-	fprintf(stderr, "%s v%s: ", pname, pversion);
-	vfprintf(stderr, msg, args);
-	va_end(args);
-	fprintf(stderr, "\n");
-	if (status == PARAMETER_PROBLEM)
-		exit_tryhelp(status);
-	if (status == VERSION_PROBLEM)
-		fprintf(stderr,
-			"Perhaps iptables or your kernel needs to be upgraded.\n");
-	exit(status);
-}
-
-/* stolen from iptables 1.2.11
-They should really have them as a library so i can link to them
-Email them next time i remember
-*/
-
-char *
-addr_to_dotted(const struct in_addr *addrp)
-{
-	static char buf[20];
-	const unsigned char *bytep;
-
-	bytep = (const unsigned char *) &(addrp->s_addr);
-	sprintf(buf, "%d.%d.%d.%d", bytep[0], bytep[1], bytep[2], bytep[3]);
-	return buf;
-}
-
-int string_to_number_ll(const char *s, unsigned long long min,
-			unsigned long long max,
-		 unsigned long long *ret)
-{
-	unsigned long long number;
-	char *end;
-
-	/* Handle hex, octal, etc. */
-	errno = 0;
-	number = strtoull(s, &end, 0);
-	if (*end == '\0' && end != s) {
-		/* we parsed a number, let's see if we want this */
-		if (errno != ERANGE && min <= number && (!max || number <= max)) {
-			*ret = number;
-			return 0;
-		}
-	}
-	return -1;
-}
-
-int string_to_number_l(const char *s, unsigned long min, unsigned long max,
-		       unsigned long *ret)
-{
-	int result;
-	unsigned long long number;
-
-	result = string_to_number_ll(s, min, max, &number);
-	*ret = (unsigned long)number;
-
-	return result;
-}
-
-int string_to_number(const char *s, unsigned int min, unsigned int max,
-		unsigned int *ret)
-{
-	int result;
-	unsigned long number;
-
-	result = string_to_number_l(s, min, max, &number);
-	*ret = (unsigned int)number;
-
-	return result;
-}
-
+/*XXX: TC_CONFIG_XT_H */
 static void free_opts(struct option *local_opts)
 {
 	if (local_opts != original_opts) {
@@ -171,6 +85,7 @@ static void free_opts(struct option *local_opts)
 	}
 }
 
+/*XXX: TC_CONFIG_XT_H */
 static struct option *
 merge_options(struct option *oldopts, const struct option *newopts,
 	      unsigned int *option_offset)
@@ -194,152 +109,51 @@ merge_options(struct option *oldopts, const struct option *newopts,
 	return merge;
 }
 
-static void *
-fw_calloc(size_t count, size_t size)
-{
-	void *p;
 
-	if ((p = (void *) calloc(count, size)) == NULL) {
-		perror("iptables: calloc failed");
-		exit(1);
-	}
-	return p;
+/*XXX: TC_CONFIG_XT_H */
+#ifndef TRUE
+#define TRUE 1
+#endif
+#ifndef FALSE
+#define FALSE 0
+#endif
+
+/*XXX: TC_CONFIG_XT_H */
+int
+check_inverse(const char option[], int *invert, int *my_optind, int argc)
+{
+        if (option && strcmp(option, "!") == 0) {
+                if (*invert)
+                        exit_error(PARAMETER_PROBLEM,
+                                   "Multiple `!' flags not allowed");
+                *invert = TRUE;
+                if (my_optind != NULL) {
+                        ++*my_optind;
+                        if (argc && *my_optind > argc)
+                                exit_error(PARAMETER_PROBLEM,
+                                           "no argument following `!'");
+                }
+
+                return TRUE;
+        }
+        return FALSE;
 }
 
-static struct iptables_target *
-find_t(char *name)
+/*XXX: TC_CONFIG_XT_H */
+void exit_error(enum exittype status, const char *msg, ...)
 {
-	struct iptables_target *m;
-	for (m = t_list; m; m = m->next) {
-		if (strcmp(m->name, name) == 0)
-			return m;
-	}
+        va_list args;
 
-	return NULL;
+        va_start(args, msg);
+        fprintf(stderr, "%s v%s: ", pname, pversion);
+        vfprintf(stderr, msg, args);
+        va_end(args);
+        fprintf(stderr, "\n");
+        /* On error paths, make sure that we don't leak memory */
+        exit(status);
 }
 
-static struct iptables_target *
-get_target_name(const char *name)
-{
-	void *handle;
-	char *error;
-	char *new_name, *lname;
-	struct iptables_target *m;
-	char path[strlen(lib_dir) + sizeof ("/libipt_.so") + strlen(name)];
-
-	new_name = malloc(strlen(name) + 1);
-	lname = malloc(strlen(name) + 1);
-	if (new_name)
-		memset(new_name, '\0', strlen(name) + 1);
-	else
-		exit_error(PARAMETER_PROBLEM, "get_target_name");
-
-	if (lname)
-		memset(lname, '\0', strlen(name) + 1);
-	else
-		exit_error(PARAMETER_PROBLEM, "get_target_name");
-
-	strcpy(new_name, name);
-	strcpy(lname, name);
-
-	if (isupper(lname[0])) {
-		int i;
-		for (i = 0; i < strlen(name); i++) {
-			lname[i] = tolower(lname[i]);
-		}
-	}
-
-	if (islower(new_name[0])) {
-		int i;
-		for (i = 0; i < strlen(new_name); i++) {
-			new_name[i] = toupper(new_name[i]);
-		}
-	}
-
-	/* try libxt_xx first */
-	sprintf(path, "%s/libxt_%s.so", lib_dir, new_name);
-	handle = dlopen(path, RTLD_LAZY);
-	if (!handle) {
-		/* try libipt_xx next */
-		sprintf(path, "%s/libipt_%s.so", lib_dir, new_name);
-		handle = dlopen(path, RTLD_LAZY);
-
-		if (!handle) {
-			sprintf(path, "%s/libxt_%s.so", lib_dir , lname);
-			handle = dlopen(path, RTLD_LAZY);
-		}
-
-		if (!handle) {
-			sprintf(path, "%s/libipt_%s.so", lib_dir , lname);
-			handle = dlopen(path, RTLD_LAZY);
-		}
-		/* ok, lets give up .. */
-		if (!handle) {
-			fputs(dlerror(), stderr);
-			printf("\n");
-			free(new_name);
-			return NULL;
-		}
-	}
-
-	m = dlsym(handle, new_name);
-	if ((error = dlerror()) != NULL) {
-		m = (struct iptables_target *) dlsym(handle, lname);
-		if ((error = dlerror()) != NULL) {
-			m = find_t(new_name);
-			if (NULL == m) {
-				m = find_t(lname);
-				if (NULL == m) {
-					fputs(error, stderr);
-					fprintf(stderr, "\n");
-					dlclose(handle);
-					free(new_name);
-					return NULL;
-				}
-			}
-		}
-	}
-
-	free(new_name);
-	return m;
-}
-
-
-struct in_addr *dotted_to_addr(const char *dotted)
-{
-	static struct in_addr addr;
-	unsigned char *addrp;
-	char *p, *q;
-	unsigned int onebyte;
-	int i;
-	char buf[20];
-
-	/* copy dotted string, because we need to modify it */
-	strncpy(buf, dotted, sizeof (buf) - 1);
-	addrp = (unsigned char *) &(addr.s_addr);
-
-	p = buf;
-	for (i = 0; i < 3; i++) {
-		if ((q = strchr(p, '.')) == NULL)
-			return (struct in_addr *) NULL;
-
-		*q = '\0';
-		if (string_to_number(p, 0, 255, &onebyte) == -1)
-			return (struct in_addr *) NULL;
-
-		addrp[i] = (unsigned char) onebyte;
-		p = q + 1;
-	}
-
-	/* we've checked 3 bytes, now we check the last one */
-	if (string_to_number(p, 0, 255, &onebyte) == -1)
-		return (struct in_addr *) NULL;
-
-	addrp[3] = (unsigned char) onebyte;
-
-	return &addr;
-}
-
+/*XXX: TC_CONFIG_XT_H */
 static void set_revision(char *name, u_int8_t revision)
 {
 	/* Old kernel sources don't have ".revision" field,
@@ -352,37 +166,45 @@ static void set_revision(char *name, u_int8_t revision)
  * we may need to check for version mismatch
 */
 int
-build_st(struct iptables_target *target, struct ipt_entry_target *t)
+build_st(struct xtables_target *target, struct xt_entry_target *t)
 {
-	unsigned int nfcache = 0;
 
-	if (target) {
-		size_t size;
+	size_t size =
+		    XT_ALIGN(sizeof (struct xt_entry_target)) + target->size;
 
-		size =
-		    IPT_ALIGN(sizeof (struct ipt_entry_target)) + target->size;
-
-		if (NULL == t) {
-			target->t = fw_calloc(1, size);
-			target->t->u.target_size = size;
-
-			if (target->init != NULL)
-				target->init(target->t, &nfcache);
-			set_revision(target->t->u.user.name, target->revision);
-		} else {
-			target->t = t;
-		}
+	if (NULL == t) {
+		target->t = fw_calloc(1, size);
+		target->t->u.target_size = size;
 		strcpy(target->t->u.user.name, target->name);
-		return 0;
-	}
+		set_revision(target->t->u.user.name, target->revision);
 
-	return -1;
+		if (target->init != NULL)
+			target->init(target->t);
+	} else {
+		target->t = t;
+	}
+	return 0;
+
+}
+
+inline void set_lib_dir(void)
+{
+
+	lib_dir = getenv("XTABLES_LIBDIR");
+	if (!lib_dir) {
+		lib_dir = getenv("IPTABLES_LIB_DIR");
+		if (lib_dir)
+			fprintf(stderr, "using deprecated IPTABLES_LIB_DIR \n");
+	}
+	if (lib_dir == NULL)
+		lib_dir = XT_LIB_DIR;
+
 }
 
 static int parse_ipt(struct action_util *a,int *argc_p,
 		     char ***argv_p, int tca_id, struct nlmsghdr *n)
 {
-	struct iptables_target *m = NULL;
+	struct xtables_target *m = NULL;
 	struct ipt_entry fw;
 	struct rtattr *tail;
 	int c;
@@ -396,9 +218,7 @@ static int parse_ipt(struct action_util *a,int *argc_p,
 	__u32 hook = 0, index = 0;
 	res = 0;
 
-	lib_dir = getenv("IPTABLES_LIB_DIR");
-	if (!lib_dir)
-		lib_dir = IPT_LIB_DIR;
+	set_lib_dir();
 
 	{
 		int i;
@@ -421,7 +241,7 @@ static int parse_ipt(struct action_util *a,int *argc_p,
 			break;
 		switch (c) {
 		case 'j':
-			m = get_target_name(optarg);
+			m = find_target(optarg, TRY_LOAD);
 			if (NULL != m) {
 
 				if (0 > build_st(m, NULL)) {
@@ -533,14 +353,12 @@ static int
 print_ipt(struct action_util *au,FILE * f, struct rtattr *arg)
 {
 	struct rtattr *tb[TCA_IPT_MAX + 1];
-	struct ipt_entry_target *t = NULL;
+	struct xt_entry_target *t = NULL;
 
 	if (arg == NULL)
 		return -1;
 
-	lib_dir = getenv("IPTABLES_LIB_DIR");
-	if (!lib_dir)
-		lib_dir = IPT_LIB_DIR;
+	set_lib_dir();
 
 	parse_rtattr_nested(tb, TCA_IPT_MAX, arg);
 
@@ -564,9 +382,9 @@ print_ipt(struct action_util *au,FILE * f, struct rtattr *arg)
 		fprintf(f, "\t[NULL ipt target parameters ] \n");
 		return -1;
 	} else {
-		struct iptables_target *m = NULL;
+		struct xtables_target *m = NULL;
 		t = RTA_DATA(tb[TCA_IPT_TARG]);
-		m = get_target_name(t->u.user.name);
+		m = find_target(t->u.user.name, TRY_LOAD);
 		if (NULL != m) {
 			if (0 > build_st(m, t)) {
 				fprintf(stderr, " %s error \n", m->name);

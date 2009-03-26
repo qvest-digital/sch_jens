@@ -26,9 +26,9 @@ TCMODULES += f_tcindex.o
 TCMODULES += q_ingress.o
 TCMODULES += q_hfsc.o
 TCMODULES += q_htb.o
+TCMODULES += q_drr.o
 TCMODULES += m_gact.o
 TCMODULES += m_mirred.o
-TCMODULES += m_ipt.o
 TCMODULES += m_nat.o
 TCMODULES += m_pedit.o
 TCMODULES += m_skbedit.o
@@ -41,7 +41,22 @@ TCMODULES += em_cmp.o
 TCMODULES += em_u32.o
 TCMODULES += em_meta.o
 
+
+ifeq ($(TC_CONFIG_XT),y)
+  TCMODULES += m_xt.o
+  LDLIBS += -lxtables
+else
+  ifeq ($(TC_CONFIG_XT_H),y)
+	CFLAGS += -DTC_CONFIG_XT_H
+	TCMODULES += m_xt.o
+	LDLIBS += -lxtables
+  else
+  TCMODULES += m_ipt.o
+  endif
+endif
+
 TCOBJ += $(TCMODULES)
+LDLIBS += -L. -ltc -lm -ldl
 
 TCLIB := tc_core.o
 TCLIB += tc_red.o
@@ -56,7 +71,6 @@ ifeq ($(TC_CONFIG_ATM),y)
   TCSO += q_atm.so
 endif
 
-LDLIBS += -L. -ltc -lm -ldl
 
 LDFLAGS += -Wl,-export-dynamic
 

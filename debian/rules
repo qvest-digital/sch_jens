@@ -14,6 +14,7 @@ clean-patched:
 	dh_testroot
 	dh_clean
 	make clean
+	-rm tc/q_wrr.o
 
 binary: binary-indep binary-arch
 

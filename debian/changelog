@@ -10,8 +10,9 @@ iproute (20091226-1) unstable; urgency=low
     - fix parsing of interfaces for mroute. (Closes: #550097)
   * hoplimit.dpatch: dropped in favor of other/improved version
     merged upstream.
+  * Update lynx build-dependency to include lynx-cur
 
- -- Andreas Henriksson <andreas@fatal.se>  Sat, 26 Dec 2009 20:15:14 +0100
+ -- Andreas Henriksson <andreas@fatal.se>  Sun, 27 Dec 2009 00:37:05 +0100
 
 iproute (20090324-1) unstable; urgency=low
 

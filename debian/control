@@ -7,7 +7,7 @@ Homepage: http://www.linux-foundation.org/en/Net:Iproute2
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pkg-iproute.git
 Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git
 Standards-Version: 3.8.1
-Build-Depends: texlive-latex-base, texlive-latex-recommended, libatm1-dev, bison, libdb-dev, linuxdoc-tools, linux-libc-dev, debhelper (>= 5), lynx, dpatch, flex
+Build-Depends: texlive-latex-base, texlive-latex-recommended, libatm1-dev, bison, libdb-dev, linuxdoc-tools, linux-libc-dev, debhelper (>= 5), lynx | lynx-cur, dpatch, flex
 
 Package: iproute
 Priority: important

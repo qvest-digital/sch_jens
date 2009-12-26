@@ -1,3 +1,9 @@
+iproute (20091226-1) unstable; urgency=low
+
+  * New upstream release v2.6.31
+
+ -- Andreas Henriksson <andreas@fatal.se>  Sat, 26 Dec 2009 20:15:14 +0100
+
 iproute (20090324-1) unstable; urgency=low
 
   * New upstream release v2.6.29-1 (includes "Fix headers needed for gre")

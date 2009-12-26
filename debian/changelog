@@ -1,6 +1,15 @@
 iproute (20091226-1) unstable; urgency=low
 
   * New upstream release v2.6.31
+    - dropped equalize command since kernel never supported it. (Closes: #149897)
+    - avoid segfault on incorrect lladdr. (Closes: #526329)
+    - fix manpage typo. (Closes: #539830)
+    - support xtables >= 1.4.5 api. (Closes: #532727, #559022) 
+    - ss help to stdout (Closes: #545008)
+    - add -fPIC to lib/Makefile (Closes: #547602)
+    - fix parsing of interfaces for mroute. (Closes: #550097)
+  * hoplimit.dpatch: dropped in favor of other/improved version
+    merged upstream.
 
  -- Andreas Henriksson <andreas@fatal.se>  Sat, 26 Dec 2009 20:15:14 +0100
 

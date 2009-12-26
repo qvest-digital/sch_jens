@@ -7,11 +7,6 @@
  *		2 of the License, or (at your option) any later version.
  *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
- *
- *
- * Changes:
- *
- * Rani Assaf <rani@magic.metawire.com> 980929:	resolve addresses
  */
 
 #include <stdio.h>
@@ -45,12 +40,13 @@ static void usage(void)
 {
 	fprintf(stderr,
 "Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n"
-"       ip [ -force ] [-batch filename\n"
+"       ip [ -force ] -batch filename\n"
 "where  OBJECT := { link | addr | addrlabel | route | rule | neigh | ntable |\n"
 "                   tunnel | maddr | mroute | monitor | xfrm }\n"
 "       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n"
 "                    -f[amily] { inet | inet6 | ipx | dnet | link } |\n"
-"                    -o[neline] | -t[imestamp] }\n");
+"                    -o[neline] | -t[imestamp] | -b[atch] [filename] |\n"
+"                    -rc[vbuf] [size]}\n");
 	exit(-1);
 }
 
@@ -213,6 +209,19 @@ int main(int argc, char **argv)
 			if (argc <= 1)
 				usage();
 			batch_file = argv[1];
+		} else if (matches(opt, "-rcvbuf") == 0) {
+			unsigned int size;
+
+			argc--;
+			argv++;
+			if (argc <= 1)
+				usage();
+			if (get_unsigned(&size, argv[1], 0)) {
+				fprintf(stderr, "Invalid rcvbuf size '%s'\n",
+					argv[1]);
+				exit(-1);
+			}
+			rcvbuf = size;
 		} else if (matches(opt, "-help") == 0) {
 			usage();
 		} else {

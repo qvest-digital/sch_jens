@@ -8,8 +8,6 @@
  *
  * Authors:	Alexey Kuznetsov, <kuznet@ms2.inr.ac.ru>
  *
- * Changes:
- *	Laszlo Valko <valko@linux.karinthy.hu> 990223: address label must be zero terminated
  */
 
 #include <stdio.h>
@@ -109,6 +107,7 @@ void print_link_flags(FILE *fp, unsigned flags, unsigned mdown)
 	_PF(UP);
 	_PF(LOWER_UP);
 	_PF(DORMANT);
+	_PF(ECHO);
 #undef _PF
         if (flags)
 		fprintf(fp, "%x", flags);
@@ -210,8 +209,7 @@ int print_linkinfo(const struct sockaddr_nl *who,
 
 	parse_rtattr(tb, IFLA_MAX, IFLA_RTA(ifi), len);
 	if (tb[IFLA_IFNAME] == NULL) {
-		fprintf(stderr, "BUG: nil ifname\n");
-		return -1;
+		fprintf(stderr, "BUG: device with ifindex %d has nil ifname\n", ifi->ifi_index);
 	}
 	if (filter.label &&
 	    (!filter.family || filter.family == AF_PACKET) &&
@@ -508,6 +506,10 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 		fprintf(fp, "dynamic ");
 	} else
 		ifa->ifa_flags &= ~IFA_F_PERMANENT;
+	if (ifa->ifa_flags&IFA_F_DADFAILED) {
+		ifa->ifa_flags &= ~IFA_F_DADFAILED;
+		fprintf(fp, "dadfailed ");
+	}
 	if (ifa->ifa_flags)
 		fprintf(fp, "flags %02x ", ifa->ifa_flags);
 	if (rta_tb[IFA_LABEL])
@@ -537,6 +539,27 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	return 0;
 }
 
+int print_addrinfo_primary(const struct sockaddr_nl *who, struct nlmsghdr *n,
+			   void *arg)
+{
+	struct ifaddrmsg *ifa = NLMSG_DATA(n);
+
+	if (!ifa->ifa_flags & IFA_F_SECONDARY)
+		return 0;
+
+	return print_addrinfo(who, n, arg);
+}
+
+int print_addrinfo_secondary(const struct sockaddr_nl *who, struct nlmsghdr *n,
+			     void *arg)
+{
+	struct ifaddrmsg *ifa = NLMSG_DATA(n);
+
+	if (ifa->ifa_flags & IFA_F_SECONDARY)
+		return 0;
+
+	return print_addrinfo(who, n, arg);
+}
 
 struct nlmsg_list
 {
@@ -698,12 +721,32 @@ static int ipaddr_list_or_flush(int argc, char **argv, int flush)
 		filter.flushe = sizeof(flushb);
 
 		while (round < MAX_ROUNDS) {
+			const struct rtnl_dump_filter_arg a[3] = {
+				{
+					.filter = print_addrinfo_secondary,
+					.arg1 = stdout,
+					.junk = NULL,
+					.arg2 = NULL
+				},
+				{
+					.filter = print_addrinfo_primary,
+					.arg1 = stdout,
+					.junk = NULL,
+					.arg2 = NULL
+				},
+				{
+					.filter = NULL,
+					.arg1 = NULL,
+					.junk = NULL,
+					.arg2 = NULL
+				},
+			};
 			if (rtnl_wilddump_request(&rth, filter.family, RTM_GETADDR) < 0) {
 				perror("Cannot send dump request");
 				exit(1);
 			}
 			filter.flushed = 0;
-			if (rtnl_dump_filter(&rth, print_addrinfo, stdout, NULL, NULL) < 0) {
+			if (rtnl_dump_filter_l(&rth, a) < 0) {
 				fprintf(stderr, "Flush terminated\n");
 				exit(1);
 			}

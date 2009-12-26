@@ -16,11 +16,6 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 /*
- * based on:
- * $Id: s.ipv6tunnel.c 1.7 02/12/11 11:21:51+02:00 antti@traci.mipl.mediapoli.com $
- *
- */
-/*
  * Author:
  *	Masahide NAKAMURA @USAGI
  */
@@ -335,6 +330,7 @@ static int do_show(int argc, char **argv)
         struct ip6_tnl_parm p;
 
 	ip6_tnl_parm_init(&p, 0);
+	p.proto = 0;  /* default to any */
 
         if (parse_args(argc, argv, &p) < 0)
                 return -1;

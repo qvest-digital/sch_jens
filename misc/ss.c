@@ -1302,7 +1302,7 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r)
 		}
 
 		if (tb[INET_DIAG_CONG])
-			printf("%s", (char *) RTA_DATA(tb[INET_DIAG_CONG]));
+			printf(" %s", (char *) RTA_DATA(tb[INET_DIAG_CONG]));
 
 		if (info->tcpi_options & TCPI_OPT_WSCALE)
 			printf(" wscale:%d,%d", info->tcpi_snd_wscale,
@@ -1393,9 +1393,10 @@ static int tcp_show_sock(struct nlmsghdr *nlh, struct filter *f)
 		if (r->idiag_uid)
 			printf(" uid:%u", (unsigned)r->idiag_uid);
 		printf(" ino:%u", r->idiag_inode);
-		printf(" sk:%08x", r->id.idiag_cookie[0]);
+		printf(" sk:");
 		if (r->id.idiag_cookie[1] != 0)
 			printf("%08x", r->id.idiag_cookie[1]);
+ 		printf("%08x", r->id.idiag_cookie[0]);
 	}
 	if (show_mem || show_tcpinfo) {
 		printf("\n\t");
@@ -2330,12 +2331,9 @@ int print_summary(void)
 	return 0;
 }
 
-
-static void usage(void) __attribute__((noreturn));
-
-static void usage(void)
+static void _usage(FILE *dest)
 {
-	fprintf(stderr,
+	fprintf(dest,
 "Usage: ss [ OPTIONS ]\n"
 "       ss [ OPTIONS ] [ FILTER ]\n"
 "   -h, --help		this message\n"
@@ -2367,6 +2365,19 @@ static void usage(void)
 "   -F, --filter=FILE   read filter information from FILE\n"
 "       FILTER := [ state TCP-STATE ] [ EXPRESSION ]\n"
 		);
+}
+
+static void help(void) __attribute__((noreturn));
+static void help(void)
+{
+	_usage(stdout);
+	exit(0);
+}
+
+static void usage(void) __attribute__((noreturn));
+static void usage(void)
+{
+	_usage(stderr);
 	exit(-1);
 }
 
@@ -2513,7 +2524,7 @@ int main(int argc, char *argv[])
 			else if (strcmp(optarg, "netlink") == 0)
 				preferred_family = AF_NETLINK;
 			else if (strcmp(optarg, "help") == 0)
-				usage();
+				help();
 			else {
 				fprintf(stderr, "ss: \"%s\" is invalid family\n", optarg);
 				usage();
@@ -2595,6 +2606,7 @@ int main(int argc, char *argv[])
 			exit(0);
 		case 'h':
 		case '?':
+			help();
 		default:
 			usage();
 		}

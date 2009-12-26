@@ -3,6 +3,7 @@ TCOBJ= tc.o tc_qdisc.o tc_class.o tc_filter.o tc_util.o \
        m_ematch.o emp_ematch.yacc.o emp_ematch.lex.o
 
 include ../Config
+SHARED_LIBS ?= y
 
 TCMODULES :=
 TCMODULES += q_fifo.o
@@ -20,6 +21,7 @@ TCMODULES += f_route.o
 TCMODULES += f_fw.o
 TCMODULES += f_basic.o
 TCMODULES += f_flow.o
+TCMODULES += f_cgroup.o
 TCMODULES += q_dsmark.o
 TCMODULES += q_gred.o
 TCMODULES += f_tcindex.o
@@ -46,17 +48,27 @@ ifeq ($(TC_CONFIG_XT),y)
   TCMODULES += m_xt.o
   LDLIBS += -lxtables
 else
-  ifeq ($(TC_CONFIG_XT_H),y)
-	CFLAGS += -DTC_CONFIG_XT_H
-	TCMODULES += m_xt.o
-	LDLIBS += -lxtables
+  ifeq ($(TC_CONFIG_XT_OLD),y)
+    TCMODULES += m_xt_old.o
+    LDLIBS += -lxtables
   else
-  TCMODULES += m_ipt.o
+    ifeq ($(TC_CONFIG_XT_OLD_H),y)
+	CFLAGS += -DTC_CONFIG_XT_H
+	TCMODULES += m_xt_old.o
+	LDLIBS += -lxtables
+    else
+      TCMODULES += m_ipt.o
+    endif
   endif
 endif
 
 TCOBJ += $(TCMODULES)
-LDLIBS += -L. -ltc -lm -ldl
+LDLIBS += -L. -ltc -lm
+
+ifeq ($(SHARED_LIBS),y)
+LDLIBS += -ldl
+LDFLAGS += -Wl,-export-dynamic
+endif
 
 TCLIB := tc_core.o
 TCLIB += tc_red.o
@@ -70,9 +82,6 @@ TCSO :=
 ifeq ($(TC_CONFIG_ATM),y)
   TCSO += q_atm.so
 endif
-
-
-LDFLAGS += -Wl,-export-dynamic
 
 YACC := bison
 LEX := flex
@@ -100,10 +109,22 @@ clean:
 	rm -f emp_ematch.yacc.output
 
 q_atm.so: q_atm.c
-	$(CC) $(CFLAGS) -shared -fpic -o q_atm.so q_atm.c -latm
+	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o q_atm.so q_atm.c -latm
 
 %.yacc.c: %.y
 	$(YACC) $(YACCFLAGS) -o $@ $<
 
 %.lex.c: %.l
 	$(LEX) $(LEXFLAGS) -o$@ $<
+
+ifneq ($(SHARED_LIBS),y)
+
+tc: static-syms.o
+static-syms.o: static-syms.h
+static-syms.h: $(wildcard *.c)
+	files="$^" ; \
+	for s in `grep -B 3 '\<dlsym' $$files | sed -n '/snprintf/{s:.*"\([^"]*\)".*:\1:;s:%s::;p}'` ; do \
+		sed -n '/'$$s'[^ ]* =/{s:.* \([^ ]*'$$s'[^ ]*\) .*:extern char \1[] __attribute__((weak)); if (!strcmp(sym, "\1")) return \1;:;p}' $$files ; \
+	done > $@
+
+endif

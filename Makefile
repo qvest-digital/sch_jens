@@ -1,14 +1,21 @@
 DESTDIR=/usr/
+ROOTDIR=$(DESTDIR)
 LIBDIR=/usr/lib/
 SBINDIR=/sbin
 CONFDIR=/etc/iproute2
 DOCDIR=/share/doc/iproute2
 MANDIR=/share/man
+ARPDDIR=/var/lib/arpd
 
 # Path to db_185.h include
-DBM_INCLUDE:=/usr/include
+DBM_INCLUDE:=$(ROOTDIR)/usr/include
+
+SHARED_LIBS = y
 
 DEFINES= -DRESOLVE_HOSTNAMES -DLIBDIR=\"$(LIBDIR)\"
+ifneq ($(SHARED_LIBS),y)
+DEFINES+= -DNO_SHARED_LIBS
+endif
 
 #options if you have a bind>=4.9.4 libresolv (or, maybe, glibc)
 LDLIBS=-lresolv
@@ -43,6 +50,7 @@ Config:
 install: all
 	install -m 0755 -d $(DESTDIR)$(SBINDIR)
 	install -m 0755 -d $(DESTDIR)$(CONFDIR)
+	install -m 0755 -d $(DESTDIR)$(ARPDDIR)
 	install -m 0755 -d $(DESTDIR)$(DOCDIR)/examples
 	install -m 0755 -d $(DESTDIR)$(DOCDIR)/examples/diffserv
 	install -m 0644 README.iproute2+tc $(shell find examples -maxdepth 1 -type f) \

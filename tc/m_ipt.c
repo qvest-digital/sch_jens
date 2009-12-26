@@ -30,7 +30,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include <limits.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -226,6 +225,10 @@ get_target_name(const char *name)
 	char *new_name, *lname;
 	struct iptables_target *m;
 	char path[strlen(lib_dir) + sizeof ("/libipt_.so") + strlen(name)];
+
+#ifdef NO_SHARED_LIBS
+	return NULL;
+#endif
 
 	new_name = malloc(strlen(name) + 1);
 	lname = malloc(strlen(name) + 1);

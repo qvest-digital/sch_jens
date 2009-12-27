@@ -8,6 +8,7 @@ iproute (20091226-1) unstable; urgency=low
     - ss help to stdout (Closes: #545008)
     - add -fPIC to lib/Makefile (Closes: #547602)
     - fix parsing of interfaces for mroute. (Closes: #550097)
+    - don't fail flush with secondary asdresses. (Closes: #532152)
   * hoplimit.dpatch: dropped in favor of other/improved version
     merged upstream.
   * Update lynx build-dependency to include lynx-cur

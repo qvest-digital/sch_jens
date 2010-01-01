@@ -13,8 +13,9 @@ iproute (20091226-1) unstable; urgency=low
   * hoplimit.dpatch: dropped in favor of other/improved version
     merged upstream.
   * Update lynx build-dependency to include lynx-cur
+  * Add patch to avoid using bashisms in configure script.
 
- -- Andreas Henriksson <andreas@fatal.se>  Sun, 27 Dec 2009 00:37:05 +0100
+ -- Andreas Henriksson <andreas@fatal.se>  Fri, 01 Jan 2010 22:48:45 +0100
 
 iproute (20090324-1) unstable; urgency=low
 

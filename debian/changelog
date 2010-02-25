@@ -1,3 +1,11 @@
+iproute (20100224-1) unstable; urgency=low
+
+  * New upstream release v2.6.33
+    - Really dropped equalize command since kernel never supported it.
+      (Closes: #149897)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 25 Feb 2010 12:36:02 +0100
+
 iproute (20091226-1) unstable; urgency=low
 
   * New upstream release v2.6.31

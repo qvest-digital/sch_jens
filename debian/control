@@ -6,7 +6,7 @@ Uploaders: Andreas Henriksson <andreas@fatal.se>, Alexander Wirt <formorer@debia
 Homepage: http://www.linux-foundation.org/en/Net:Iproute2
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pkg-iproute.git
 Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git
-Standards-Version: 3.8.1
+Standards-Version: 3.8.4
 Build-Depends: texlive-latex-base, texlive-latex-recommended, libatm1-dev, bison, libdb-dev, linuxdoc-tools, linux-libc-dev, debhelper (>= 5), lynx | lynx-cur, dpatch, flex
 
 Package: iproute
@@ -14,7 +14,7 @@ Priority: important
 Architecture: any
 Provides: arpd
 Conflicts: arpd
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: libatm1
 Suggests: iproute-doc
 Description: networking and traffic control tools
@@ -28,6 +28,7 @@ Description: networking and traffic control tools
 Package: iproute-doc
 Section: doc
 Architecture: all
+Depends: ${misc:Depends}
 Description: networking and traffic control tools - documentation
  The iproute suite, also known as iproute2, is a collection of
  utilities for networking and traffic control.
@@ -37,6 +38,7 @@ Description: networking and traffic control tools - documentation
 Package: iproute-dev
 Section: libdevel
 Architecture: any
+Depends: ${misc:Depends}
 Description: networking and traffic control tools - development files
  The iproute suite, also known as iproute2, is a collection of
  utilities for networking and traffic control.

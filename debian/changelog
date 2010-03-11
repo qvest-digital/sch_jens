@@ -1,3 +1,13 @@
+iproute (20100224-2) unstable; urgency=low
+
+  * Drop debian/patches/tc_modules.dpatch
+    - /lib/iptables isn't correct anymore.
+  * Try to automatically detect correct iptables modules directory
+    in configure script.
+  * Bump Standards-Version and add ${misc:Depends}
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 11 Mar 2010 20:35:56 +0100
+
 iproute (20100224-1) unstable; urgency=low
 
   * New upstream release v2.6.33

@@ -5,6 +5,7 @@ iproute (20100224-3) unstable; urgency=low
     - the configure script auto-detection won't work in clean
       build environments since we don't have a build-depedency
       on iptables!
+  * Fix tc/Makefile to include the "" in the IPT_LIB_DIR define.
 
  -- Andreas Henriksson <andreas@fatal.se>  Thu, 11 Mar 2010 21:18:27 +0100
 

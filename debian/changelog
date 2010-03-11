@@ -1,3 +1,13 @@
+iproute (20100224-3) unstable; urgency=low
+
+  * The "Brown paper bag" release, sorry.
+  * explicitly set IPT_LIB_DIR=/lib/xtables when building.
+    - the configure script auto-detection won't work in clean
+      build environments since we don't have a build-depedency
+      on iptables!
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 11 Mar 2010 21:18:27 +0100
+
 iproute (20100224-2) unstable; urgency=low
 
   * Drop debian/patches/tc_modules.dpatch

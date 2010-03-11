@@ -1,5 +1,4 @@
 wrr-qdisc.dpatch
-tc_modules.dpatch
 moo.dpatch
 disable-ifstat.dpatch
 txtdocs.dpatch

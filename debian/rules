@@ -62,7 +62,7 @@ binary-arch: build-arch
 
 build-arch: stamp-build
 stamp-build: patch
-	$(MAKE) KERNEL_INCLUDE=./include IPT_LIB_DIR="/lib/xtables"
+	$(MAKE) KERNEL_INCLUDE=./include
 	touch stamp-build
 
 .PHONY: build binary binary-arch binary-indep clean

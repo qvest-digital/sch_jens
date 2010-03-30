@@ -1,3 +1,13 @@
+iproute (20100224-4) UNRELEASED; urgency=low
+
+  * Use multi-line build-depends.
+  * Add iptables-dev build dependency
+    - needed to detect which tc ipt/xt module to build.
+    - also makes autodetecting IPT_LIB_DIR possible....
+  * Revert "explicitly set IPT_LIB_DIR=/lib/xtables when building."
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 30 Mar 2010 11:55:30 +0200
+
 iproute (20100224-3) unstable; urgency=low
 
   * The "Brown paper bag" release, sorry.

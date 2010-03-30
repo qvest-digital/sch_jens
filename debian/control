@@ -9,14 +9,15 @@ Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git
 Standards-Version: 3.8.4
 Build-Depends: texlive-latex-base,
                texlive-latex-recommended,
+               iptables-dev,
                libatm1-dev,
-               bison,
                libdb-dev,
                linuxdoc-tools,
                linux-libc-dev,
                debhelper (>= 5),
                lynx | lynx-cur,
                dpatch,
+               bison,
                flex
 
 Package: iproute

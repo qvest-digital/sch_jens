@@ -1,12 +1,17 @@
 iproute (20100224-4) UNRELEASED; urgency=low
 
+  [ Andreas Henriksson ]
   * Use multi-line build-depends.
   * Add iptables-dev build dependency
     - needed to detect which tc ipt/xt module to build.
     - also makes autodetecting IPT_LIB_DIR possible....
   * Revert "explicitly set IPT_LIB_DIR=/lib/xtables when building."
+  * Add patch by Alexandre Cassen (Closes: #575970)
 
- -- Andreas Henriksson <andreas@fatal.se>  Tue, 30 Mar 2010 11:55:30 +0200
+  [ Alexandre Cassen ]
+  * Detect 6rd kernel missing support / 6rd tunnel scope
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 06 Apr 2010 11:57:36 +0200
 
 iproute (20100224-3) unstable; urgency=low
 

@@ -1,4 +1,4 @@
-iproute (20100224-4) UNRELEASED; urgency=low
+iproute (20100224-4) unstable; urgency=low
 
   [ Andreas Henriksson ]
   * Use multi-line build-depends.
@@ -11,7 +11,7 @@ iproute (20100224-4) UNRELEASED; urgency=low
   [ Alexandre Cassen ]
   * Detect 6rd kernel missing support / 6rd tunnel scope
 
- -- Andreas Henriksson <andreas@fatal.se>  Tue, 06 Apr 2010 11:57:36 +0200
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 07 Apr 2010 21:36:57 +0200
 
 iproute (20100224-3) unstable; urgency=low
 

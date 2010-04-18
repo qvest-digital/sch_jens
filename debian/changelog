@@ -1,4 +1,4 @@
-iproute (20100224-5) UNRELEASED; urgency=low
+iproute (20100224-5) unstable; urgency=low
 
   * Add patch (applied upstream): build m_xt as a tc module
   * Install /usr/lib/tc/m_ipt.so symlink (to m_xt.so)
@@ -7,7 +7,7 @@ iproute (20100224-5) UNRELEASED; urgency=low
     to README.Debian.
     (the above changes closes: #576953)
 
- -- Andreas Henriksson <andreas@fatal.se>  Mon, 12 Apr 2010 22:49:18 +0200
+ -- Andreas Henriksson <andreas@fatal.se>  Sun, 18 Apr 2010 18:51:12 +0200
 
 iproute (20100224-4) unstable; urgency=low
 

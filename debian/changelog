@@ -1,6 +1,8 @@
 iproute (20100519-1) unstable; urgency=low
 
   * New upstream release.
+  * drop debian/patches/disable-ifstat.dpatch:
+    - ifstat is not installed anyway, no need for this patch.
 
  -- Andreas Henriksson <andreas@fatal.se>  Thu, 20 May 2010 10:19:14 +0200
 

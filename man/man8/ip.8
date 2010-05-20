@@ -27,6 +27,34 @@ ip \- show / manipulate routing, devices, policy routing and tunnels
 \fB\-o\fR[\fIneline\fR] }
 
 .ti -8
+.BI "ip link add link " DEVICE
+.RB "[ " name " ]"
+.I NAME
+.br
+.RB "[ " txqueuelen 
+.IR PACKETS " ]"
+.br
+.RB "[ " address
+.IR LLADDR " ]"
+.RB "[ " broadcast
+.IR LLADDR " ]"
+.br
+.RB "[ " mtu
+.IR MTU " ]"
+.br
+.BR type TYPE
+.RI "[ " ARGS " ]"
+
+.ti -8
+.IR TYPE " := [ "
+.BR vlan " | " maclan " | " can " ]"
+
+.ti -8
+.BI "ip link delete " DEVICE
+.BI type TYPE
+.RI "[ " ARGS " ]"
+
+.ti -8
 .BI "ip link set " DEVICE
 .RB "{ " up " | " down " | " arp " { " on " | " off " } |"
 .br
@@ -53,7 +81,21 @@ ip \- show / manipulate routing, devices, policy routing and tunnels
 .IR MTU " |"
 .br
 .B  netns
-.IR PID " }"
+.IR PID " |"
+.br
+.B alias
+.IR NAME  " |"
+.br
+.B vf
+.IR NUM " ["
+.B  mac
+.IR LLADDR " ] ["
+.B vlan
+.IR VLANID " [ "
+.B qos
+.IR VLAN-QOS " ] ] ["
+.B rate
+.IR TXRATE " ]"
 
 .ti -8
 .B ip link show
@@ -195,7 +237,11 @@ replace " | " monitor " } "
 .B  realms
 .IR REALM " ] [ "
 .B  rto_min
-.IR TIME " ]"
+.IR TIME " ] [ "
+.B  initcwnd
+.IR NUMBER " ] [ "
+.B  initrwnd
+.IR NUMBER " ]"
 
 .ti -8
 .IR TYPE " := [ "
@@ -817,12 +863,50 @@ or, if the objects of this class cannot be listed,
 is a network device and the corresponding commands
 display and change the state of devices.
 
+.SS ip link add - add virtual link
+
+.TP
+.BI link " DEVICE "
+specifies the physical device to act operate on.
+
+.I NAME
+specifies the name of the new virtual device.
+
+.I TYPE
+specifies the type of the new device.
+.sp
+Link types:
+
+.in +8
+.B vlan
+- 802.1q tagged virrtual LAN interface
+.sp
+.B macvlan
+- virtual interface base on link layer address (MAC)
+.sp
+.B can
+- Controller Area Network interface
+.in -8
+
+.SS ip link delete - delete virtual link
+.I DEVICE
+specifies the virtual  device to act operate on.
+.I TYPE
+specifies the type of the device.
+
+
+.TP
+.BI dev " DEVICE "
+specifies the physical device to act operate on.
+
 .SS ip link set - change device attributes
 
 .TP
-.BI dev " NAME " (default)
-.I NAME
-specifies network device to operate on.
+.BI dev " DEVICE "
+.I DEVICE
+specifies network device to operate on. When configuring SR-IOV Virtual Fuction
+(VF) devices, this keyword should specify the associated Physical Function (PF)
+device.
 
 .TP
 .BR up " and " down
@@ -884,7 +968,56 @@ the interface is
 .TP
 .BI netns " PID"
 move the device to the network namespace associated with the process
-.IR "PID" .
+.IR "PID".
+
+.TP
+.BI alias " NAME"
+give the device a symbolic name for easy reference.
+
+.TP
+.BI vf " NUM"
+specify a Virtual Function device to be configured. The associated PF device
+must be specified using the
+.B dev
+parameter.
+
+.in +8
+.BI mac " LLADDRESS"
+- change the station address for the specified VF. The
+.B vf
+parameter must be specified.
+
+.sp
+.BI vlan " VLANID"
+- change the assigned VLAN for the specified VF. When specified, all traffic
+sent from the VF will be tagged with the specified VLAN ID. Incoming traffic
+will be filtered for the specified VLAN ID, and will have all VLAN tags
+stripped before being passed to the VF. Setting this parameter to 0 disables
+VLAN tagging and filtering. The
+.B vf
+parameter must be specified.
+
+.sp
+.BI qos " VLAN-QOS"
+- assign VLAN QOS (priority) bits for the VLAN tag. When specified, all VLAN
+tags transmitted by the VF will include the specified priority bits in the
+VLAN tag. If not specified, the value is assumed to be 0. Both the
+.B vf
+and
+.B vlan
+parameters must be specified. Setting both
+.B vlan
+and
+.B qos
+as 0 disables VLAN tagging and filtering for the VF.
+
+.sp
+.BI rate " TXRATE"
+- change the allowed transmit bandwidth, in Mbps, for the specified VF.
+Setting this parameter to 0 disables rate limiting. The
+.B vf
+parameter must be specified.
+.in -8
 
 .PP
 .B Warning:
@@ -1328,13 +1461,13 @@ normal routing tables.
 
 .P
 .B Route tables:
-Linux-2.x can pack routes into several routing
-tables identified by a number in the range from 1 to 255 or by
-name from the file
+Linux-2.x can pack routes into several routing tables identified 
+by a number in the range from 1 to 2^31 or by name from the file
 .B /etc/iproute2/rt_tables
 By default all normal routes are inserted into the
 .B main
 table (ID 254) and the kernel only uses this table when calculating routes.
+Values (0, 253, 254, and 255) are reserved for built-in use.
 
 .sp
 Actually, one other table always exists, which is invisible but
@@ -1492,6 +1625,19 @@ an estimate for the initial slow start threshold.
 the clamp for congestion window.  It is ignored if the
 .B lock
 flag is not used.
+
+.TP
+.BI initcwnd " NUMBER " "(2.5.70+ only)"
+the initial congestion window size for connections to this destination.
+Actual window size is this value multiplied by the MSS
+(``Maximal Segment Size'') for same connection. The default is
+zero, meaning to use the values specified in RFC2414.
+
+.TP
+.BI initrwnd " NUMBER " "(2.6.33+ only)"
+the initial receive window size for connections to this destination.
+Actual window size is this value multiplied by the MSS of the connection.
+The default value is zero, meaning to use Slow Start value.
 
 .TP
 .BI advmss " NUMBER " "(2.3.15+ only)"

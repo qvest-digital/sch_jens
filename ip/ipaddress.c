@@ -187,6 +187,36 @@ static void print_linktype(FILE *fp, struct rtattr *tb)
 	}
 }
 
+static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
+{
+	struct ifla_vf_mac *vf_mac;
+	struct ifla_vf_vlan *vf_vlan;
+	struct ifla_vf_tx_rate *vf_tx_rate;
+	struct rtattr *vf[IFLA_VF_MAX+1];
+	SPRINT_BUF(b1);
+
+	if (vfinfo->rta_type != IFLA_VF_INFO) {
+		fprintf(stderr, "BUG: rta type is %d\n", vfinfo->rta_type);
+		return;
+	}
+
+	parse_rtattr_nested(vf, IFLA_VF_MAX, vfinfo);
+
+	vf_mac = RTA_DATA(vf[IFLA_VF_MAC]);
+	vf_vlan = RTA_DATA(vf[IFLA_VF_VLAN]);
+	vf_tx_rate = RTA_DATA(vf[IFLA_VF_TX_RATE]);
+
+	fprintf(fp, "\n    vf %d MAC %s", vf_mac->vf,
+		ll_addr_n2a((unsigned char *)&vf_mac->mac,
+		ETH_ALEN, 0, b1, sizeof(b1)));
+	if (vf_vlan->vlan)
+		fprintf(fp, ", vlan %d", vf_vlan->vlan);
+	if (vf_vlan->qos)
+		fprintf(fp, ", qos %d", vf_vlan->qos);
+	if (vf_tx_rate->rate)
+		fprintf(fp, ", tx rate %d (Mbps)", vf_tx_rate->rate);
+}
+
 int print_linkinfo(const struct sockaddr_nl *who,
 		   struct nlmsghdr *n, void *arg)
 {
@@ -331,6 +361,13 @@ int print_linkinfo(const struct sockaddr_nl *who,
 				);
 		}
 	}
+	if (do_link && tb[IFLA_VFINFO_LIST] && tb[IFLA_NUM_VF]) {
+		struct rtattr *i, *vflist = tb[IFLA_VFINFO_LIST];
+		int rem = RTA_PAYLOAD(vflist);
+		for (i = RTA_DATA(vflist); RTA_OK(i, rem); i = RTA_NEXT(i, rem))
+			print_vfinfo(fp, i);
+	}
+
 	fprintf(fp, "\n");
 	fflush(fp);
 	return 0;
@@ -1014,7 +1051,7 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 	}
 	if (l && matches(d, l) != 0) {
 		fprintf(stderr, "\"dev\" (%s) must match \"label\" (%s).\n", d, l);
-		exit(1);
+		return -1;
 	}
 
 	if (peer_len == 0 && local_len) {
@@ -1079,7 +1116,7 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 	}
 
 	if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0)
-		exit(2);
+		return -2;
 
 	return 0;
 }

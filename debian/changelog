@@ -1,3 +1,9 @@
+iproute (20100519-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 20 May 2010 10:19:14 +0200
+
 iproute (20100224-5) unstable; urgency=low
 
   * Add patch (applied upstream): build m_xt as a tc module

@@ -1,6 +1,40 @@
 iproute (20100519-1) unstable; urgency=low
 
   * New upstream release.
+    + Detect 6rd kernel missing support / 6rd tunnel scope
+    + iproute2: detect iptables modules dir in configure.
+    + iproute2: add option to build m_xt as a tc module (v3)
+    + fix build issues with flex ver 2.5
+    + ip: document initcwnd
+    + iproute2: rework SR-IOV VF support
+    + Add 'ip tuntap' support.
+    + iproute2: fix addrlabel interface names handling
+    + tc: add new queue discipline: head drop fifo
+    + xfrm: policy by mark
+    + xfrm: Introduce xfrm by mark
+    + xfrm: add support for SA by mark
+    + ip: correctly report tunnel link type
+    + Continue after errors in -batch
+    + Update headers for 2.6.33-net-next
+    + Fix line numbering on batch commands
+    + Workaround missing ALIGN() macro
+    + Remove mirred debug message
+    + Workaround missing ALIGN() macro.
+    + Update ip.8 man page to describe route table id values
+    + Update kernel headers to 2.6.34 final version
+    + Add documentation for ip link add/delete sub-commands
+    + ip: add documentation for initrwnd
+    + v2.6.34
+    + Update man page to indicate current options
+    + ip: Add support for setting and showing SR-IOV virtual funtion
+         link params
+    + libnetlink: Modify the parser to track first duplicated
+         attributes
+    + iproute2: netlink support for bus-error reporting and counters
+    + gaiconf: /etc/gai.conf configuration helper.
+    + skbedit: use get_u32 for parsing mark
+    + Add initrwnd to iproute2
+
   * drop debian/patches/disable-ifstat.dpatch:
     - ifstat is not installed anyway, no need for this patch.
 

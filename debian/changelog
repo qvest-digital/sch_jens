@@ -1,8 +1,12 @@
 iproute (20100519-3) unstable; urgency=low
 
+  [ Alexander Wirt ]
   * Add README.source 
 
- -- Alexander Wirt <formorer@debian.org>  Tue, 25 May 2010 07:52:44 +0200
+  [ Andreas Henriksson ]
+  * tc: make symbols loaded from tc action modules global. (Closes: #584898)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 06 Jul 2010 12:02:39 +0200
 
 iproute (20100519-2) unstable; urgency=low
 

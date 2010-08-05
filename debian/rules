@@ -4,17 +4,14 @@
 
 build: build-arch
 
-include /usr/share/dpatch/dpatch.make
-
-clean: clean-patched unpatch
-clean-patched:
+clean:
 	-rm stamp-build
 	-rm stamp-doc
 	dh_testdir
 	dh_testroot
 	dh_clean
 	make distclean
-	-rm tc/q_wrr.o
+	-rm -f tc/q_wrr.o
 
 binary: binary-indep binary-arch
 
@@ -37,7 +34,7 @@ binary-indep: build-indep
 
 
 build-indep: stamp-doc
-stamp-doc: patch
+stamp-doc:
 	$(MAKE) -C doc all txt
 	touch stamp-doc
 
@@ -61,7 +58,7 @@ binary-arch: build-arch
 	dh_builddeb -a
 
 build-arch: stamp-build
-stamp-build: patch
+stamp-build:
 	$(MAKE) KERNEL_INCLUDE=./include
 	touch stamp-build
 

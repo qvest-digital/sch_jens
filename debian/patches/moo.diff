@@ -1,14 +1,12 @@
-#! /bin/sh /usr/share/dpatch/dpatch-run
-## moo.dpatch by Alexander Wirt <formorer@debian.org>
-##
-## All lines beginning with `## DP:' are a description of the patch.
-## DP: Add moo feature
+From: Alexander Wirt <formorer@debian.org>
+Subject: Add moo feature
+Forwarded: not-needed
 
-@DPATCH@
-diff -urNad pkg-iproute~/ip/ip.c pkg-iproute/ip/ip.c
---- pkg-iproute~/ip/ip.c	2007-10-18 11:48:11.000000000 +0200
-+++ pkg-iproute/ip/ip.c	2007-10-18 14:14:20.000000000 +0200
-@@ -59,6 +59,20 @@
+Index: iproute/ip/ip.c
+===================================================================
+--- iproute.orig/ip/ip.c	2010-08-05 12:33:36.000000000 +0200
++++ iproute/ip/ip.c	2010-08-05 12:51:38.000000000 +0200
+@@ -55,6 +55,20 @@
  	usage();
  }
  
@@ -30,8 +28,8 @@ diff -urNad pkg-iproute~/ip/ip.c pkg-iproute/ip/ip.c
  	const char *cmd;
  	int (*func)(int argc, char **argv);
 @@ -78,6 +92,7 @@
- 	{ "xfrm",	do_xfrm },
  	{ "mroute",	do_multiroute },
+ 	{ "mrule",	do_multirule },
  	{ "help",	do_help },
 +	{ "moo",	do_moo }, 
  	{ 0 }

@@ -1,16 +1,13 @@
-#! /bin/sh /usr/share/dpatch/dpatch-run
-## txtdocs.dpatch by Andreas Henriksson <andreas@fatal.se>
-## Original author unknown, this was split out to a dpatch
-## from a direct source edit.
-##
-## All lines beginning with `## DP:' are a description of the patch.
-## DP: Add make rules to build documentation in plain text format.
-## DP: This adds a build-dependency on lynx.
+Origin: author unknown, this was split out from a direct source edit.
+Description: Add make rules to build documentation in plain text format.
+             The "txt" target needs to be invoked explicitly (not
+	     hooked up to "all") and needs lynx installed when used.
+Forwarded: no
 
-@DPATCH@
-diff -urNad pkg-iproute~/doc/Makefile pkg-iproute/doc/Makefile
---- pkg-iproute~/doc/Makefile	2008-01-09 21:24:37.000000000 +0100
-+++ pkg-iproute/doc/Makefile	2008-01-09 21:24:46.000000000 +0100
+Index: iproute/doc/Makefile
+===================================================================
+--- iproute.orig/doc/Makefile	2010-08-05 12:33:36.000000000 +0200
++++ iproute/doc/Makefile	2010-08-05 12:51:42.000000000 +0200
 @@ -14,6 +14,7 @@
  PAGESPERPAGE=2
  

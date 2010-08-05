@@ -270,7 +270,8 @@ static int iprule_modify(int cmd, int argc, char **argv)
 			if (get_u32(&pref, *argv, 0))
 				invarg("preference value is invalid\n", *argv);
 			addattr32(&req.n, sizeof(req), FRA_PRIORITY, pref);
-		} else if (strcmp(*argv, "tos") == 0) {
+		} else if (strcmp(*argv, "tos") == 0 ||
+			   matches(*argv, "dsfield") == 0) {
 			__u32 tos;
 			NEXT_ARG();
 			if (rtnl_dsfield_a2n(&tos, *argv))
@@ -436,3 +437,24 @@ int do_iprule(int argc, char **argv)
 	exit(-1);
 }
 
+int do_multirule(int argc, char **argv)
+{
+	switch (preferred_family) {
+	case AF_UNSPEC:
+	case AF_INET:
+		preferred_family = RTNL_FAMILY_IPMR;
+		break;
+	case AF_INET6:
+		preferred_family = RTNL_FAMILY_IP6MR;
+		break;
+	case RTNL_FAMILY_IPMR:
+	case RTNL_FAMILY_IP6MR:
+		break;
+	default:
+		fprintf(stderr, "Multicast rules are only supported for IPv4/IPv6, was: %i\n",
+			preferred_family);
+		exit(-1);
+	}
+
+	return do_iprule(argc, argv);
+}

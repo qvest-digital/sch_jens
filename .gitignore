@@ -8,14 +8,8 @@ Config
 # cscope
 cscope.*
 ncscope.*
-# for patch generation
-*.diff
-*.patch
-*.orig
-*.rej
 # for quilt
-patches
-series
+.pc
 # for gdb
 .gdbinit
 .gdb_history

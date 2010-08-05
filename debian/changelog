@@ -1,3 +1,57 @@
+iproute (20100804-1) UNRELEASED; urgency=low
+
+  * Imported Upstream version 2.6.35
+
+    Changes since last release (2.6.34):
+
+    Andreas Henriksson (1):
+          tc: make symbols loaded from tc action modules global.
+
+    Arnd Hannemann (1):
+          iproute2: Add dsfield as alias for tos for ip rules
+
+    Ben Greear (1):
+          iproute2: Fix batch-mode for mrules.
+
+    Jan Engelhardt (1):
+          Add IFLA_STATS64 support
+
+    Mike Frysinger (3):
+          tc: revert "echo" in install target
+          dnet: fix strict aliasing warnings
+          netem: fix installs of dist files
+
+    Patrick McHardy (1):
+          ip: add support for multicast rules
+
+    Petr Lautrbach (1):
+          iproute: fix tc generating ipv6 priority filter
+
+    Stephen Hemminger (5):
+          Update kernel derived headers
+          Update ARP header type table
+          Fix NULL pointer reference when using basic match
+          Fix byte order of ether address match for u32
+          snapshot 100804
+
+    Steve Fink (1):
+          ss -p is much too slow
+
+    Ulrich Weber (3):
+          iproute2: filter routing entries based on clone flag
+          iproute2: use get_user_hz() for IPv6 print_route
+          iproute2: use int instead of long for RTAX_HOPLIMIT compare
+
+  * debian/source/format: use 3.0 (quilt)
+  * debian/patches: convert from dpatch to quilt style
+  * debian/patches/*.diff: refresh and use DEP-3 description
+  * debian/rules: drop dpatch usage.
+  * debian/control: drop dpatch build dependency.
+  * debian/README.source: replace with /usr/share/doc/quilt/README.source
+    - could have been dropped since we only use dpkg standard features...
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 05 Aug 2010 13:05:37 +0200
+
 iproute (20100519-3) unstable; urgency=low
 
   [ Alexander Wirt ]

@@ -14,7 +14,7 @@ Build-Depends: texlive-latex-base,
                libdb-dev,
                linuxdoc-tools,
                linux-libc-dev,
-               debhelper (>= 5),
+               debhelper (>= 8),
                lynx | lynx-cur,
                bison,
                flex

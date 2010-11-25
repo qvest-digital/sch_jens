@@ -5,8 +5,8 @@
 build: build-arch
 
 clean:
-	-rm stamp-build
-	-rm stamp-doc
+	-rm -f stamp-build
+	-rm -f stamp-doc
 	dh_testdir
 	dh_testroot
 	dh_clean

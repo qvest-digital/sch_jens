@@ -12,6 +12,7 @@ clean:
 	dh_clean
 	make distclean
 	-rm -f tc/q_wrr.o
+	-rm -f doc/*.txt
 
 binary: binary-indep binary-arch
 

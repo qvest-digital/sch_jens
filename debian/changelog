@@ -1,6 +1,6 @@
-iproute (20100804-1) UNRELEASED; urgency=low
+iproute (20110107-1) UNRELEASED; urgency=low
 
-  * Imported Upstream version 2.6.35
+  * Imported Upstream version 2.6.35 (snapshot 20100804)
 
     Changes since last release (2.6.34):
 
@@ -50,7 +50,83 @@ iproute (20100804-1) UNRELEASED; urgency=low
   * debian/README.source: replace with /usr/share/doc/quilt/README.source
     - could have been dropped since we only use dpkg standard features...
 
- -- Andreas Henriksson <andreas@fatal.se>  Thu, 05 Aug 2010 13:05:37 +0200
+  * Update .gitignore
+  * debian/patches/fix-ip-route-get.diff: fix failing route matching.
+  * debian/copyright: Update download location
+  * packaging: automatically unapply patches after build
+  * packaging: ignore if stamp-build and stamp-doc doesn't exist on
+    clean
+  * packaging: clean up generated txt docs when cleaning unpatched
+  * packaging: bump debhelper compatibility and dependency to v8
+  * packaging: switch debian/rules to dh
+  * debian/control: bump to policy 3.9.1
+  * remove manual symlinking of manpages
+
+  * Imported Upstream version 2.6.37 (snapshot 20110107)
+
+    Changes since last release (2.6.35):
+
+    Andreas Schwab (1):
+          iproute2: remove useless use of buffer
+
+    Ben Greear (2):
+          iproute2: Fix filtering related to flushing IP addresses.
+          Allow 'ip addr flush' to loop more than 10 times
+
+    Changli Gao (1):
+          iproute2: tc: f_flow: add key rxhash
+
+    Dan Smith (1):
+          Add ip route save/restore
+
+    Eric Dumazet (2):
+          ip: add RTA_MARK support
+          iproute2: add 64bit support to ifstat
+
+    Gerrit Renker (1):
+          tc-red: typo in man page
+
+    Gregoire Baron (1):
+          tc: add ACT_CSUM action support (csum)
+
+    Mike Frysinger (1):
+          m_xt: stop using xtables_set_revision()
+
+    Octavian Purdila (1):
+          iproute2: initialize the ll_map only once
+
+    Petr Sabata (3):
+          ss(8) improvements by Jiri Popelka <jpopelka@redhat.com>
+          ss: Change "do now" to "do not" in ss(8), -n option
+          ip: Few typo and grammar errors fixes for ip(8) manpage
+
+    Sridhar Samudrala (1):
+          Support 'mode' parameter when creating macvtap device
+
+    Stephen Hemminger (11):
+          Snapshot for 2.6.35.1
+          Update kernel headers to 2.6.36-rc2
+          Use correct rt_link_statistics
+          Fix GRED options clearing
+          Update to 2.6.36 headers
+          Workaround for repeated distclean
+          Use standard routines for interface name to index etc
+          Increase size of ifindex hash heads
+          Cleanup ll_map
+          Update to 2.6.37-rc8 headers
+          v2.6.37
+
+    Timo Teräs (2):
+          iproute2: treat gre key as number
+          iproute2: support xfrm upper protocol gre key
+
+    Ulrich Weber (2):
+          iproute2: dont filter cached routes on iproute_get
+          iproute2: display xfrm socket policy direction
+
+  * Revert "debian/patches/fix-ip-route-get.diff" - fixed upstream.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 11 Jan 2011 11:49:50 +0100
 
 iproute (20100519-3) unstable; urgency=low
 

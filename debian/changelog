@@ -1,4 +1,4 @@
-iproute (20110107-1) UNRELEASED; urgency=low
+iproute (20110107-1) experimental; urgency=low
 
   * Imported Upstream version 2.6.35 (snapshot 20100804)
 
@@ -126,7 +126,7 @@ iproute (20110107-1) UNRELEASED; urgency=low
 
   * Revert "debian/patches/fix-ip-route-get.diff" - fixed upstream.
 
- -- Andreas Henriksson <andreas@fatal.se>  Tue, 11 Jan 2011 11:49:50 +0100
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 12 Jan 2011 10:56:53 +0100
 
 iproute (20100519-3) unstable; urgency=low
 

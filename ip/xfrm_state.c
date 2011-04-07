@@ -50,12 +50,13 @@
 #define NLMSG_BUF_SIZE 4096
 #define RTA_BUF_SIZE 2048
 #define XFRM_ALGO_KEY_BUF_SIZE 512
+#define CTX_BUF_SIZE 256
 
 static void usage(void) __attribute__((noreturn));
 
 static void usage(void)
 {
-	fprintf(stderr, "Usage: ip xfrm state { add | update } ID [ XFRM_OPT ] [ mode MODE ]\n");
+	fprintf(stderr, "Usage: ip xfrm state { add | update } ID [ XFRM_OPT ] [ ctx SEC_CTX ] [ mode MODE ]\n");
 	fprintf(stderr, "        [ reqid REQID ] [ seq SEQ ] [ replay-window SIZE ] [ flag FLAG-LIST ]\n");
 	fprintf(stderr, "        [ encap ENCAP ] [ sel SELECTOR ] [ replay-seq SEQ ]\n");
 	fprintf(stderr, "        [ replay-oseq SEQ ] [ LIMIT-LIST ]\n");
@@ -90,11 +91,12 @@ static void usage(void)
 
 	fprintf(stderr, "ALGO-LIST := [ ALGO-LIST ] | [ ALGO ]\n");
 	fprintf(stderr, "ALGO := ALGO_TYPE ALGO_NAME ALGO_KEY "
-			"[ ALGO_ICV_LEN ]\n");
+			"[ ALGO_ICV_LEN | ALGO_TRUNC_LEN ]\n");
 	fprintf(stderr, "ALGO_TYPE := [ ");
 	fprintf(stderr, "%s | ", strxf_algotype(XFRMA_ALG_AEAD));
 	fprintf(stderr, "%s | ", strxf_algotype(XFRMA_ALG_CRYPT));
 	fprintf(stderr, "%s | ", strxf_algotype(XFRMA_ALG_AUTH));
+	fprintf(stderr, "%s | ", strxf_algotype(XFRMA_ALG_AUTH_TRUNC));
 	fprintf(stderr, "%s ", strxf_algotype(XFRMA_ALG_COMP));
 	fprintf(stderr, "]\n");
 
@@ -246,10 +248,16 @@ static int xfrm_state_modify(int cmd, unsigned flags, int argc, char **argv)
 	char *aalgop = NULL;
 	char *calgop = NULL;
 	char *coap = NULL;
+	char *sctxp = NULL;
 	struct xfrm_mark mark = {0, 0};
+	struct {
+		struct xfrm_user_sec_ctx sctx;
+		char    str[CTX_BUF_SIZE];
+	} ctx;
 
 	memset(&req, 0, sizeof(req));
 	memset(&replay, 0, sizeof(replay));
+	memset(&ctx, 0, sizeof(ctx));
 
 	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(req.xsinfo));
 	req.n.nlmsg_flags = NLM_F_REQUEST|flags;
@@ -333,6 +341,19 @@ static int xfrm_state_modify(int cmd, unsigned flags, int argc, char **argv)
 
 			addattr_l(&req.n, sizeof(req.buf), XFRMA_COADDR,
 				  (void *)&xcoa, sizeof(xcoa));
+		} else if (strcmp(*argv, "ctx") == 0) {
+			char *context;
+
+			if (sctxp)
+				duparg("ctx", *argv);
+			sctxp = *argv;
+
+			NEXT_ARG();
+			context = *argv;
+
+			xfrm_sctx_parse((char *)&ctx.str, context, &ctx.sctx);
+			addattr_l(&req.n, sizeof(req.buf), XFRMA_SEC_CTX,
+				  (void *)&ctx, ctx.sctx.len);
 		} else {
 			/* try to assume ALGO */
 			int type = xfrm_algotype_getbyname(*argv);
@@ -340,6 +361,7 @@ static int xfrm_state_modify(int cmd, unsigned flags, int argc, char **argv)
 			case XFRMA_ALG_AEAD:
 			case XFRMA_ALG_CRYPT:
 			case XFRMA_ALG_AUTH:
+			case XFRMA_ALG_AUTH_TRUNC:
 			case XFRMA_ALG_COMP:
 			{
 				/* ALGO */
@@ -347,11 +369,12 @@ static int xfrm_state_modify(int cmd, unsigned flags, int argc, char **argv)
 					union {
 						struct xfrm_algo alg;
 						struct xfrm_algo_aead aead;
+						struct xfrm_algo_auth auth;
 					} u;
 					char buf[XFRM_ALGO_KEY_BUF_SIZE];
 				} alg = {};
 				int len;
-				__u32 icvlen;
+				__u32 icvlen, trunclen;
 				char *name;
 				char *key;
 				char *buf;
@@ -368,6 +391,7 @@ static int xfrm_state_modify(int cmd, unsigned flags, int argc, char **argv)
 					ealgop = *argv;
 					break;
 				case XFRMA_ALG_AUTH:
+				case XFRMA_ALG_AUTH_TRUNC:
 					if (aalgop)
 						duparg("ALGOTYPE", *argv);
 					aalgop = *argv;
@@ -395,21 +419,33 @@ static int xfrm_state_modify(int cmd, unsigned flags, int argc, char **argv)
 				buf = alg.u.alg.alg_key;
 				len = sizeof(alg.u.alg);
 
-				if (type != XFRMA_ALG_AEAD)
-					goto parse_algo;
+				switch (type) {
+				case XFRMA_ALG_AEAD:
+					if (!NEXT_ARG_OK())
+						missarg("ALGOICVLEN");
+					NEXT_ARG();
+					if (get_u32(&icvlen, *argv, 0))
+						invarg("\"aead\" ICV length is invalid",
+						       *argv);
+					alg.u.aead.alg_icv_len = icvlen;
 
-				if (!NEXT_ARG_OK())
-					missarg("ALGOICVLEN");
-				NEXT_ARG();
-				if (get_u32(&icvlen, *argv, 0))
-					invarg("\"aead\" ICV length is invalid",
-					       *argv);
-				alg.u.aead.alg_icv_len = icvlen;
+					buf = alg.u.aead.alg_key;
+					len = sizeof(alg.u.aead);
+					break;
+				case XFRMA_ALG_AUTH_TRUNC:
+					if (!NEXT_ARG_OK())
+						missarg("ALGOTRUNCLEN");
+					NEXT_ARG();
+					if (get_u32(&trunclen, *argv, 0))
+						invarg("\"auth\" trunc length is invalid",
+						       *argv);
+					alg.u.auth.alg_trunc_len = trunclen;
 
-				buf = alg.u.aead.alg_key;
-				len = sizeof(alg.u.aead);
+					buf = alg.u.auth.alg_key;
+					len = sizeof(alg.u.auth);
+					break;
+				}
 
-parse_algo:
 				xfrm_algo_parse((void *)&alg, type, name, key,
 						buf, sizeof(alg.buf));
 				len += alg.u.alg.alg_key_len;

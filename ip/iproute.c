@@ -85,7 +85,7 @@ static void usage(void)
 	fprintf(stderr, "MP_ALGO := { rr | drr | random | wrandom }\n");
 	fprintf(stderr, "NHFLAGS := [ onlink | pervasive ]\n");
 	fprintf(stderr, "RTPROTO := [ kernel | boot | static | NUMBER ]\n");
-	fprintf(stderr, "TIME := NUMBER[s|ms|us|ns|j]\n");
+	fprintf(stderr, "TIME := NUMBER[s|ms]\n");
 	exit(-1);
 }
 
@@ -526,8 +526,6 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 
 			if (mxrta[i] == NULL)
 				continue;
-			if (!hz)
-				hz = get_user_hz();
 
 			if (i < sizeof(mx_names)/sizeof(char*) && mx_names[i])
 				fprintf(fp, " %s", mx_names[i]);
@@ -549,18 +547,15 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 			case RTAX_RTT:
 			case RTAX_RTTVAR:
 			case RTAX_RTO_MIN:
-				val *= 1000;
 				if (i == RTAX_RTT)
 					val /= 8;
 				else if (i == RTAX_RTTVAR)
 					val /= 4;
 
-				if (val >= hz)
-					fprintf(fp, " %llums",
-						(unsigned long long) val / hz);
+				if (val >= 1000)
+					fprintf(fp, " %gs", val/1e3);
 				else
-					fprintf(fp, " %.2fms", 
-						(double)val / hz);
+					fprintf(fp, " %ums", val);
 			}
 		}
 	}
@@ -840,7 +835,7 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 				mxlock |= (1<<RTAX_RTT);
 				NEXT_ARG();
 			}
-			if (get_jiffies(&rtt, *argv, 0, &raw))
+			if (get_time_rtt(&rtt, *argv, &raw))
 				invarg("\"rtt\" value is invalid\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_RTT, 
 				(raw) ? rtt : rtt * 8);
@@ -848,7 +843,7 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			unsigned rto_min;
 			NEXT_ARG();
 			mxlock |= (1<<RTAX_RTO_MIN);
-			if (get_jiffies(&rto_min, *argv, 0, &raw))
+			if (get_time_rtt(&rto_min, *argv, &raw))
 				invarg("\"rto_min\" value is invalid\n",
 				       *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_RTO_MIN,
@@ -900,7 +895,7 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 				mxlock |= (1<<RTAX_RTTVAR);
 				NEXT_ARG();
 			}
-			if (get_jiffies(&win, *argv, 0, &raw))
+			if (get_time_rtt(&win, *argv, &raw))
 				invarg("\"rttvar\" value is invalid\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_RTTVAR,
 				(raw) ? win : win * 4);

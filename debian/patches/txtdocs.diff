@@ -14,11 +14,11 @@ Index: iproute/doc/Makefile
  HTMLFILES=$(subst .sgml,.html,$(shell echo *.sgml))
 +TXTFILES=$(subst .sgml,.txt,$(shell echo *.sgml))
  DVIFILES=$(subst .ps,.dvi,$(PSFILES))
- 
+ PDFFILES=$(subst .ps,.pdf,$(PSFILES))
  
 @@ -25,6 +26,8 @@
  
- dvi: $(DVIFILES)
+ pdf: $(PDFFILES)
  
 +txt: $(TXTFILES)
 +

@@ -1,3 +1,17 @@
+iproute (20110629-1) unstable; urgency=low
+
+  [ Alexander Wirt ]
+  * Install ss to /bin instead of /sbin.
+
+  [ Andreas Henriksson ]
+  * Imported Upstream version 2.6.39 (aka snapshot 20110629)
+    - tc filter: fix dport/sport in pretty print output (Closes: #627312)
+  * Finally drop the patch adding the wrr qdisc scheduler to tc
+  * Fix txtdocs patch to apply again
+  * Add patch to build against xtables version 6
+
+ -- Andreas Henriksson <andreas@fatal.se>  Mon, 04 Jul 2011 17:29:04 +0200
+
 iproute (20110315-1) unstable; urgency=low
 
   * Imported Upstream version 2.6.38 (snapshot 20110315)

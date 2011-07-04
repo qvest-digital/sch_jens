@@ -49,6 +49,7 @@ static struct
 	char *flushb;
 	int flushp;
 	int flushe;
+	int group;
 } filter;
 
 static int do_link;
@@ -129,26 +130,31 @@ static void print_operstate(FILE *f, __u8 state)
 		fprintf(f, "state %s ", oper_states[state]);
 }
 
-static void print_queuelen(FILE *f, const char *name)
+static void print_queuelen(FILE *f, struct rtattr *tb[IFLA_MAX + 1])
 {
-	struct ifreq ifr;
-	int s;
+	int qlen;
 
-	s = socket(AF_INET, SOCK_STREAM, 0);
-	if (s < 0)
-		return;
+	if (tb[IFLA_TXQLEN])
+		qlen = *(int *)RTA_DATA(tb[IFLA_TXQLEN]);
+	else {
+		struct ifreq ifr;
+		int s = socket(AF_INET, SOCK_STREAM, 0);
 
-	memset(&ifr, 0, sizeof(ifr));
-	strcpy(ifr.ifr_name, name);
-	if (ioctl(s, SIOCGIFTXQLEN, &ifr) < 0) {
-		fprintf(f, "ioctl(SIOCGIFXQLEN) failed: %s\n", strerror(errno));
+		if (s < 0)
+			return;
+
+		memset(&ifr, 0, sizeof(ifr));
+		strcpy(ifr.ifr_name, (char *)RTA_DATA(tb[IFLA_IFNAME]));
+		if (ioctl(s, SIOCGIFTXQLEN, &ifr) < 0) {
+			fprintf(f, "ioctl(SIOCGIFXQLEN) failed: %s\n", strerror(errno));
+			close(s);
+			return;
+		}
 		close(s);
-		return;
+		qlen = ifr.ifr_qlen;
 	}
-	close(s);
-
-	if (ifr.ifr_qlen)
-		fprintf(f, "qlen %d", ifr.ifr_qlen);
+	if (qlen)
+		fprintf(f, "qlen %d", qlen);
 }
 
 static void print_linktype(FILE *fp, struct rtattr *tb)
@@ -246,6 +252,12 @@ int print_linkinfo(const struct sockaddr_nl *who,
 	    fnmatch(filter.label, RTA_DATA(tb[IFLA_IFNAME]), 0))
 		return 0;
 
+	if (tb[IFLA_GROUP]) {
+		int group = *(int*)RTA_DATA(tb[IFLA_GROUP]);
+		if (group != filter.group)
+			return -1;
+	}
+
 	if (n->nlmsg_type == RTM_DELLINK)
 		fprintf(fp, "Deleted ");
 
@@ -271,17 +283,15 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		fprintf(fp, "mtu %u ", *(int*)RTA_DATA(tb[IFLA_MTU]));
 	if (tb[IFLA_QDISC])
 		fprintf(fp, "qdisc %s ", (char*)RTA_DATA(tb[IFLA_QDISC]));
-#ifdef IFLA_MASTER
 	if (tb[IFLA_MASTER]) {
 		SPRINT_BUF(b1);
 		fprintf(fp, "master %s ", ll_idx_n2a(*(int*)RTA_DATA(tb[IFLA_MASTER]), b1));
 	}
-#endif
 	if (tb[IFLA_OPERSTATE])
 		print_operstate(fp, *(__u8 *)RTA_DATA(tb[IFLA_OPERSTATE]));
 		
 	if (filter.showqueue)
-		print_queuelen(fp, (char*)RTA_DATA(tb[IFLA_IFNAME]));
+		print_queuelen(fp, tb);
 
 	if (!filter.family || filter.family == AF_PACKET) {
 		SPRINT_BUF(b1);
@@ -718,9 +728,12 @@ static int ipaddr_list_or_flush(int argc, char **argv, int flush)
 	if (filter.family == AF_UNSPEC)
 		filter.family = preferred_family;
 
+	filter.group = INIT_NETDEV_GROUP;
+
 	if (flush) {
 		if (argc <= 0) {
 			fprintf(stderr, "Flush requires arguments.\n");
+
 			return -1;
 		}
 		if (filter.family == AF_PACKET) {
@@ -779,6 +792,10 @@ static int ipaddr_list_or_flush(int argc, char **argv, int flush)
 		} else if (strcmp(*argv, "label") == 0) {
 			NEXT_ARG();
 			filter.label = *argv;
+		} else if (strcmp(*argv, "group") == 0) {
+			NEXT_ARG();
+			if (rtnl_group_a2n(&filter.group, *argv))
+				invarg("Invalid \"group\" value\n", *argv);
 		} else {
 			if (strcmp(*argv, "dev") == 0) {
 				NEXT_ARG();

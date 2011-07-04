@@ -478,12 +478,11 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				if (ci->rta_lastuse != 0)
 					fprintf(fp, " age %dsec", ci->rta_lastuse/hz);
 			}
-#ifdef RTNETLINK_HAVE_PEERINFO
 			if (ci->rta_id)
 				fprintf(fp, " ipid 0x%04x", ci->rta_id);
 			if (ci->rta_ts || ci->rta_tsage)
-				fprintf(fp, " ts 0x%x tsage %dsec", ci->rta_ts, ci->rta_tsage);
-#endif
+				fprintf(fp, " ts 0x%x tsage %dsec",
+					ci->rta_ts, ci->rta_tsage);
 		}
 	} else if (r->rtm_family == AF_INET6) {
 		struct rta_cacheinfo *ci = NULL;
@@ -713,8 +712,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 	int nhs_ok = 0;
 	int scope_ok = 0;
 	int table_ok = 0;
-	int proto_ok = 0;
-	int type_ok = 0;
 	int raw = 0;
 
 	memset(&req, 0, sizeof(req));
@@ -792,7 +789,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (get_unsigned(&mtu, *argv, 0))
 				invarg("\"mtu\" value is invalid\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_MTU, mtu);
-#ifdef RTAX_HOPLIMIT
 		} else if (strcmp(*argv, "hoplimit") == 0) {
 			unsigned hoplimit;
 			NEXT_ARG();
@@ -803,8 +799,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (get_unsigned(&hoplimit, *argv, 0))
 				invarg("\"hoplimit\" value is invalid\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_HOPLIMIT, hoplimit);
-#endif
-#ifdef RTAX_ADVMSS
 		} else if (strcmp(*argv, "advmss") == 0) {
 			unsigned mss;
 			NEXT_ARG();
@@ -815,8 +809,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (get_unsigned(&mss, *argv, 0))
 				invarg("\"mss\" value is invalid\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_ADVMSS, mss);
-#endif
-#ifdef RTAX_REORDERING
 		} else if (matches(*argv, "reordering") == 0) {
 			unsigned reord;
 			NEXT_ARG();
@@ -827,7 +819,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (get_unsigned(&reord, *argv, 0))
 				invarg("\"reordering\" value is invalid\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_REORDERING, reord);
-#endif
 		} else if (strcmp(*argv, "rtt") == 0) {
 			unsigned rtt;
 			NEXT_ARG();
@@ -926,7 +917,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (rtnl_rtprot_a2n(&prot, *argv))
 				invarg("\"protocol\" value is invalid\n", *argv);
 			req.r.rtm_protocol = prot;
-			proto_ok =1;
 		} else if (matches(*argv, "table") == 0) {
 			__u32 tid;
 			NEXT_ARG();
@@ -954,7 +944,6 @@ int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			    rtnl_rtntype_a2n(&type, *argv) == 0) {
 				NEXT_ARG();
 				req.r.rtm_type = type;
-				type_ok = 1;
 			}
 
 			if (matches(*argv, "help") == 0)

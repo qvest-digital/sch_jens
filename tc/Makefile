@@ -31,6 +31,7 @@ TCMODULES += q_ingress.o
 TCMODULES += q_hfsc.o
 TCMODULES += q_htb.o
 TCMODULES += q_drr.o
+TCMODULES += q_qfq.o
 TCMODULES += m_gact.o
 TCMODULES += m_mirred.o
 TCMODULES += m_nat.o
@@ -118,7 +119,7 @@ install: all
 
 clean:
 	rm -f $(TCOBJ) $(TCLIB) libtc.a tc *.so emp_ematch.yacc.h; \
-	rm -f emp_ematch.yacc.output
+	rm -f emp_ematch.yacc.*
 
 q_atm.so: q_atm.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o q_atm.so q_atm.c -latm
@@ -134,6 +135,11 @@ m_xt_old.so: m_xt_old.c
 
 %.lex.c: %.l
 	$(LEX) $(LEXFLAGS) -o$@ $<
+
+# our lexer includes the header from yacc, so make sure
+# we don't attempt to compile it before the header has
+# been generated as part of the yacc step.
+emp_ematch.lex.o: emp_ematch.yacc.c
 
 ifneq ($(SHARED_LIBS),y)
 

@@ -273,13 +273,19 @@ static void user_ent_hash_build(void)
 			unsigned int ino;
 			char lnk[64];
 			int fd;
+			ssize_t link_len;
 
 			if (sscanf(d1->d_name, "%d%c", &fd, &crap) != 1)
 				continue;
 
 			sprintf(name+pos, "%d", fd);
-			if (readlink(name, lnk, sizeof(lnk)-1) < 0 ||
-			    strncmp(lnk, pattern, strlen(pattern)))
+
+			link_len = readlink(name, lnk, sizeof(lnk)-1);
+			if (link_len == -1)
+				continue;
+			lnk[link_len] = '\0';
+
+			if (strncmp(lnk, pattern, strlen(pattern)))
 				continue;
 
 			sscanf(lnk, "socket:[%u]", &ino);
@@ -518,6 +524,7 @@ void init_service_resolver(void)
 				}
 			}
 		}
+		pclose(fp);
 	}
 }
 
@@ -2416,9 +2423,10 @@ static void _usage(FILE *dest)
 "   -x, --unix		display only Unix domain sockets\n"
 "   -f, --family=FAMILY display sockets of type FAMILY\n"
 "\n"
-"   -A, --query=QUERY\n"
+"   -A, --query=QUERY, --socket=QUERY\n"
 "       QUERY := {all|inet|tcp|udp|raw|unix|packet|netlink}[,QUERY]\n"
 "\n"
+"   -D, --diag=FILE     Dump raw information about TCP sockets to FILE\n"
 "   -F, --filter=FILE   read filter information from FILE\n"
 "       FILTER := [ state TCP-STATE ] [ EXPRESSION ]\n"
 		);
@@ -2486,8 +2494,9 @@ static const struct option long_opts[] = {
 	{ "packet", 0, 0, '0' },
 	{ "family", 1, 0, 'f' },
 	{ "socket", 1, 0, 'A' },
+	{ "query", 1, 0, 'A' },
 	{ "summary", 0, 0, 's' },
-	{ "diag", 0, 0, 'D' },
+	{ "diag", 1, 0, 'D' },
 	{ "filter", 1, 0, 'F' },
 	{ "version", 0, 0, 'V' },
 	{ "help", 0, 0, 'h' },
@@ -2559,7 +2568,7 @@ int main(int argc, char *argv[])
 			current_filter.states = SS_ALL;
 			break;
 		case 'l':
-			current_filter.states = (1<<SS_LISTEN);
+			current_filter.states = (1<<SS_LISTEN) | (1<<SS_CLOSE);
 			break;
 		case '4':
 			preferred_family = AF_INET;

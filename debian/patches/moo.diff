@@ -2,11 +2,11 @@ From: Alexander Wirt <formorer@debian.org>
 Subject: Add moo feature
 Forwarded: not-needed
 
-Index: iproute/ip/ip.c
+Index: quilt-oPPpWs/ip/ip.c
 ===================================================================
---- iproute.orig/ip/ip.c	2010-08-05 12:33:36.000000000 +0200
-+++ iproute/ip/ip.c	2010-08-05 12:51:38.000000000 +0200
-@@ -55,6 +55,20 @@
+--- quilt-oPPpWs.orig/ip/ip.c	2011-11-23 21:53:54.000000000 +0100
++++ quilt-oPPpWs/ip/ip.c	2011-11-23 22:13:37.000000000 +0100
+@@ -59,6 +59,20 @@
  	usage();
  }
  
@@ -27,9 +27,9 @@ Index: iproute/ip/ip.c
  static const struct cmd {
  	const char *cmd;
  	int (*func)(int argc, char **argv);
-@@ -78,6 +92,7 @@
- 	{ "mroute",	do_multiroute },
+@@ -83,6 +97,7 @@
  	{ "mrule",	do_multirule },
+ 	{ "netns",	do_netns },
  	{ "help",	do_help },
 +	{ "moo",	do_moo }, 
  	{ 0 }

@@ -1,3 +1,13 @@
+iproute (20111117-1) unstable; urgency=low
+
+  * Imported Upstream version 3.1.0 (aka snapshot 20111117)
+  * Update download location in debian/copyright
+    - tarballs now available from kernel.org
+  * Drop debian/patches/xt-v6.diff, fixed upstream.
+  * Refresh patches: debian/patches/moo.diff and txtdocs.diff
+
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 23 Nov 2011 22:15:38 +0100
+
 iproute (20110629-1) unstable; urgency=low
 
   [ Alexander Wirt ]

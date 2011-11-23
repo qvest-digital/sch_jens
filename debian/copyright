@@ -2,8 +2,9 @@ This is the Debian GNU/Linux's prepackaged version of the
 Linux Traffic Control engine and related utils, "iproute"
 
 The source code was obtained from
-  http://devresources.linuxfoundation.org/dev/iproute2/download/
+ http://kernel.org/pub/linux/utils/networking/iproute2/
 The former upstream was
+  http://devresources.linuxfoundation.org/dev/iproute2/download/
   http://developer.osdl.org/dev/iproute2
   ftp://ftp.inr.ac.ru/ip-routing/iproute2-2.4.7-now-ss010824.tar.gz
 

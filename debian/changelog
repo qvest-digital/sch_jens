@@ -1,3 +1,19 @@
+iproute (20120105-1) unstable; urgency=low
+
+  * Imported Upstream version 3.2 (aka snapshot 20120105)
+    * better manual pages
+    * L2TPv3 support
+    * improved RED options
+    * netem additions for loss models
+    * iptables integration fixes
+  * Don't install (outdated) RELNOTES, dropped upstream.
+  * Refresh debian patches
+  * Bump standards version
+  * debian/patches/ipl2tp-avoid-libnl.diff:
+    Add patch to avoid the need for libnl-dev build dependency
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 10 Jan 2012 12:59:15 +0100
+
 iproute (20111117-1) unstable; urgency=low
 
   * Imported Upstream version 3.1.0 (aka snapshot 20111117)

@@ -71,7 +71,10 @@ void iplink_usage(void)
 	fprintf(stderr, "			  [ alias NAME ]\n");
 	fprintf(stderr, "	                  [ vf NUM [ mac LLADDR ]\n");
 	fprintf(stderr, "				   [ vlan VLANID [ qos VLAN-QOS ] ]\n");
+
 	fprintf(stderr, "				   [ rate TXRATE ] ] \n");
+
+	fprintf(stderr, "				   [ spoofchk { on | off} ] ] \n");
 	fprintf(stderr, "			  [ master DEVICE ]\n");
 	fprintf(stderr, "			  [ nomaster ]\n");
 	fprintf(stderr, "       ip link show [ DEVICE | group GROUP ]\n");
@@ -161,7 +164,7 @@ static int iplink_have_newlink(void)
 		req.n.nlmsg_type = RTM_NEWLINK;
 		req.i.ifi_family = AF_UNSPEC;
 
-		rtnl_send(&rth, (char *)&req.n, req.n.nlmsg_len);
+		rtnl_send(&rth, &req.n, req.n.nlmsg_len);
 		rtnl_listen(&rth, accept_msg, NULL);
 	}
 	return have_rtnl_newlink;
@@ -228,6 +231,18 @@ int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 			ivt.vf = vf;
 			addattr_l(&req->n, sizeof(*req), IFLA_VF_TX_RATE, &ivt, sizeof(ivt));
 		
+		} else if (matches(*argv, "spoofchk") == 0) {
+			struct ifla_vf_spoofchk ivs;
+			NEXT_ARG();
+			if (matches(*argv, "on") == 0)
+				ivs.setting = 1;
+			else if (matches(*argv, "off") == 0)
+				ivs.setting = 0;
+			else
+				invarg("Invalid \"spoofchk\" value\n", *argv);
+			ivs.vf = vf;
+			addattr_l(&req->n, sizeof(*req), IFLA_VF_SPOOFCHK, &ivs, sizeof(ivs));
+
 		} else {
 			/* rewind arg */
 			PREV_ARG();
@@ -467,7 +482,7 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 			req.i.ifi_index = 0;
 			addattr32(&req.n, sizeof(req), IFLA_GROUP, group);
-			if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0)
+			if (rtnl_talk(&rth, &req.n, 0, 0, NULL) < 0)
 				exit(2);
 			return 0;
 		}
@@ -544,7 +559,7 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 		addattr_l(&req.n, sizeof(req), IFLA_IFNAME, name, len);
 	}
 
-	if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0)
+	if (rtnl_talk(&rth, &req.n, 0, 0, NULL) < 0)
 		exit(2);
 
 	return 0;

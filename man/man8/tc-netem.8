@@ -1,0 +1,148 @@
+.TH NETEM 8 "25 November 2011" "iproute2" "Linux"
+.SH NAME
+NetEm \- Network Emulator
+.SH SYNOPSIS
+.B "tc qdisc ... dev" 
+.IR dev " ] "
+.BR "add netem" 
+.I OPTIONS
+
+.IR OPTIONS " := [ " LIMIT " ] [ " DELAY " ] [ " LOSS \
+" ] [ " CORRUPT " ] [ " DUPLICATION " ] [ " REORDERING " ]"
+
+.IR LIMIT " := "
+.B limit
+.I packets
+
+.IR DELAY " := "
+.BI delay 
+.IR TIME " [ " JITTER " [ " CORRELATION " ]]]"
+.br
+       [ 
+.BR distribution " { "uniform " | " normal " | " pareto " |  " paretonormal " } ]"
+
+.IR LOSS " := "
+.BR loss " { "
+.BI random 
+.IR PERCENT " [ " CORRELATION " ]  |"
+.br
+.RB "               " state
+.IR p13 " [ " p31 " [ " p32 " [ " p23 " [ " p14 "]]]] |"
+.br
+.RB "               " gemodel
+.IR p " [ " r " [ " 1-h " [ " 1-k " ]]]"
+
+.IR CORRUPT " := "
+.B corrupt
+.IR PERCENT " [ " CORRELATION " ]]"
+
+.IR DUPLICATION " := "
+.B duplicate
+.IR PERCENT " [ " CORRELATION " ]]"
+
+.IR REODERING " := "
+.B reorder
+.IR PERCENT " [ " CORRELATION " ] [ "
+.B gap 
+.IR DISTANCE " ]"
+
+.SH DESCRIPTION
+NetEm is an enhancement of the Linux traffic control facilities
+that allow to add delay, packet loss, duplication and more other
+characteristics to packets outgoing from a selected network
+interface. NetEm is build using the existing Quality Of Service (QOS)
+and Differentiated Services (diffserv) facilities in the Linux
+kernel.
+
+.SH netem OPTIONS
+netem has the following options:
+
+.SS limit packets
+
+limits the effect of selected options to the indicated number of next packets.
+
+.SS delay
+adds the chosen delay to the packets outgoing to chosen network interface. The
+optional parameters allows to introduce a delay variation and a correlation.
+Delay and jitter values are expressed in ms while correlation is percentage.
+
+.SS distribution
+allow the choose the delay distribution. If not specified, the default
+distribution is normal. Additional parameters allow to consider situations in
+which network has variable delays depending on traffic flows concurring on the
+same path, that causes severeal delay peaks and a tail.
+
+.SS loss random
+adds an independent loss probability to the packets outgoing from the chosen
+network interface. It is also possibile to add a correlation, but this option
+is now deprecated due to the noticed bad behaviour.
+
+.SS loss state
+adds packet losses according to the 4-state Markov using the transition
+probabilities as input parameters. The parameters p13 is mandatory and if used
+alone corresponds to the Bernoulli model. The optional parameters allows to
+extend the model to 2-state (p31), 3-state (p23 and p32) and 4-state (p14).
+State 1 corresponds to good reception, State 4 to independent losses, State 3
+to burst losses and State 2 to good reception within a burst.
+
+.SS loss gemodel
+adds packet losses according to the Gilbert-Elliot loss model or its special
+cases (Gilbert, Simple Gilbert and Bernoulli). To use the Bernoulli model, the
+only needed parameter is p while the the others will be set to the default
+values r=1-p, 1-h=1 and 1-k=0. The parameters needed for the Simple Gilbert
+model are two (p and r), while three parameters (p, r, 1-h) are needed for the
+Gilbert model and four (p, r, 1-h and 1-k) are needed for the Gilbert-Elliot
+model. As known, p and r are the transition probabilities between the bad and
+the good states, 1-h is the loss probability in the bad state and 1-k is the
+loss probability in the good state.
+
+.SS corrupt
+allows the emulate the random noise introducing an error in a random position
+for a chosen percent of packets. It is also possible to add a correlation
+through the proper parameter.
+
+.SS duplicate
+using this option the chosen percent of packets is duplicated before queueing
+them. It is also possible to add a correlation through the proper parameter.
+
+.SS reorder
+there are two ways to use this option:
+
+.B "reorder gap"
+.I 5 10
+.br
+in this first example every 5th (10th, 15th) packet is sent immediately while
+other packets are delayed by 10 ms
+
+.B reorder
+.I 25% 50%
+.br
+in this second example 25% of packets are sent immediately (with correlation of
+50%) while the other are delayed by 10 ms.
+
+.SH LIMITATIONS
+The main known limitation of Netem are related to timer granularity, since
+Linux is not a real-time operating system.
+
+.SH SOURCES
+.IP " 1. " 4
+Hemminger S. , "Network Emulation with NetEm", Open Source Development Lab,
+April 2005
+(http://devresources.linux-foundation.org/shemminger/netem/LCA2005_paper.pdf)
+
+.IP " 2. " 4
+Netem page from Linux foundation, (http://www.linuxfoundation.org/en/Net:Netem)
+
+.IP " 3. " 4
+Salsano S., Ludovici F., Ordine A., "Definition of a general and intuitive loss
+model for packet networks and its implementation in the Netem module in the
+Linux kernel", available at http://netgroup.uniroma2.it/NetemCLG
+
+.SH SEE ALSO
+.BR tc (8),
+.BR tc-tbf (8)
+
+.SH AUTHOR
+Netem was written by Stephen Hemminger at Linux foundation and is based on NISTnet.
+This manpage was created by Fabio Ludovici <fabio.ludovici at yahoo dot it> and
+Hagen Paul Pfeifer <hagen@jauu.net>

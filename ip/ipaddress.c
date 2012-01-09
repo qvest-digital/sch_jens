@@ -197,7 +197,9 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 	struct ifla_vf_mac *vf_mac;
 	struct ifla_vf_vlan *vf_vlan;
 	struct ifla_vf_tx_rate *vf_tx_rate;
+	struct ifla_vf_spoofchk *vf_spoofchk;
 	struct rtattr *vf[IFLA_VF_MAX+1];
+	struct rtattr *tmp;
 	SPRINT_BUF(b1);
 
 	if (vfinfo->rta_type != IFLA_VF_INFO) {
@@ -211,6 +213,17 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 	vf_vlan = RTA_DATA(vf[IFLA_VF_VLAN]);
 	vf_tx_rate = RTA_DATA(vf[IFLA_VF_TX_RATE]);
 
+	/* Check if the spoof checking vf info type is supported by
+	 * this kernel.
+	 */
+	tmp = (struct rtattr *)((char *)vf[IFLA_VF_TX_RATE] +
+			vf[IFLA_VF_TX_RATE]->rta_len);
+
+	if (tmp->rta_type != IFLA_VF_SPOOFCHK)
+		vf_spoofchk = NULL;
+	else
+		vf_spoofchk = RTA_DATA(vf[IFLA_VF_SPOOFCHK]);
+
 	fprintf(fp, "\n    vf %d MAC %s", vf_mac->vf,
 		ll_addr_n2a((unsigned char *)&vf_mac->mac,
 		ETH_ALEN, 0, b1, sizeof(b1)));
@@ -220,6 +233,12 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 		fprintf(fp, ", qos %d", vf_vlan->qos);
 	if (vf_tx_rate->rate)
 		fprintf(fp, ", tx rate %d (Mbps)", vf_tx_rate->rate);
+	if (vf_spoofchk && vf_spoofchk->setting != -1) {
+		if (vf_spoofchk->setting)
+			fprintf(fp, ", spoof checking on");
+		else
+			fprintf(fp, ", spoof checking off");
+	}
 }
 
 int print_linkinfo(const struct sockaddr_nl *who,
@@ -814,7 +833,7 @@ static int ipaddr_list_or_flush(int argc, char **argv, int flush)
 		exit(1);
 	}
 
-	if (rtnl_dump_filter(&rth, store_nlmsg, &linfo, NULL, NULL) < 0) {
+	if (rtnl_dump_filter(&rth, store_nlmsg, &linfo) < 0) {
 		fprintf(stderr, "Dump terminated\n");
 		exit(1);
 	}
@@ -840,20 +859,14 @@ static int ipaddr_list_or_flush(int argc, char **argv, int flush)
 				{
 					.filter = print_addrinfo_secondary,
 					.arg1 = stdout,
-					.junk = NULL,
-					.arg2 = NULL
 				},
 				{
 					.filter = print_addrinfo_primary,
 					.arg1 = stdout,
-					.junk = NULL,
-					.arg2 = NULL
 				},
 				{
 					.filter = NULL,
 					.arg1 = NULL,
-					.junk = NULL,
-					.arg2 = NULL
 				},
 			};
 			if (rtnl_wilddump_request(&rth, filter.family, RTM_GETADDR) < 0) {
@@ -904,7 +917,7 @@ flush_done:
 			exit(1);
 		}
 
-		if (rtnl_dump_filter(&rth, store_nlmsg, &ainfo, NULL, NULL) < 0) {
+		if (rtnl_dump_filter(&rth, store_nlmsg, &ainfo) < 0) {
 			fprintf(stderr, "Dump terminated\n");
 			exit(1);
 		}
@@ -1195,7 +1208,7 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 			  sizeof(cinfo));
 	}
 
-	if (rtnl_talk(&rth, &req.n, 0, 0, NULL, NULL, NULL) < 0)
+	if (rtnl_talk(&rth, &req.n, 0, 0, NULL) < 0)
 		return -2;
 
 	return 0;

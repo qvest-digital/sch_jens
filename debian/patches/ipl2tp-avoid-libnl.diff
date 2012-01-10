@@ -1,0 +1,31 @@
+From: Andreas Henriksson <andreas@fatal.se>
+
+Upstream commit 38cd311adef818a891a0d9fa778969419fe55141
+("l2tp: Add l2tp support") says:
+
+> Based on earlier implementation by James Chapman. But instead of
+> dragging in all of libnl, use existing libnetlink infrastructure.
+
+But libnl headers are still required to build.
+I guess that was just and oversight and they should be removed.
+Upstream has been notified.
+
+diff --git a/ip/ipl2tp.c b/ip/ipl2tp.c
+index 042ddb4..b7a83cf 100644
+--- a/ip/ipl2tp.c
++++ b/ip/ipl2tp.c
+@@ -23,12 +23,14 @@
+ #include <linux/if_arp.h>
+ #include <linux/ip.h>
+ 
++/*
+ #include <netlink/netlink.h>
+ #include <netlink/genl/genl.h>
+ #include <netlink/genl/family.h>
+ #include <netlink/genl/mngt.h>
+ #include <netlink/genl/ctrl.h>
+ #include <netlink/utils.h>
++*/
+ 
+ #include <linux/genetlink.h>
+ #include <linux/l2tp.h>

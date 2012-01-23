@@ -16,6 +16,7 @@ Build-Depends: texlive-latex-base,
                linux-libc-dev,
                debhelper (>= 8),
                lynx | lynx-cur,
+               pkg-config,
                bison,
                flex
 

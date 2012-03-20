@@ -1,3 +1,19 @@
+iproute (20120319-1) unstable; urgency=low
+
+  * Build-depend on pkg-config (Closes: #657062)
+  * Imported Upstream version 3.3.0 (aka snapshot 20120319)
+    This release includes, among other things, the following bug fixes:
+    - C++ compatible netlink headers (Closes: #658903)
+    - ip link sorted before l2tp (Closes: #656585)
+    - Improved tuntap documentation (Closes: #629630)
+    - Router advertisement decoding fix (Closes: #634170)
+    - tc iec rates decoding fix (Closes: #662979)
+    - Drop ip route monitor from help syntax and manpage (Closes: #537681)
+  * Revert "Add patch to avoid the need for libnl-dev build dependency"
+    - now included upstream.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 20 Mar 2012 16:51:52 +0100
+
 iproute (20120105-1) unstable; urgency=low
 
   * Imported Upstream version 3.2 (aka snapshot 20120105)

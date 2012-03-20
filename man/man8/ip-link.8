@@ -1,6 +1,6 @@
 .TH IP\-LINK 8 "20 Dec 2011" "iproute2" "Linux"
 .SH "NAME"
-ip link \- network device configuration
+ip-link \- network device configuration
 .SH "SYNOPSIS"
 .sp
 .ad l
@@ -99,6 +99,9 @@ ip link \- network device configuration
 .IR TXRATE " ] ["
 .B spoofchk { on | off }
 ] |
+.br
+.B mode
+.IR LINKMODE " |"
 .br
 .B master
 .IR DEVICE
@@ -249,6 +252,14 @@ move the device to the network namespace associated with name
 .IR "NETNSNAME".
 
 .TP
+.BI mode " LINKMODE"
+allows setting link mode which determines which RFC2863 operational state
+the device will transistion to when it is brought up. Setting
+.I dormant
+mode changes the behaviour so that device goes into DORMANT state instead
+of UP when driver is ready.
+
+.TP
 .BI alias " NAME"
 give the device a symbolic name for easy reference.
 
@@ -301,6 +312,10 @@ as 0 disables VLAN tagging and filtering for the VF.
 Setting this parameter to 0 disables rate limiting. The
 .B vf
 parameter must be specified.
+
+.sp
+.BI spoofchk " on|off"
+- turn packet spoof checking on or off for the specified VF.
 .in -8
 
 .TP

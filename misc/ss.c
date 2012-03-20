@@ -34,7 +34,9 @@
 #include "SNAPSHOT.h"
 
 #include <netinet/tcp.h>
+#include <linux/sock_diag.h>
 #include <linux/inet_diag.h>
+#include <linux/unix_diag.h>
 
 int resolve_hosts = 0;
 int resolve_services = 1;
@@ -1561,6 +1563,7 @@ static int tcp_show_netlink(struct filter *f, FILE *dump_fp, int socktype)
 		}
 		if (status == 0) {
 			fprintf(stderr, "EOF on netlink\n");
+			close(fd);
 			return 0;
 		}
 
@@ -1576,8 +1579,10 @@ static int tcp_show_netlink(struct filter *f, FILE *dump_fp, int socktype)
 			    h->nlmsg_seq != 123456)
 				goto skip_it;
 
-			if (h->nlmsg_type == NLMSG_DONE)
+			if (h->nlmsg_type == NLMSG_DONE) {
+				close(fd);
 				return 0;
+			}
 			if (h->nlmsg_type == NLMSG_ERROR) {
 				struct nlmsgerr *err = (struct nlmsgerr*)NLMSG_DATA(h);
 				if (h->nlmsg_len < NLMSG_LENGTH(sizeof(struct nlmsgerr))) {
@@ -1586,6 +1591,7 @@ static int tcp_show_netlink(struct filter *f, FILE *dump_fp, int socktype)
 					errno = -err->error;
 					perror("TCPDIAG answers");
 				}
+				close(fd);
 				return 0;
 			}
 			if (!dump_fp) {
@@ -1594,8 +1600,10 @@ static int tcp_show_netlink(struct filter *f, FILE *dump_fp, int socktype)
 					continue;
 				}
 				err = tcp_show_sock(h, NULL);
-				if (err < 0)
+				if (err < 0) {
+					close(fd);
 					return err;
+				}
 			}
 
 skip_it:
@@ -1610,6 +1618,7 @@ skip_it:
 			exit(1);
 		}
 	}
+	close(fd);
 	return 0;
 }
 
@@ -1993,6 +2002,157 @@ void unix_list_print(struct unixstat *list, struct filter *f)
 	}
 }
 
+static int unix_show_sock(struct nlmsghdr *nlh, struct filter *f)
+{
+	struct unix_diag_msg *r = NLMSG_DATA(nlh);
+	struct rtattr *tb[UNIX_DIAG_MAX+1];
+	char name[128];
+	int peer_ino;
+	int rqlen;
+
+	parse_rtattr(tb, UNIX_DIAG_MAX, (struct rtattr*)(r+1),
+		     nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*r)));
+
+	if (netid_width)
+		printf("%-*s ", netid_width,
+				r->udiag_type == SOCK_STREAM ? "u_str" : "u_dgr");
+	if (state_width)
+		printf("%-*s ", state_width, sstate_name[r->udiag_state]);
+
+	if (tb[UNIX_DIAG_RQLEN])
+		rqlen = *(int *)RTA_DATA(tb[UNIX_DIAG_RQLEN]);
+	else
+		rqlen = 0;
+
+	printf("%-6d %-6d ", rqlen, 0);
+
+	if (tb[UNIX_DIAG_NAME]) {
+		int len = RTA_PAYLOAD(tb[UNIX_DIAG_NAME]);
+
+		memcpy(name, RTA_DATA(tb[UNIX_DIAG_NAME]), len);
+		name[len] = '\0';
+		if (name[0] == '\0')
+			name[0] = '@';
+	} else
+		sprintf(name, "*");
+
+	if (tb[UNIX_DIAG_PEER])
+		peer_ino = *(int *)RTA_DATA(tb[UNIX_DIAG_PEER]);
+	else
+		peer_ino = 0;
+
+	printf("%*s %-*d %*s %-*d",
+			addr_width, name,
+			serv_width, r->udiag_ino,
+			addr_width, "*", /* FIXME */
+			serv_width, peer_ino);
+
+	if (show_users) {
+		char ubuf[4096];
+		if (find_users(r->udiag_ino, ubuf, sizeof(ubuf)) > 0)
+			printf(" users:(%s)", ubuf);
+	}
+
+	printf("\n");
+
+	return 0;
+}
+
+static int unix_show_netlink(struct filter *f, FILE *dump_fp)
+{
+	int fd;
+	struct {
+		struct nlmsghdr nlh;
+		struct unix_diag_req r;
+	} req;
+	char	buf[8192];
+
+	if ((fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_INET_DIAG)) < 0)
+		return -1;
+
+	memset(&req, 0, sizeof(req));
+	req.nlh.nlmsg_len = sizeof(req);
+	req.nlh.nlmsg_type = SOCK_DIAG_BY_FAMILY;
+	req.nlh.nlmsg_flags = NLM_F_ROOT|NLM_F_MATCH|NLM_F_REQUEST;
+	req.nlh.nlmsg_seq = 123456;
+
+	req.r.sdiag_family = AF_UNIX;
+	req.r.udiag_states = f->states;
+	req.r.udiag_show = UDIAG_SHOW_NAME | UDIAG_SHOW_PEER | UDIAG_SHOW_RQLEN;
+
+	if (send(fd, &req, sizeof(req), 0) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	while (1) {
+		ssize_t status;
+		struct nlmsghdr *h;
+		struct sockaddr_nl nladdr;
+		socklen_t slen = sizeof(nladdr);
+
+		status = recvfrom(fd, buf, sizeof(buf), 0,
+				  (struct sockaddr *) &nladdr, &slen);
+		if (status < 0) {
+			if (errno == EINTR)
+				continue;
+			perror("OVERRUN");
+			continue;
+		}
+		if (status == 0) {
+			fprintf(stderr, "EOF on netlink\n");
+			goto close_it;
+		}
+
+		if (dump_fp)
+			fwrite(buf, 1, NLMSG_ALIGN(status), dump_fp);
+
+		h = (struct nlmsghdr*)buf;
+		while (NLMSG_OK(h, status)) {
+			int err;
+
+			if (/*h->nlmsg_pid != rth->local.nl_pid ||*/
+			    h->nlmsg_seq != 123456)
+				goto skip_it;
+
+			if (h->nlmsg_type == NLMSG_DONE)
+				goto close_it;
+
+			if (h->nlmsg_type == NLMSG_ERROR) {
+				struct nlmsgerr *err = (struct nlmsgerr*)NLMSG_DATA(h);
+				if (h->nlmsg_len < NLMSG_LENGTH(sizeof(struct nlmsgerr))) {
+					fprintf(stderr, "ERROR truncated\n");
+				} else {
+					errno = -err->error;
+					if (errno != ENOENT)
+						fprintf(stderr, "UDIAG answers %d\n", errno);
+				}
+				close(fd);
+				return -1;
+			}
+			if (!dump_fp) {
+				err = unix_show_sock(h, f);
+				if (err < 0) {
+					close(fd);
+					return err;
+				}
+			}
+
+skip_it:
+			h = NLMSG_NEXT(h, status);
+		}
+
+		if (status) {
+			fprintf(stderr, "!!!Remnant of size %zd\n", status);
+			exit(1);
+		}
+	}
+
+close_it:
+	close(fd);
+	return 0;
+}
+
 int unix_show(struct filter *f)
 {
 	FILE *fp;
@@ -2001,6 +2161,10 @@ int unix_show(struct filter *f)
 	int  newformat = 0;
 	int  cnt;
 	struct unixstat *list = NULL;
+
+	if (!getenv("PROC_NET_UNIX") && !getenv("PROC_ROOT")
+	    && unix_show_netlink(f, NULL) == 0)
+		return 0;
 
 	if ((fp = net_unix_open()) == NULL)
 		return -1;
@@ -2062,7 +2226,7 @@ int unix_show(struct filter *f)
 			cnt = 0;
 		}
 	}
-
+	fclose(fp);
 	if (list) {
 		unix_list_print(list, f);
 		unix_list_free(list);

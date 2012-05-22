@@ -1,5 +1,8 @@
 #!/usr/bin/make -f
 
+LDFLAGS="`dpkg-buildflags --get LDFLAGS`"
+CCOPTS="`dpkg-buildflags --get CFLAGS` `dpkg-buildflags --get CPPFLAGS`"
+
 %:
 	dh $@
 
@@ -14,7 +17,7 @@ override_dh_installexamples:
 override_dh_shlibdeps:
 	dh_shlibdeps -a -Xq_atm.so -Xm_xt.so -Xm_ipt.so
 
-
 override_dh_auto_build:
 	$(MAKE) -C doc all txt
-	$(MAKE) KERNEL_INCLUDE=./include
+	#$(MAKE) KERNEL_INCLUDE=./include
+	dh_auto_build -- CCOPTS=$(CCOPTS) LDFLAGS=$(LDFLAGS)

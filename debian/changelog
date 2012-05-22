@@ -1,3 +1,12 @@
+iproute (20120521-1) unstable; urgency=low
+
+  * Imported Upstream version 3.4 (aka snapshot 20120521)
+    - trivial fix of ip link syntax in manpage (Closes: #673171)
+  * Apply hardening build flags (Closes: #672828)
+  * debian/iproute.manpages: fix path to manpages.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 22 May 2012 14:21:27 +0200
+
 iproute (20120319-1) unstable; urgency=low
 
   * Build-depend on pkg-config (Closes: #657062)

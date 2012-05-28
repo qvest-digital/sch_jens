@@ -1,3 +1,11 @@
+iproute (20120521-2) unstable; urgency=low
+
+  * Revert "Apply hardening build flags"
+    - hardening simply breaks iproute2 in too many ways.
+    (Closes: #674730, #674847) (Reopens: #672828)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Mon, 28 May 2012 12:31:29 +0200
+
 iproute (20120521-1) unstable; urgency=low
 
   * Imported Upstream version 3.4 (aka snapshot 20120521)

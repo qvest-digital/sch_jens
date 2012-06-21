@@ -1,3 +1,10 @@
+iproute (20120521-3) unstable; urgency=low
+
+  [ Helmut Grohne ]
+  * Mark iproute as Multi-Arch: foreign. (Closes: #676175)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 21 Jun 2012 12:33:31 +0200
+
 iproute (20120521-2) unstable; urgency=low
 
   * Revert "Apply hardening build flags"

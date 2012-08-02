@@ -1,3 +1,10 @@
+iproute (20120801-1) experimental; urgency=low
+
+  * Imported Upstream version 20120801 aka v3.5.0
+  * debian/iproute.install: Install new bridge tool to /sbin
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 02 Aug 2012 02:03:07 +0200
+
 iproute (20120521-3) unstable; urgency=low
 
   [ Helmut Grohne ]

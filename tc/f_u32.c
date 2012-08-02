@@ -513,7 +513,7 @@ static int parse_ip(int *argc_p, char ***argv_p, struct tc_u32_sel *sel)
 		res = pack_key16(sel, 0, 0x3FFF, 6, 0);
 	} else if (strcmp(*argv, "firstfrag") == 0) {
 		argc--; argv++;
-		res = pack_key16(sel, 0, 0x1FFF, 6, 0);
+		res = pack_key16(sel, 0x2000, 0x3FFF, 6, 0);
 	} else if (strcmp(*argv, "df") == 0) {
 		argc--; argv++;
 		res = pack_key16(sel, 0x4000, 0x4000, 6, 0);
@@ -531,7 +531,7 @@ static int parse_ip(int *argc_p, char ***argv_p, struct tc_u32_sel *sel)
 		res = parse_u8(&argc, &argv, sel, 20, 0);
 	} else if (strcmp(*argv, "icmp_code") == 0) {
 		NEXT_ARG();
-		res = parse_u8(&argc, &argv, sel, 20, 1);
+		res = parse_u8(&argc, &argv, sel, 21, 0);
 	} else
 		return -1;
 

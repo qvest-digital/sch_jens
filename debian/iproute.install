@@ -1,5 +1,5 @@
 misc/ss ip/ip /bin
-ip/rtmon tc/tc misc/rtacct /sbin
+ip/rtmon tc/tc misc/rtacct bridge/bridge /sbin
 misc/lnstat misc/nstat /usr/bin/
 ip/routef ip/routel /usr/bin
 etc/* /etc

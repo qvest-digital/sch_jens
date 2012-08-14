@@ -1,3 +1,11 @@
+iproute (20120813-1) experimental; urgency=low
+
+  * Add references to fixed bugs in changelog entry for 20120801-1
+  * Fix download url in debian/copyright
+  * Imported Upstream version 20120813
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 14 Aug 2012 17:11:20 +0200
+
 iproute (20120801-1) experimental; urgency=low
 
   * Imported Upstream version 20120801 aka v3.5.0

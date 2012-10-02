@@ -45,10 +45,15 @@ TCMODULES += p_udp.o
 TCMODULES += em_nbyte.o
 TCMODULES += em_cmp.o
 TCMODULES += em_u32.o
+TCMODULES += em_canid.o
 TCMODULES += em_meta.o
 TCMODULES += q_mqprio.o
 TCMODULES += q_codel.o
 TCMODULES += q_fq_codel.o
+
+ifeq ($(TC_CONFIG_IPSET), y)
+  TCMODULES += em_ipset.o
+endif
 
 TCSO :=
 ifeq ($(TC_CONFIG_ATM),y)

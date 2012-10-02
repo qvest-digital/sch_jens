@@ -26,8 +26,8 @@ int filter_index;
 
 static void usage(void)
 {
-	fprintf(stderr, "Usage: br fdb { add | del | replace } ADDR dev DEV\n");
-	fprintf(stderr, "       br fdb {show} [ dev DEV ]\n");
+	fprintf(stderr, "Usage: bridge fdb { add | del } ADDR dev DEV {self|master}\n");
+	fprintf(stderr, "       bridge fdb {show} [ dev DEV ]\n");
 	exit(-1);
 }
 
@@ -95,11 +95,12 @@ int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 		return -1;
 	}
 
-	printf("%s\t%.2x:%.2x:%.2x:%.2x:%.2x:%.2x\t%s",
+	printf("%s\t%.2x:%.2x:%.2x:%.2x:%.2x:%.2x\t%s %s",
 		ll_index_to_name(r->ndm_ifindex),
 		addr[0], addr[1], addr[2],
 		addr[3], addr[4], addr[5],
-		state_n2a(r->ndm_state));
+		state_n2a(r->ndm_state),
+		(r->ndm_flags & NTF_SELF) ? "self" : "master");
 
 	if (show_stats && tb[NDA_CACHEINFO]) {
 		struct nda_cacheinfo *ci = RTA_DATA(tb[NDA_CACHEINFO]);
@@ -176,6 +177,10 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 			req.ndm.ndm_state = NUD_PERMANENT;
 		} else if (strcmp(*argv, "temp") == 0) {
 			req.ndm.ndm_state = NUD_REACHABLE;
+		} else if (strcmp(*argv, "self") == 0) {
+			req.ndm.ndm_flags |= NTF_SELF;
+		} else if (strcmp(*argv, "master") == 0) {
+			req.ndm.ndm_flags |= NTF_MASTER;
 		} else {
 			if (strcmp(*argv, "to") == 0) {
 				NEXT_ARG();
@@ -223,11 +228,6 @@ int do_fdb(int argc, char **argv)
 	if (argc > 0) {
 		if (matches(*argv, "add") == 0)
 			return fdb_modify(RTM_NEWNEIGH, NLM_F_CREATE|NLM_F_EXCL, argc-1, argv+1);
-		if (matches(*argv, "change") == 0)
-			return fdb_modify(RTM_NEWNEIGH, NLM_F_REPLACE, argc-1, argv+1);
-
-		if (matches(*argv, "replace") == 0)
-			return fdb_modify(RTM_NEWNEIGH, NLM_F_CREATE|NLM_F_REPLACE, argc-1, argv+1);
 		if (matches(*argv, "delete") == 0)
 			return fdb_modify(RTM_DELNEIGH, 0, argc-1, argv+1);
 		if (matches(*argv, "show") == 0 ||
@@ -239,6 +239,6 @@ int do_fdb(int argc, char **argv)
 	} else
 		return fdb_show(0, NULL);
 
-	fprintf(stderr, "Command \"%s\" is unknown, try \"ip neigh help\".\n", *argv);
+	fprintf(stderr, "Command \"%s\" is unknown, try \"bridge fdb help\".\n", *argv);
 	exit(-1);
 }

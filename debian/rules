@@ -13,7 +13,7 @@ override_dh_installexamples:
 
 override_dh_shlibdeps:
 	dh_shlibdeps -a -Xq_atm.so -Xm_xt.so -Xm_ipt.so
-
+	dh_shlibdeps -a -- -pipmods -dRecommends -e debian/iproute/usr/lib/tc/m_xt.so -e debian/iproute/usr/lib/tc/q_atm.so -xlibc6
 
 override_dh_auto_build:
 	$(MAKE) -C doc all txt

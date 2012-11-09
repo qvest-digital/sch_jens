@@ -1,3 +1,19 @@
+iproute (20121001-2) experimental; urgency=low
+
+  * Generate recommends for optional module dependencies
+    This makes the optional module dependency on libxtables more
+    visible, to hopefully get iproute rebuilt whenever libxtables
+    bumps soname.
+    Thanks to iptables maintainer for splitting libxtables9 into
+    a separate package in version 1.4.16.3-2.
+  * 0001-iproute2-List-interfaces-without-net-address-by-defa.patch:
+    List interfaces without net address by default.
+    This fixes regression in iproute2-3.5.1 when `ip addr show' skipped
+    interfaces without network layer address.
+    Patch from upstream (git 7f747fd9377b8538ad).
+
+ -- Andreas Henriksson <andreas@fatal.se>  Fri, 09 Nov 2012 15:49:24 +0100
+
 iproute (20121001-1) experimental; urgency=low
 
   * Imported Upstream version 3.6.0 (aka snapshot 20121001)

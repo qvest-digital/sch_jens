@@ -2,6 +2,9 @@
 # This is not an autconf generated configure
 #
 INCLUDE=${1:-"$PWD/include"}
+: ${PKG_CONFIG:=pkg-config}
+: ${CC=gcc}
+echo "PKG_CONFIG:=${PKG_CONFIG}" >>Config
 
 # Make a temp directory in build tree.
 TMPDIR=$(mktemp -d config.XXXXXX)
@@ -17,7 +20,7 @@ int main(int argc, char **argv) {
 	return 0;
 }
 EOF
-gcc -I$INCLUDE -o $TMPDIR/atmtest $TMPDIR/atmtest.c -latm >/dev/null 2>&1 
+$CC -I$INCLUDE -o $TMPDIR/atmtest $TMPDIR/atmtest.c -latm >/dev/null 2>&1
 if [ $? -eq 0 ]
 then
     echo "TC_CONFIG_ATM:=y" >>Config
@@ -51,7 +54,7 @@ int main(int argc, char **argv)
 
 EOF
 
-if gcc -I$INCLUDE $IPTC -o $TMPDIR/ipttest $TMPDIR/ipttest.c $IPTL $(pkg-config xtables --cflags --libs) -ldl >/dev/null 2>&1
+if $CC -I$INCLUDE $IPTC -o $TMPDIR/ipttest $TMPDIR/ipttest.c $IPTL $(${PKG_CONFIG} xtables --cflags --libs) -ldl >/dev/null 2>&1
 then
 	echo "TC_CONFIG_XT:=y" >>Config
 	echo "using xtables"
@@ -88,7 +91,7 @@ int main(int argc, char **argv) {
 }
 
 EOF
-gcc -I$INCLUDE $IPTC -o $TMPDIR/ipttest $TMPDIR/ipttest.c $IPTL -ldl >/dev/null 2>&1
+$CC -I$INCLUDE $IPTC -o $TMPDIR/ipttest $TMPDIR/ipttest.c $IPTL -ldl >/dev/null 2>&1
 
 if [ $? -eq 0 ]
 then
@@ -128,7 +131,7 @@ int main(int argc, char **argv) {
 }
 
 EOF
-gcc -I$INCLUDE $IPTC -o $TMPDIR/ipttest $TMPDIR/ipttest.c $IPTL -ldl >/dev/null 2>&1
+$CC -I$INCLUDE $IPTC -o $TMPDIR/ipttest $TMPDIR/ipttest.c $IPTL -ldl >/dev/null 2>&1
 
 if [ $? -eq 0 ]
 then
@@ -148,7 +151,7 @@ check_ipt()
 
 check_ipt_lib_dir()
 {
-	IPT_LIB_DIR=$(pkg-config --variable=xtlibdir xtables)
+	IPT_LIB_DIR=$(${PKG_CONFIG} --variable=xtlibdir xtables)
 	if [ -n "$IPT_LIB_DIR" ]; then
 		echo $IPT_LIB_DIR
 		echo "IPT_LIB_DIR:=$IPT_LIB_DIR" >> Config
@@ -178,7 +181,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 EOF
-gcc -I$INCLUDE -o $TMPDIR/setnstest $TMPDIR/setnstest.c >/dev/null 2>&1
+$CC -I$INCLUDE -o $TMPDIR/setnstest $TMPDIR/setnstest.c >/dev/null 2>&1
 if [ $? -eq 0 ]
 then
 	echo "IP_CONFIG_SETNS:=y" >>Config
@@ -210,7 +213,7 @@ int main(void)
 #endif
 EOF
 
-if gcc -I$INCLUDE -o $TMPDIR/ipsettest $TMPDIR/ipsettest.c >/dev/null 2>&1
+if $CC -I$INCLUDE -o $TMPDIR/ipsettest $TMPDIR/ipsettest.c >/dev/null 2>&1
 then
 	echo "TC_CONFIG_IPSET:=y" >>Config
 	echo "yes"

@@ -20,8 +20,8 @@
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
  */
-#ifndef _LINUX_IF_ARP_H
-#define _LINUX_IF_ARP_H
+#ifndef _UAPI_LINUX_IF_ARP_H
+#define _UAPI_LINUX_IF_ARP_H
 
 #include <linux/netdevice.h>
 
@@ -92,6 +92,7 @@
 #define ARPHRD_PHONET	820		/* PhoNet media type		*/
 #define ARPHRD_PHONET_PIPE 821		/* PhoNet pipe header		*/
 #define ARPHRD_CAIF	822		/* CAIF media type		*/
+#define ARPHRD_IP6GRE	823		/* GRE over IPv6		*/
 
 #define ARPHRD_VOID	  0xFFFF	/* Void type, nothing is known */
 #define ARPHRD_NONE	  0xFFFE	/* zero header length */
@@ -155,4 +156,4 @@ struct arphdr {
 };
 
 
-#endif	/* _LINUX_IF_ARP_H */
+#endif /* _UAPI_LINUX_IF_ARP_H */

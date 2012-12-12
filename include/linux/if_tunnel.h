@@ -1,5 +1,5 @@
-#ifndef _IF_TUNNEL_H_
-#define _IF_TUNNEL_H_
+#ifndef _UAPI_IF_TUNNEL_H_
+#define _UAPI_IF_TUNNEL_H_
 
 #include <linux/types.h>
 #include <asm/byteorder.h>
@@ -71,6 +71,9 @@ enum {
 	IFLA_GRE_TTL,
 	IFLA_GRE_TOS,
 	IFLA_GRE_PMTUDISC,
+	IFLA_GRE_ENCAP_LIMIT,
+	IFLA_GRE_FLOWINFO,
+	IFLA_GRE_FLAGS,
 	__IFLA_GRE_MAX,
 };
 
@@ -90,4 +93,4 @@ enum {
 };
 
 #define IFLA_VTI_MAX	(__IFLA_VTI_MAX - 1)
-#endif /* _IF_TUNNEL_H_ */
+#endif /* _UAPI_IF_TUNNEL_H_ */

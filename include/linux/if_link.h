@@ -1,5 +1,5 @@
-#ifndef _LINUX_IF_LINK_H
-#define _LINUX_IF_LINK_H
+#ifndef _UAPI_LINUX_IF_LINK_H
+#define _UAPI_LINUX_IF_LINK_H
 
 #include <linux/types.h>
 #include <linux/netlink.h>
@@ -270,6 +270,28 @@ enum macvlan_mode {
 
 #define MACVLAN_FLAG_NOPROMISC	1
 
+/* VXLAN section */
+enum {
+	IFLA_VXLAN_UNSPEC,
+	IFLA_VXLAN_ID,
+	IFLA_VXLAN_GROUP,
+	IFLA_VXLAN_LINK,
+	IFLA_VXLAN_LOCAL,
+	IFLA_VXLAN_TTL,
+	IFLA_VXLAN_TOS,
+	IFLA_VXLAN_LEARNING,
+	IFLA_VXLAN_AGEING,
+	IFLA_VXLAN_LIMIT,
+	IFLA_VXLAN_PORT_RANGE,
+	__IFLA_VXLAN_MAX
+};
+#define IFLA_VXLAN_MAX	(__IFLA_VXLAN_MAX - 1)
+
+struct ifla_vxlan_port_range {
+	__be16	low;
+	__be16	high;
+};
+
 /* SR-IOV virtual function management section */
 
 enum {
@@ -384,4 +406,22 @@ struct ifla_port_vsi {
 	__u8 pad[3];
 };
 
-#endif /* _LINUX_IF_LINK_H */
+
+/* IPoIB section */
+
+enum {
+	IFLA_IPOIB_UNSPEC,
+	IFLA_IPOIB_PKEY,
+	IFLA_IPOIB_MODE,
+	IFLA_IPOIB_UMCAST,
+	__IFLA_IPOIB_MAX
+};
+
+enum {
+	IPOIB_MODE_DATAGRAM  = 0, /* using unreliable datagram QPs */
+	IPOIB_MODE_CONNECTED = 1, /* using connected QPs */
+};
+
+#define IFLA_IPOIB_MAX (__IFLA_IPOIB_MAX - 1)
+
+#endif /* _UAPI_LINUX_IF_LINK_H */

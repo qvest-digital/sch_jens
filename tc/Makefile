@@ -52,7 +52,9 @@ TCMODULES += q_codel.o
 TCMODULES += q_fq_codel.o
 
 ifeq ($(TC_CONFIG_IPSET), y)
-  TCMODULES += em_ipset.o
+  ifeq ($(TC_CONFIG_XT), y)
+    TCMODULES += em_ipset.o
+  endif
 endif
 
 TCSO :=
@@ -133,10 +135,10 @@ q_atm.so: q_atm.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o q_atm.so q_atm.c -latm
 
 m_xt.so: m_xt.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o m_xt.so m_xt.c $$(pkg-config xtables --cflags --libs)
+	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o m_xt.so m_xt.c $$($(PKG_CONFIG) xtables --cflags --libs)
 
 m_xt_old.so: m_xt_old.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o m_xt_old.so m_xt_old.c $$(pkg-config xtables --cflags --libs)
+	$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o m_xt_old.so m_xt_old.c $$($(PKG_CONFIG) xtables --cflags --libs)
 
 %.yacc.c: %.y
 	$(YACC) $(YACCFLAGS) -o $@ $<

@@ -1,13 +1,15 @@
 iproute (20121211-2) experimental; urgency=low
 
   [ Kamal Mostafa ]
-  * Enable cross-compile support in debian/rules
+  * Enable cross-compile support in debian/rules (Closes: #670660)
 
  -- Andreas Henriksson <andreas@fatal.se>  Wed, 12 Dec 2012 12:29:03 +0100
 
 iproute (20121211-1) experimental; urgency=low
 
   * Imported Upstream version 3.7.0 (aka. snapshot 20121211)
+    - this version has the fix for cross-compile
+    - fixes it's vs its in manpages (Closes: #693043)
   * Revert "List interfaces without net address by default"
     - patch from upstream now part of latest release.
 

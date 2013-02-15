@@ -1,7 +1,7 @@
-Source: iproute
+Source: iproute2
 Section: net
 Priority: optional
-Maintainer: Debian iproute maintainers <ah-iproute@debian.org>
+Maintainer: Debian iproute2 Maintainers <ah-iproute@debian.org>
 Uploaders: Andreas Henriksson <andreas@fatal.se>, Alexander Wirt <formorer@debian.org>
 Homepage: http://www.linux-foundation.org/en/Net:Iproute2
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pkg-iproute.git
@@ -20,40 +20,45 @@ Build-Depends: texlive-latex-base,
                bison,
                flex
 
-Package: iproute
+Package: iproute2
 Priority: important
 Architecture: any
 Provides: arpd
 Conflicts: arpd
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: ${ipmods:Recommends}
-Suggests: iproute-doc
+Suggests: iproute2-doc
 Multi-Arch: foreign
 Description: networking and traffic control tools
- The iproute suite, also known as iproute2, is a collection of
- utilities for networking and traffic control.
+ The iproute2 suite is a collection of utilities for networking and
+ traffic control.
  .
  These tools communicate with the Linux kernel via the (rt)netlink
  interface, providing advanced features not available through the
  legacy net-tools commands 'ifconfig' and 'route'.
 
-Package: iproute-doc
+Package: iproute2-doc
 Section: doc
 Architecture: all
 Depends: ${misc:Depends}
 Description: networking and traffic control tools - documentation
- The iproute suite, also known as iproute2, is a collection of
- utilities for networking and traffic control.
+ The iproute2 suite is a collection of utilities for networking and
+ traffic control.
  .
  This package contains the documentation for iproute.
 
-Package: iproute-dev
-Section: libdevel
-Architecture: any
-Depends: ${misc:Depends}
-Description: networking and traffic control tools - development files
- The iproute suite, also known as iproute2, is a collection of
- utilities for networking and traffic control.
- .
- This package contains the header files and static libraries for
- compiling iproute extensions, and is needed only for development.
+Package: iproute
+Depends: iproute2
+Architecture: all
+Section: oldlibs
+Description: transitional dummy package for iproute2
+ This is a transitional dummy package to get upgrading systems to install
+ the iproute2 package. It can safely be removed.
+
+Package: iproute-doc
+Depends: iproute2-doc
+Architecture: all
+Section: oldlibs
+Description: transitional dummy package for iproute2-doc
+ This is a transitional dummy package to get upgrading systems to install
+ the iproute2-doc package. It can safely be removed.

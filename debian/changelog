@@ -1,3 +1,14 @@
+iproute2 (3.7.0-1) UNRELEASED; urgency=low
+
+  * Rename the package and adopt new versioning scheme! (Closes: #693575)
+    - iproute renamed to iproute2 to properly match upstream name.
+    - iproute-doc renamed to iproute2-doc
+    - iproute-dev dropped. It only shipped libnetlink static library
+      which is actively discuraged. See libmnl instead.
+    - add transitional packages iproute and iproute-doc.
+
+ -- Andreas Henriksson <andreas@fatal.se>  Fri, 15 Feb 2013 19:12:54 +0100
+
 iproute (20121211-2) experimental; urgency=low
 
   [ Kamal Mostafa ]

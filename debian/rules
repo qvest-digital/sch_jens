@@ -18,11 +18,11 @@ override_dh_clean:
 	-rm -f doc/*.txt
 
 override_dh_installexamples:
-	dh_installexamples -p iproute-doc examples/*
+	dh_installexamples -p iproute2-doc examples/*
 
 override_dh_shlibdeps:
 	dh_shlibdeps -a -Xq_atm.so -Xm_xt.so -Xm_ipt.so
-	dh_shlibdeps -a -- -pipmods -dRecommends -e debian/iproute/usr/lib/tc/m_xt.so -e debian/iproute/usr/lib/tc/q_atm.so -xlibc6
+	dh_shlibdeps -a -- -pipmods -dRecommends -e debian/iproute2/usr/lib/tc/m_xt.so -e debian/iproute2/usr/lib/tc/q_atm.so -xlibc6
 
 override_dh_auto_configure:
 	$(CROSS) dh_auto_configure
@@ -30,3 +30,9 @@ override_dh_auto_configure:
 override_dh_auto_build:
 	$(MAKE) -C doc all txt
 	$(MAKE) KERNEL_INCLUDE=./include $(CROSS)
+
+# bump version of the transitional packages...
+override_dh_gencontrol:
+	dh_gencontrol -piproute -- -v20130000-1
+	dh_gencontrol -piproute-doc -- -v20130000-1
+	dh_gencontrol --remaining-packages

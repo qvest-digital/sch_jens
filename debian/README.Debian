@@ -1,4 +1,4 @@
-iproute for Debian
+iproute2 for Debian
 ------------------
 
 If you want use tc with the atm based queue you have to install libatm1 first.

@@ -24,7 +24,8 @@ Package: iproute2
 Priority: important
 Architecture: any
 Provides: arpd
-Conflicts: arpd
+Conflicts: arpd, iproute (<< 20130000-1)
+Replaces: iproute
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: ${ipmods:Recommends}
 Suggests: iproute2-doc
@@ -40,6 +41,8 @@ Description: networking and traffic control tools
 Package: iproute2-doc
 Section: doc
 Architecture: all
+Conflicts: iproute-doc (<< 20130000-1)
+Replaces: iproute-doc
 Depends: ${misc:Depends}
 Description: networking and traffic control tools - documentation
  The iproute2 suite is a collection of utilities for networking and

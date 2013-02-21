@@ -23,4 +23,4 @@ enum {
 	SK_MEMINFO_VARS,
 };
 
-#endif /* _UAPI__SOCK_DIAG_H__ */
+#endif /* __SOCK_DIAG_H__ */

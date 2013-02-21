@@ -238,4 +238,4 @@ struct atmif_sioc {
 
 
 typedef unsigned short atm_backend_t;
-#endif /* _UAPI_LINUX_ATM_H */
+#endif /* _LINUX_ATM_H */

@@ -156,4 +156,4 @@ struct arphdr {
 };
 
 
-#endif /* _UAPI_LINUX_IF_ARP_H */
+#endif /* _LINUX_IF_ARP_H */

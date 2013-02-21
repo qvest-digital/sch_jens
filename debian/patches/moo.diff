@@ -4,8 +4,8 @@ Forwarded: not-needed
 
 --- a/ip/ip.c
 +++ b/ip/ip.c
-@@ -59,6 +59,20 @@
- 	usage();
+@@ -60,6 +60,20 @@
+         return 0;
  }
  
 +static int do_moo(int argc, char **argv)
@@ -25,9 +25,9 @@ Forwarded: not-needed
  static const struct cmd {
  	const char *cmd;
  	int (*func)(int argc, char **argv);
-@@ -84,6 +98,7 @@
- 	{ "mrule",	do_multirule },
+@@ -88,6 +102,7 @@
  	{ "netns",	do_netns },
+ 	{ "netconf",	do_ipnetconf },
  	{ "help",	do_help },
 +	{ "moo",	do_moo }, 
  	{ 0 }

@@ -23,7 +23,7 @@ Forwarded: no
  print: $(PSFILES)
  	$(LPR) $(PSFILES)
  
-@@ -55,9 +58,13 @@
+@@ -65,9 +68,13 @@
  %.html: %.sgml
  	$(SGML2HTML) $<
  

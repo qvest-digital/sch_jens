@@ -33,6 +33,6 @@ override_dh_auto_build:
 
 # bump version of the transitional packages...
 override_dh_gencontrol:
-	dh_gencontrol -piproute -- -v20130000-1
-	dh_gencontrol -piproute-doc -- -v20130000-1
+	dh_gencontrol -piproute -- -v20130000-2
+	dh_gencontrol -piproute-doc -- -v20130000-2
 	dh_gencontrol --remaining-packages

@@ -20,8 +20,8 @@
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
  */
-#ifndef _UAPI_LINUX_IF_ARP_H
-#define _UAPI_LINUX_IF_ARP_H
+#ifndef _LINUX_IF_ARP_H
+#define _LINUX_IF_ARP_H
 
 #include <linux/netdevice.h>
 

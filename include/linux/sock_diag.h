@@ -1,5 +1,5 @@
-#ifndef _UAPI__SOCK_DIAG_H__
-#define _UAPI__SOCK_DIAG_H__
+#ifndef __SOCK_DIAG_H__
+#define __SOCK_DIAG_H__
 
 #include <linux/types.h>
 

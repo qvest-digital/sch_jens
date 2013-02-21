@@ -10,8 +10,8 @@
  *
  */
 
-#ifndef _UAPI_LINUX_IF_VLAN_H_
-#define _UAPI_LINUX_IF_VLAN_H_
+#ifndef _LINUX_IF_VLAN_H_
+#define _LINUX_IF_VLAN_H_
 
 
 /* VLAN IOCTLs are found in sockios.h */

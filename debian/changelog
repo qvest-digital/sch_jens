@@ -1,3 +1,11 @@
+iproute2 (3.8.0-1) experimental; urgency=low
+
+  * Imported Upstream version 3.8.0
+    - ip: handle flush with table > 2^31 (Closes: #700434)
+  * Refresh patches to apply without fuzz and offset
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 21 Feb 2013 20:16:18 +0100
+
 iproute2 (3.7.0-1) experimental; urgency=low
 
   * Add additional meta-info to previous changelog entries

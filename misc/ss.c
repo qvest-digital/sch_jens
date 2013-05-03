@@ -1327,6 +1327,29 @@ static char *sprint_bw(char *buf, double bw)
 	return buf;
 }
 
+static void print_skmeminfo(struct rtattr *tb[], int attrtype)
+{
+	const __u32 *skmeminfo;
+	if (!tb[attrtype])
+		return;
+	skmeminfo = RTA_DATA(tb[attrtype]);
+
+	printf(" skmem:(r%u,rb%u,t%u,tb%u,f%u,w%u,o%u",
+	       skmeminfo[SK_MEMINFO_RMEM_ALLOC],
+	       skmeminfo[SK_MEMINFO_RCVBUF],
+	       skmeminfo[SK_MEMINFO_WMEM_ALLOC],
+	       skmeminfo[SK_MEMINFO_SNDBUF],
+	       skmeminfo[SK_MEMINFO_FWD_ALLOC],
+	       skmeminfo[SK_MEMINFO_WMEM_QUEUED],
+	       skmeminfo[SK_MEMINFO_OPTMEM]);
+
+	if (RTA_PAYLOAD(tb[attrtype]) >=
+		(SK_MEMINFO_BACKLOG + 1) * sizeof(__u32))
+		printf(",bl%u", skmeminfo[SK_MEMINFO_BACKLOG]);
+
+	printf(")");
+}
+
 static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r)
 {
 	struct rtattr * tb[INET_DIAG_MAX+1];
@@ -1337,22 +1360,7 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r)
 		     nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*r)));
 
 	if (tb[INET_DIAG_SKMEMINFO]) {
-		const __u32 *skmeminfo = RTA_DATA(tb[INET_DIAG_SKMEMINFO]);
-
-		printf(" skmem:(r%u,rb%u,t%u,tb%u,f%u,w%u,o%u",
-			skmeminfo[SK_MEMINFO_RMEM_ALLOC],
-			skmeminfo[SK_MEMINFO_RCVBUF],
-			skmeminfo[SK_MEMINFO_WMEM_ALLOC],
-			skmeminfo[SK_MEMINFO_SNDBUF],
-			skmeminfo[SK_MEMINFO_FWD_ALLOC],
-			skmeminfo[SK_MEMINFO_WMEM_QUEUED],
-			skmeminfo[SK_MEMINFO_OPTMEM]);
-
-		if (RTA_PAYLOAD(tb[INET_DIAG_SKMEMINFO]) >=
-			(SK_MEMINFO_BACKLOG + 1) * sizeof(__u32))
-			printf(",bl%u", skmeminfo[SK_MEMINFO_BACKLOG]);
-
-		printf(")");
+		print_skmeminfo(tb, INET_DIAG_SKMEMINFO);
 	} else if (tb[INET_DIAG_MEMINFO]) {
 		const struct inet_diag_meminfo *minfo
 			= RTA_DATA(tb[INET_DIAG_MEMINFO]);
@@ -2139,7 +2147,7 @@ static int unix_show_sock(struct nlmsghdr *nlh, struct filter *f)
 	struct rtattr *tb[UNIX_DIAG_MAX+1];
 	char name[128];
 	int peer_ino;
-	int rqlen;
+	__u32 rqlen, wqlen;
 
 	parse_rtattr(tb, UNIX_DIAG_MAX, (struct rtattr*)(r+1),
 		     nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*r)));
@@ -2150,12 +2158,16 @@ static int unix_show_sock(struct nlmsghdr *nlh, struct filter *f)
 	if (state_width)
 		printf("%-*s ", state_width, sstate_name[r->udiag_state]);
 
-	if (tb[UNIX_DIAG_RQLEN])
-		rqlen = *(int *)RTA_DATA(tb[UNIX_DIAG_RQLEN]);
-	else
+	if (tb[UNIX_DIAG_RQLEN]) {
+		struct unix_diag_rqlen *rql = RTA_DATA(tb[UNIX_DIAG_RQLEN]);
+		rqlen = rql->udiag_rqueue;
+		wqlen = rql->udiag_wqueue;
+	} else {
 		rqlen = 0;
+		wqlen = 0;
+	}
 
-	printf("%-6d %-6d ", rqlen, 0);
+	printf("%-6u %-6u ", rqlen, wqlen);
 
 	if (tb[UNIX_DIAG_NAME]) {
 		int len = RTA_PAYLOAD(tb[UNIX_DIAG_NAME]);
@@ -2168,7 +2180,7 @@ static int unix_show_sock(struct nlmsghdr *nlh, struct filter *f)
 		sprintf(name, "*");
 
 	if (tb[UNIX_DIAG_PEER])
-		peer_ino = *(int *)RTA_DATA(tb[UNIX_DIAG_PEER]);
+		peer_ino = rta_getattr_u32(tb[UNIX_DIAG_PEER]);
 	else
 		peer_ino = 0;
 
@@ -2182,6 +2194,11 @@ static int unix_show_sock(struct nlmsghdr *nlh, struct filter *f)
 		char ubuf[4096];
 		if (find_users(r->udiag_ino, ubuf, sizeof(ubuf)) > 0)
 			printf(" users:(%s)", ubuf);
+	}
+
+	if (show_mem) {
+		printf("\n\t");
+		print_skmeminfo(tb, UNIX_DIAG_MEMINFO);
 	}
 
 	printf("\n");
@@ -2210,6 +2227,8 @@ static int unix_show_netlink(struct filter *f, FILE *dump_fp)
 	req.r.sdiag_family = AF_UNIX;
 	req.r.udiag_states = f->states;
 	req.r.udiag_show = UDIAG_SHOW_NAME | UDIAG_SHOW_PEER | UDIAG_SHOW_RQLEN;
+	if (show_mem)
+		req.r.udiag_show |= UDIAG_SHOW_MEMINFO;
 
 	if (send(fd, &req, sizeof(req), 0) < 0) {
 		close(fd);

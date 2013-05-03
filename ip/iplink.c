@@ -79,7 +79,7 @@ void iplink_usage(void)
 	fprintf(stderr, "				   [ spoofchk { on | off} ] ] \n");
 	fprintf(stderr, "			  [ master DEVICE ]\n");
 	fprintf(stderr, "			  [ nomaster ]\n");
-	fprintf(stderr, "       ip link show [ DEVICE | group GROUP ]\n");
+	fprintf(stderr, "       ip link show [ DEVICE | group GROUP ] [up]\n");
 
 	if (iplink_have_newlink()) {
 		fprintf(stderr, "\n");
@@ -532,8 +532,6 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 			return 0;
 		}
 	}
-
-	ll_init_map(&rth);
 
 	if (!(flags & NLM_F_CREATE)) {
 		if (!dev) {

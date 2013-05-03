@@ -1,3 +1,13 @@
+iproute2 (3.9.0-1) experimental; urgency=low
+
+  * debian/copyright: List additional copyright holders
+  * debian/copyright: say GPLv2 (only) as not all files are "or later".
+  * Imported Upstream version 3.9.0
+  * Please lintian with dummy copyright lines for transitional packages
+  * Bump standards-version to 3.9.4
+
+ -- Andreas Henriksson <andreas@fatal.se>  Fri, 03 May 2013 15:32:09 +0200
+
 iproute2 (3.8.0-2) experimental; urgency=low
 
   * Add dummy copyright and changelog for iproute and iproute-doc

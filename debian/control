@@ -51,7 +51,7 @@ Description: networking and traffic control tools - documentation
  This package contains the documentation for iproute.
 
 Package: iproute
-Depends: iproute2
+Depends: iproute2, ${misc:Depends}
 Architecture: all
 Section: oldlibs
 Description: transitional dummy package for iproute2
@@ -59,7 +59,7 @@ Description: transitional dummy package for iproute2
  the iproute2 package. It can safely be removed.
 
 Package: iproute-doc
-Depends: iproute2-doc
+Depends: iproute2-doc, ${misc:Depends}
 Architecture: all
 Section: oldlibs
 Description: transitional dummy package for iproute2-doc

@@ -1,3 +1,10 @@
+iproute2 (3.9.0-2) unstable; urgency=low
+
+  * Give up and just use an epoch for the transitional packages
+  * Add misc:Depends to transitional packages to please lintian
+
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 08 May 2013 14:27:12 +0200
+
 iproute2 (3.9.0-1) experimental; urgency=low
 
   * debian/copyright: List additional copyright holders

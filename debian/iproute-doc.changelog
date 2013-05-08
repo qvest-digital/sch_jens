@@ -1,7 +1,0 @@
-iproute2 (3.8.0-2) UNRELEASED; urgency=low
-
-  * The iproute-doc package is just a dummy transitional package since
-    version 20130000-1. See "iproute2-doc".
-
- -- Andreas Henriksson <andreas@fatal.se>  Thu, 21 Feb 2013 20:58:29 +0100
-

@@ -1,12 +1,16 @@
-Origin: author unknown, this was split out from a direct source edit.
-Description: Add make rules to build documentation in plain text format.
-             The "txt" target needs to be invoked explicitly (not
-	     hooked up to "all") and needs lynx installed when used.
-Forwarded: no
+From: Debian iproute2 Maintainers <ah-iproute@debian.org>
+Date: Mon, 10 Jun 2013 11:47:00 +0200
+Subject: txtdocs
 
+---
+ doc/Makefile |    9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/doc/Makefile b/doc/Makefile
+index b92957e..e1993b4 100644
 --- a/doc/Makefile
 +++ b/doc/Makefile
-@@ -14,6 +14,7 @@
+@@ -14,6 +14,7 @@ PAGESIZE=a4
  PAGESPERPAGE=2
  
  HTMLFILES=$(subst .sgml,.html,$(shell echo *.sgml))
@@ -14,7 +18,7 @@ Forwarded: no
  DVIFILES=$(subst .ps,.dvi,$(PSFILES))
  PDFFILES=$(subst .ps,.pdf,$(PSFILES))
  
-@@ -28,6 +29,8 @@
+@@ -28,6 +29,8 @@ dvi: $(DVIFILES)
  
  pdf: $(PDFFILES)
  
@@ -23,7 +27,7 @@ Forwarded: no
  print: $(PSFILES)
  	$(LPR) $(PSFILES)
  
-@@ -65,9 +68,13 @@
+@@ -65,9 +68,13 @@ print: $(PSFILES)
  %.html: %.sgml
  	$(SGML2HTML) $<
  

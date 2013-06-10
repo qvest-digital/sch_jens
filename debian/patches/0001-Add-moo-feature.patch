@@ -1,10 +1,16 @@
 From: Alexander Wirt <formorer@debian.org>
+Date: Mon, 10 Jun 2013 11:47:00 +0200
 Subject: Add moo feature
-Forwarded: not-needed
 
+---
+ ip/ip.c |   15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/ip/ip.c b/ip/ip.c
+index e10ddb2..962fd87 100644
 --- a/ip/ip.c
 +++ b/ip/ip.c
-@@ -60,6 +60,20 @@
+@@ -61,6 +61,20 @@ static int do_help(int argc, char **argv)
          return 0;
  }
  
@@ -25,7 +31,7 @@ Forwarded: not-needed
  static const struct cmd {
  	const char *cmd;
  	int (*func)(int argc, char **argv);
-@@ -88,6 +102,7 @@
+@@ -89,6 +103,7 @@ static const struct cmd {
  	{ "netns",	do_netns },
  	{ "netconf",	do_ipnetconf },
  	{ "help",	do_help },

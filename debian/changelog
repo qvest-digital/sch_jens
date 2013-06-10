@@ -1,3 +1,10 @@
+iproute2 (3.9.0-3) unstable; urgency=low
+
+  * Cherry-pick sparc build failure fix from upstream (Closes: #711540)
+    - 0003-iproute2-fix-build-failure-on-sparc-due-to-Wformat-a.patch:
+
+ -- Andreas Henriksson <andreas@fatal.se>  Mon, 10 Jun 2013 11:59:42 +0200
+
 iproute2 (3.9.0-2) unstable; urgency=low
 
   * Give up and just use an epoch for the transitional packages

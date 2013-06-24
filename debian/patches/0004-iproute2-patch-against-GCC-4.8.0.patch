@@ -1,0 +1,37 @@
+From: Kamil Rytarowski <n54@gmx.com>
+Date: Fri, 3 May 2013 06:52:21 +0000
+Subject: iproute2 patch against GCC 4.8.0
+
+Hello!
+
+I'm attaching a patch [1] "Feed GCC 4.8.0 against new warning that is
+shipped with -Wall: -Wsizeof-pointer-memaccess.".
+
+More details: http://gcc.gnu.org/gcc-4.8/porting_to.html
+
+Regards,
+
+[1] 0001-Feed-GCC-4.8.0-against-new-warning-that-is-shipped-w.patch
+
+>From 1f3ea01fe2ff61cbbca6474f7d9903a0756a4f44 Mon Sep 17 00:00:00 2001
+From: Kamil Rytarowski <n54@gmx.com>
+Date: Fri, 3 May 2013 18:43:38 +0200
+Subject: [PATCH] Feed GCC 4.8.0 against new warning that is shipped with
+ -Wall: -Wsizeof-pointer-memaccess.
+---
+ misc/lnstat.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/misc/lnstat.c b/misc/lnstat.c
+index bd19cc1..90198b7 100644
+--- a/misc/lnstat.c
++++ b/misc/lnstat.c
+@@ -166,7 +166,7 @@ static struct table_hdr *build_hdr_string(struct lnstat_file *lnstat_files,
+ 
+ 	for (i = 0; i < HDR_LINES; i++) {
+ 		th.hdr[i] = malloc(HDR_LINE_LENGTH);
+-		memset(th.hdr[i], 0, sizeof(th.hdr[i]));
++		memset(th.hdr[i], 0, HDR_LINE_LENGTH);
+ 	}
+ 
+ 	for (i = 0; i < fps->num; i++) {

@@ -1,3 +1,9 @@
+iproute2 (3.9.0-4) unstable; urgency=low
+
+  * Cherry-pick upstream patch to build with gcc 4.8.0 (Closes: #713998)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Mon, 24 Jun 2013 19:54:41 +0200
+
 iproute2 (3.9.0-3) unstable; urgency=low
 
   * Cherry-pick sparc build failure fix from upstream (Closes: #711540)

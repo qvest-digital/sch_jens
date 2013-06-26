@@ -1,0 +1,25 @@
+From: Adam Borowski <kilobyte@angband.pl>
+Date: Tue, 25 Jun 2013 01:39:21 +0200
+Subject: ip: fix build failure if time_t is not long int
+
+This includes x32, and, per Linus' decree, any future arch with longs
+shorter than 64 bits.
+
+Signed-off-by: Adam Borowski <kilobyte@angband.pl>
+---
+ ip/iproute.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ip/iproute.c b/ip/iproute.c
+index adef774..d3c56d3 100644
+--- a/ip/iproute.c
++++ b/ip/iproute.c
+@@ -1330,7 +1330,7 @@ static int iproute_list_flush_or_save(int argc, char **argv, int action)
+ 
+ 			if (time(0) - start > 30) {
+ 				printf("\n*** Flush not completed after %ld seconds, %d entries remain ***\n",
+-				       time(0) - start, filter.flushed);
++				       (long)(time(0) - start), filter.flushed);
+ 				exit(1);
+ 			}
+ 

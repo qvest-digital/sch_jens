@@ -1,3 +1,10 @@
+iproute2 (3.9.0-5) unstable; urgency=low
+
+  * Cherry-pick patch from upstream to fix build on x32.
+    Thanks to Adam Borowski (Closes: #714172)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 26 Jun 2013 21:04:16 +0200
+
 iproute2 (3.9.0-4) unstable; urgency=low
 
   * Cherry-pick upstream patch to build with gcc 4.8.0 (Closes: #713998)

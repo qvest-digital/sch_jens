@@ -1,5 +1,2 @@
 0001-Add-moo-feature.patch
 0002-txtdocs.patch
-0003-iproute2-fix-build-failure-on-sparc-due-to-Wformat-a.patch
-0004-iproute2-patch-against-GCC-4.8.0.patch
-0005-ip-fix-build-failure-if-time_t-is-not-long-int.patch

@@ -229,6 +229,7 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 	struct ifla_vf_vlan *vf_vlan;
 	struct ifla_vf_tx_rate *vf_tx_rate;
 	struct ifla_vf_spoofchk *vf_spoofchk;
+	struct ifla_vf_link_state *vf_linkstate;
 	struct rtattr *vf[IFLA_VF_MAX+1];
 	struct rtattr *tmp;
 	SPRINT_BUF(b1);
@@ -255,6 +256,20 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 	else
 		vf_spoofchk = RTA_DATA(vf[IFLA_VF_SPOOFCHK]);
 
+	if (vf_spoofchk) {
+		/* Check if the link state vf info type is supported by
+		 * this kernel.
+		 */
+		tmp = (struct rtattr *)((char *)vf[IFLA_VF_SPOOFCHK] +
+				vf[IFLA_VF_SPOOFCHK]->rta_len);
+
+		if (tmp->rta_type != IFLA_VF_LINK_STATE)
+			vf_linkstate = NULL;
+		else
+			vf_linkstate = RTA_DATA(vf[IFLA_VF_LINK_STATE]);
+	} else
+		vf_linkstate = NULL;
+
 	fprintf(fp, "\n    vf %d MAC %s", vf_mac->vf,
 		ll_addr_n2a((unsigned char *)&vf_mac->mac,
 		ETH_ALEN, 0, b1, sizeof(b1)));
@@ -269,6 +284,14 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 			fprintf(fp, ", spoof checking on");
 		else
 			fprintf(fp, ", spoof checking off");
+	}
+	if (vf_linkstate) {
+		if (vf_linkstate->link_state == IFLA_VF_LINK_STATE_AUTO)
+			fprintf(fp, ", link-state auto");
+		else if (vf_linkstate->link_state == IFLA_VF_LINK_STATE_ENABLE)
+			fprintf(fp, ", link-state enable");
+		else
+			fprintf(fp, ", link-state disable");
 	}
 }
 
@@ -395,7 +418,7 @@ int print_linkinfo(const struct sockaddr_nl *who,
 
 	if (tb[IFLA_GROUP]) {
 		int group = *(int*)RTA_DATA(tb[IFLA_GROUP]);
-		if (group != filter.group)
+		if (filter.group != -1 && group != filter.group)
 			return -1;
 	}
 
@@ -434,6 +457,12 @@ int print_linkinfo(const struct sockaddr_nl *who,
 
 	if (do_link && tb[IFLA_LINKMODE])
 		print_linkmode(fp, tb[IFLA_LINKMODE]);
+
+	if (tb[IFLA_GROUP]) {
+		SPRINT_BUF(b1);
+		int group = *(int*)RTA_DATA(tb[IFLA_GROUP]);
+		fprintf(fp, "group %s ", rtnl_group_n2a(group, b1, sizeof(b1)));
+	}
 
 	if (filter.showqueue)
 		print_queuelen(fp, tb);
@@ -613,7 +642,8 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 					      abuf, sizeof(abuf)));
 
 		if (rta_tb[IFA_ADDRESS] == NULL ||
-		    memcmp(RTA_DATA(rta_tb[IFA_ADDRESS]), RTA_DATA(rta_tb[IFA_LOCAL]), 4) == 0) {
+		    memcmp(RTA_DATA(rta_tb[IFA_ADDRESS]), RTA_DATA(rta_tb[IFA_LOCAL]),
+			   ifa->ifa_family == AF_INET ? 4 : 16) == 0) {
 			fprintf(fp, "/%d ", ifa->ifa_prefixlen);
 		} else {
 			fprintf(fp, " peer %s/%d ",
@@ -1026,7 +1056,7 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	if (filter.family == AF_UNSPEC)
 		filter.family = preferred_family;
 
-	filter.group = INIT_NETDEV_GROUP;
+	filter.group = -1;
 
 	if (action == IPADD_FLUSH) {
 		if (argc <= 0) {

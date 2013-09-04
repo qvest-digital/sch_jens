@@ -1,3 +1,9 @@
+iproute2 (3.11.0-1) unstable; urgency=low
+
+  * Imported Upstream version 3.11.0 (aka snapshot 20130903)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 04 Sep 2013 21:21:03 +0200
+
 iproute2 (3.10.0-1) unstable; urgency=low
 
   * Imported Upstream version 3.10.0 (aka. snapshot 20130716)

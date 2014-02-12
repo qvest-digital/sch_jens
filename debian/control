@@ -9,6 +9,7 @@ Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git
 Standards-Version: 3.9.4
 Build-Depends: texlive-latex-base,
                texlive-latex-recommended,
+               texlive-fonts-recommended,
                iptables-dev,
                libatm1-dev,
                libdb-dev,

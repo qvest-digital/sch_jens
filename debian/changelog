@@ -1,3 +1,11 @@
+iproute2 (3.14.0-2) unstable; urgency=medium
+
+  * Add build-dependency on cm-super-minimal (Closes: #750565)
+  * Run wrap-and-sort
+  * Bump Standards-Version to 3.9.5
+
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 04 Jun 2014 18:26:32 +0200
+
 iproute2 (3.14.0-1) unstable; urgency=medium
 
   * Imported Upstream version 3.14.0

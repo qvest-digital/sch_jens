@@ -2,25 +2,26 @@ Source: iproute2
 Section: net
 Priority: optional
 Maintainer: Debian iproute2 Maintainers <ah-iproute@debian.org>
-Uploaders: Andreas Henriksson <andreas@fatal.se>, Alexander Wirt <formorer@debian.org>
+Uploaders: Andreas Henriksson <andreas@fatal.se>,
+           Alexander Wirt <formorer@debian.org>
 Homepage: http://www.linux-foundation.org/en/Net:Iproute2
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pkg-iproute.git
 Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git
 Standards-Version: 3.9.4
-Build-Depends: texlive-latex-base,
-               texlive-latex-recommended,
-               texlive-fonts-recommended,
+Build-Depends: bison,
                cm-super-minimal,
+               debhelper (>= 8),
+               flex,
                iptables-dev,
                libatm1-dev,
                libdb-dev,
-               linuxdoc-tools,
                linux-libc-dev,
-               debhelper (>= 8),
+               linuxdoc-tools,
                lynx | lynx-cur,
                pkg-config,
-               bison,
-               flex
+               texlive-fonts-recommended,
+               texlive-latex-base,
+               texlive-latex-recommended
 
 Package: iproute2
 Priority: important
@@ -28,7 +29,7 @@ Architecture: any
 Provides: arpd
 Conflicts: arpd, iproute (<< 20130000-1)
 Replaces: iproute
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${misc:Depends}, ${shlibs:Depends}
 Recommends: ${ipmods:Recommends}
 Suggests: iproute2-doc
 Multi-Arch: foreign

@@ -86,8 +86,8 @@ void iplink_usage(void)
 	if (iplink_have_newlink()) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "TYPE := { vlan | veth | vcan | dummy | ifb | macvlan | macvtap |\n");
-		fprintf(stderr, "          can | bridge | bond | ipoib | ip6tnl | ipip | sit |\n");
-		fprintf(stderr, "          vxlan | gre | gretap | ip6gre | ip6gretap | vti }\n");
+		fprintf(stderr, "          bridge | bond | ipoib | ip6tnl | ipip | sit | vxlan |\n");
+		fprintf(stderr, "          gre | gretap | ip6gre | ip6gretap | vti }\n");
 	}
 	exit(-1);
 }
@@ -365,16 +365,16 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			if (get_integer(&mtu, *argv, 0))
 				invarg("Invalid \"mtu\" value\n", *argv);
 			addattr_l(&req->n, sizeof(*req), IFLA_MTU, &mtu, 4);
-                } else if (strcmp(*argv, "netns") == 0) {
-                        NEXT_ARG();
-                        if (netns != -1)
-                                duparg("netns", *argv);
+		} else if (strcmp(*argv, "netns") == 0) {
+			NEXT_ARG();
+			if (netns != -1)
+				duparg("netns", *argv);
 			if ((netns = get_netns_fd(*argv)) >= 0)
 				addattr_l(&req->n, sizeof(*req), IFLA_NET_NS_FD, &netns, 4);
 			else if (get_integer(&netns, *argv, 0) == 0)
 				addattr_l(&req->n, sizeof(*req), IFLA_NET_NS_PID, &netns, 4);
 			else
-                                invarg("Invalid \"netns\" value\n", *argv);
+				invarg("Invalid \"netns\" value\n", *argv);
 		} else if (strcmp(*argv, "multicast") == 0) {
 			NEXT_ARG();
 			req->i.ifi_change |= IFF_MULTICAST;
@@ -934,7 +934,7 @@ static int do_set(int argc, char **argv)
 			} else
 				return on_off("dynamic", *argv);
 		} else {
-                        if (strcmp(*argv, "dev") == 0) {
+			if (strcmp(*argv, "dev") == 0) {
 				NEXT_ARG();
 			}
 			if (matches(*argv, "help") == 0)

@@ -87,7 +87,7 @@ void iplink_usage(void)
 		fprintf(stderr, "\n");
 		fprintf(stderr, "TYPE := { vlan | veth | vcan | dummy | ifb | macvlan | macvtap |\n");
 		fprintf(stderr, "          bridge | bond | ipoib | ip6tnl | ipip | sit | vxlan |\n");
-		fprintf(stderr, "          gre | gretap | ip6gre | ip6gretap | vti }\n");
+		fprintf(stderr, "          gre | gretap | ip6gre | ip6gretap | vti | nlmon }\n");
 	}
 	exit(-1);
 }
@@ -215,13 +215,37 @@ struct iplink_req {
 };
 
 static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
-			   struct iplink_req *req)
+			   struct iplink_req *req, int dev_index)
 {
+	char new_rate_api = 0, count = 0, override_legacy_rate = 0;
+	struct ifla_vf_rate tivt;
 	int len, argc = *argcp;
 	char **argv = *argvp;
 	struct rtattr *vfinfo;
 
+	tivt.min_tx_rate = -1;
+	tivt.max_tx_rate = -1;
+
 	vfinfo = addattr_nest(&req->n, sizeof(*req), IFLA_VF_INFO);
+
+	while (NEXT_ARG_OK()) {
+		NEXT_ARG();
+		count++;
+		if (!matches(*argv, "max_tx_rate")) {
+			/* new API in use */
+			new_rate_api = 1;
+			/* override legacy rate */
+			override_legacy_rate = 1;
+		} else if (!matches(*argv, "min_tx_rate")) {
+			/* new API in use */
+			new_rate_api = 1;
+		}
+	}
+
+	while (count--) {
+		/* rewind arg */
+		PREV_ARG();
+	}
 
 	while (NEXT_ARG_OK()) {
 		NEXT_ARG();
@@ -261,7 +285,25 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 				invarg("Invalid \"rate\" value\n", *argv);
 			}
 			ivt.vf = vf;
-			addattr_l(&req->n, sizeof(*req), IFLA_VF_TX_RATE, &ivt, sizeof(ivt));
+			if (!new_rate_api)
+				addattr_l(&req->n, sizeof(*req),
+					  IFLA_VF_TX_RATE, &ivt, sizeof(ivt));
+			else if (!override_legacy_rate)
+				tivt.max_tx_rate = ivt.rate;
+
+		} else if (matches(*argv, "max_tx_rate") == 0) {
+			NEXT_ARG();
+			if (get_unsigned(&tivt.max_tx_rate, *argv, 0))
+				invarg("Invalid \"max tx rate\" value\n",
+				       *argv);
+			tivt.vf = vf;
+
+		} else if (matches(*argv, "min_tx_rate") == 0) {
+			NEXT_ARG();
+			if (get_unsigned(&tivt.min_tx_rate, *argv, 0))
+				invarg("Invalid \"min tx rate\" value\n",
+				       *argv);
+			tivt.vf = vf;
 
 		} else if (matches(*argv, "spoofchk") == 0) {
 			struct ifla_vf_spoofchk ivs;
@@ -295,6 +337,20 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 		}
 	}
 
+	if (new_rate_api) {
+		int tmin, tmax;
+
+		if (tivt.min_tx_rate == -1 || tivt.max_tx_rate == -1) {
+			ipaddr_get_vf_rate(tivt.vf, &tmin, &tmax, dev_index);
+			if (tivt.min_tx_rate == -1)
+				tivt.min_tx_rate = tmin;
+			if (tivt.max_tx_rate == -1)
+				tivt.max_tx_rate = tmax;
+		}
+		addattr_l(&req->n, sizeof(*req), IFLA_VF_RATE, &tivt,
+			  sizeof(tivt));
+	}
+
 	if (argc == *argcp)
 		incomplete_command();
 
@@ -316,6 +372,7 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 	int vf = -1;
 	int numtxqueues = -1;
 	int numrxqueues = -1;
+	int dev_index = 0;
 
 	*group = -1;
 	ret = argc;
@@ -428,7 +485,10 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			}
 			vflist = addattr_nest(&req->n, sizeof(*req),
 					      IFLA_VFINFO_LIST);
-			len = iplink_parse_vf(vf, &argc, &argv, req);
+			if (dev_index == 0)
+				missarg("dev");
+
+			len = iplink_parse_vf(vf, &argc, &argv, req, dev_index);
 			if (len < 0)
 				return -1;
 			addattr_nest_end(&req->n, vflist);
@@ -510,6 +570,9 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			if (*dev)
 				duparg2("dev", *argv);
 			*dev = *argv;
+			dev_index = ll_name_to_index(*dev);
+			if (dev_index == 0)
+				invarg("Unknown device", *argv);
 		}
 		argc--; argv++;
 	}
@@ -642,6 +705,38 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 	if (rtnl_talk(&rth, &req.n, 0, 0, NULL) < 0)
 		exit(2);
+
+	return 0;
+}
+
+int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
+{
+	int len;
+	struct iplink_req req;
+	char answer[16384];
+
+	memset(&req, 0, sizeof(req));
+
+	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	req.n.nlmsg_flags = NLM_F_REQUEST|flags;
+	req.n.nlmsg_type = RTM_GETLINK;
+	req.i.ifi_family = preferred_family;
+
+	if (name) {
+		len = strlen(name) + 1;
+		if (len == 1)
+			invarg("\"\" is not a valid device identifier\n",
+				   "name");
+		if (len > IFNAMSIZ)
+			invarg("\"name\" too long\n", name);
+		addattr_l(&req.n, sizeof(req), IFLA_IFNAME, name, len);
+	}
+	addattr32(&req.n, sizeof(req), IFLA_EXT_MASK, filt_mask);
+
+	if (rtnl_talk(&rth, &req.n, 0, 0, (struct nlmsghdr *)answer) < 0)
+		return -2;
+
+	print_linkinfo(NULL, (struct nlmsghdr *)answer, stdout);
 
 	return 0;
 }

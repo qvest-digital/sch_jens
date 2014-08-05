@@ -17,6 +17,7 @@ extern int iproute_monitor(int argc, char **argv);
 extern void iplink_usage(void) __attribute__((noreturn));
 extern void iproute_reset_filter(void);
 extern void ipmroute_reset_filter(void);
+void ipaddr_get_vf_rate(int, int *, int *, int);
 extern void ipaddr_reset_filter(int);
 extern void ipneigh_reset_filter(void);
 extern void ipntable_reset_filter(void);
@@ -50,6 +51,7 @@ extern int do_ipl2tp(int argc, char **argv);
 extern int do_tcp_metrics(int argc, char **argv);
 extern int do_ipnetconf(int argc, char **argv);
 extern int do_iptoken(int argc, char **argv);
+extern int iplink_get(unsigned int flags, char *name, __u32 filt_mask);
 
 static inline int rtm_get_table(struct rtmsg *r, struct rtattr **tb)
 {

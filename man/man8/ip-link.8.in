@@ -60,6 +60,7 @@ ip-link \- network device configuration
 .BR ifb " | "
 .BR ipoib " |"
 .BR macvlan  " | "
+.BR macvtap  " | "
 .BR vcan " | "
 .BR veth " | "
 .BR vlan " | "
@@ -124,6 +125,10 @@ ip-link \- network device configuration
 .IR VLAN-QOS " ] ] ["
 .B rate
 .IR TXRATE " ] ["
+.B max_tx_rate
+.IR TXRATE " ] ["
+.B min_tx_rate
+.IR TXRATE " ] ["
 .B spoofchk { on | off } ] [
 .B state { auto | enable | disable}
 ] |
@@ -174,6 +179,9 @@ Link types:
 .sp
 .B macvlan
 - Virtual interface base on link layer address (MAC)
+.sp
+.B macvtap
+- Virtual interface based on link layer address (MAC) and TAP.
 .sp
 .B vcan
 - Virtual Controller Area Network interface
@@ -566,8 +574,24 @@ as 0 disables VLAN tagging and filtering for the VF.
 
 .sp
 .BI rate " TXRATE"
-- change the allowed transmit bandwidth, in Mbps, for the specified VF.
-Setting this parameter to 0 disables rate limiting. The
+-- change the allowed transmit bandwidth, in Mbps, for the specified VF.
+Setting this parameter to 0 disables rate limiting.
+.B vf
+parameter must be specified.
+Please use new API
+.B "max_tx_rate"
+option instead.
+
+.sp
+.BI max_tx_rate " TXRATE"
+- change the allowed maximum transmit bandwidth, in Mbps, for the specified VF.
+.B vf
+parameter must be specified.
+
+.sp
+.BI min_tx_rate " TXRATE"
+- change the allowed minimum transmit bandwidth, in Mbps, for the specified VF.
+Minimum TXRATE should be always <= Maximum TXRATE.
 .B vf
 parameter must be specified.
 

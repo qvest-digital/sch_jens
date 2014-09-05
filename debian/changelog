@@ -1,3 +1,10 @@
+iproute2 (3.16.0-2) unstable; urgency=medium
+
+  * Cherry-pick upstream commit f1b66ff8
+    "ip link: Remove unnecessary device checking" (Closes: #757644)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Fri, 05 Sep 2014 07:47:42 -0700
+
 iproute2 (3.16.0-1) unstable; urgency=medium
 
   * Imported Upstream version 3.16.0

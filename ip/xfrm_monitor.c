@@ -36,7 +36,8 @@ static void usage(void) __attribute__((noreturn));
 
 static void usage(void)
 {
-	fprintf(stderr, "Usage: ip xfrm monitor [ all | LISTofXFRM-OBJECTS ]\n");
+	fprintf(stderr, "Usage: ip xfrm monitor [ all | OBJECTS | help ]\n");
+	fprintf(stderr, "OBJECTS := { acquire | expire | SA | aevent | policy | report }\n");
 	exit(-1);
 }
 
@@ -374,7 +375,7 @@ int do_xfrm_monitor(int argc, char **argv)
 			groups = 0;
 		} else if (matches(*argv, "help") == 0) {
 			usage();
-		} else {
+		} else if (strcmp(*argv, "all")) {
 			fprintf(stderr, "Argument \"%s\" is unknown, try \"ip xfrm monitor help\".\n", *argv);
 			exit(-1);
 		}

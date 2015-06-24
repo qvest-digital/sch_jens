@@ -28,6 +28,7 @@
 #include <linux/netdevice.h>
 #include <linux/if_arp.h>
 #include <linux/sockios.h>
+#include <linux/net_namespace.h>
 
 #include "rt_names.h"
 #include "utils.h"
@@ -56,6 +57,8 @@ static struct
 	int flushp;
 	int flushe;
 	int group;
+	int master;
+	char *kind;
 } filter;
 
 static int do_link;
@@ -79,7 +82,7 @@ static void usage(void)
 	fprintf(stderr, "SCOPE-ID := [ host | link | global | NUMBER ]\n");
 	fprintf(stderr, "FLAG-LIST := [ FLAG-LIST ] FLAG\n");
 	fprintf(stderr, "FLAG  := [ permanent | dynamic | secondary | primary |\n");
-	fprintf(stderr, "           tentative | deprecated | dadfailed | temporary |\n");
+	fprintf(stderr, "           [-]tentative | [-]deprecated | [-]dadfailed | temporary |\n");
 	fprintf(stderr, "           CONFFLAG-LIST ]\n");
 	fprintf(stderr, "CONFFLAG-LIST := [ CONFFLAG-LIST ] CONFFLAG\n");
 	fprintf(stderr, "CONFFLAG  := [ home | nodad | mngtmpaddr | noprefixroute ]\n");
@@ -188,6 +191,18 @@ static void print_linkmode(FILE *f, struct rtattr *tb)
 		fprintf(f, "mode %s ", link_modes[mode]);
 }
 
+static char *parse_link_kind(struct rtattr *tb)
+{
+	struct rtattr *linkinfo[IFLA_INFO_MAX+1];
+
+	parse_rtattr_nested(linkinfo, IFLA_INFO_MAX, tb);
+
+	if (linkinfo[IFLA_INFO_KIND])
+		return RTA_DATA(linkinfo[IFLA_INFO_KIND]);
+
+	return "";
+}
+
 static void print_linktype(FILE *fp, struct rtattr *tb)
 {
 	struct rtattr *linkinfo[IFLA_INFO_MAX+1];
@@ -241,15 +256,37 @@ static void print_linktype(FILE *fp, struct rtattr *tb)
 	}
 }
 
+static void print_af_spec(FILE *fp, struct rtattr *af_spec_attr)
+{
+	struct rtattr *inet6_attr;
+	struct rtattr *tb[IFLA_INET6_MAX + 1];
+
+	inet6_attr = parse_rtattr_one_nested(AF_INET6, af_spec_attr);
+	if (!inet6_attr)
+		return;
+
+	parse_rtattr_nested(tb, IFLA_INET6_MAX, inet6_attr);
+
+	if (tb[IFLA_INET6_ADDR_GEN_MODE]) {
+		switch (rta_getattr_u8(tb[IFLA_INET6_ADDR_GEN_MODE])) {
+		case IN6_ADDR_GEN_MODE_EUI64:
+			fprintf(fp, "addrgenmode eui64 ");
+			break;
+		case IN6_ADDR_GEN_MODE_NONE:
+			fprintf(fp, "addrgenmode none ");
+			break;
+		}
+	}
+}
+
 static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 {
 	struct ifla_vf_mac *vf_mac;
 	struct ifla_vf_vlan *vf_vlan;
-	struct ifla_vf_rate *vf_rate;
 	struct ifla_vf_tx_rate *vf_tx_rate;
 	struct ifla_vf_spoofchk *vf_spoofchk;
 	struct ifla_vf_link_state *vf_linkstate;
-	struct rtattr *vf[IFLA_VF_MAX+1];
+	struct rtattr *vf[IFLA_VF_MAX + 1] = {};
 	struct rtattr *tmp;
 	SPRINT_BUF(b1);
 
@@ -263,7 +300,6 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 	vf_mac = RTA_DATA(vf[IFLA_VF_MAC]);
 	vf_vlan = RTA_DATA(vf[IFLA_VF_VLAN]);
 	vf_tx_rate = RTA_DATA(vf[IFLA_VF_TX_RATE]);
-	vf_rate = RTA_DATA(vf[IFLA_VF_RATE]);
 
 	/* Check if the spoof checking vf info type is supported by
 	 * this kernel.
@@ -299,10 +335,16 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 		fprintf(fp, ", qos %d", vf_vlan->qos);
 	if (vf_tx_rate->rate)
 		fprintf(fp, ", tx rate %d (Mbps)", vf_tx_rate->rate);
-	if (vf_rate->max_tx_rate)
-		fprintf(fp, ", max_tx_rate %dMbps", vf_rate->max_tx_rate);
-	if (vf_rate->min_tx_rate)
-		fprintf(fp, ", min_tx_rate %dMbps", vf_rate->min_tx_rate);
+
+	if (vf[IFLA_VF_RATE]) {
+		struct ifla_vf_rate *vf_rate = RTA_DATA(vf[IFLA_VF_RATE]);
+
+		if (vf_rate->max_tx_rate)
+			fprintf(fp, ", max_tx_rate %dMbps", vf_rate->max_tx_rate);
+		if (vf_rate->min_tx_rate)
+			fprintf(fp, ", min_tx_rate %dMbps", vf_rate->min_tx_rate);
+	}
+
 	if (vf_spoofchk && vf_spoofchk->setting != -1) {
 		if (vf_spoofchk->setting)
 			fprintf(fp, ", spoof checking on");
@@ -319,110 +361,191 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 	}
 }
 
+static void print_num(FILE *fp, unsigned width, uint64_t count)
+{
+	const char *prefix = "kMGTPE";
+	const unsigned int base = use_iec ? 1024 : 1000;
+	uint64_t powi = 1;
+	uint16_t powj = 1;
+	uint8_t precision = 2;
+	char buf[64];
+
+	if (!human_readable || count < base) {
+		fprintf(fp, "%-*"PRIu64" ", width, count);
+		return;
+	}
+
+	/* increase value by a factor of 1000/1024 and print
+	 * if result is something a human can read */
+	for(;;) {
+		powi *= base;
+		if (count / base < powi)
+			break;
+
+		if (!prefix[1])
+			break;
+		++prefix;
+	}
+
+	/* try to guess a good number of digits for precision */
+	for (; precision > 0; precision--) {
+		powj *= 10;
+		if (count / powi < powj)
+			break;
+	}
+
+	snprintf(buf, sizeof(buf), "%.*f%c%s", precision,
+		(double) count / powi, *prefix, use_iec ? "i" : "");
+
+	fprintf(fp, "%-*s ", width, buf);
+}
+
 static void print_link_stats64(FILE *fp, const struct rtnl_link_stats64 *s,
                                const struct rtattr *carrier_changes)
 {
-	fprintf(fp, "%s", _SL_);
+	/* RX stats */
 	fprintf(fp, "    RX: bytes  packets  errors  dropped overrun mcast   %s%s",
 		s->rx_compressed ? "compressed" : "", _SL_);
-	fprintf(fp, "    %-10"PRIu64" %-8"PRIu64" %-7"PRIu64" %-7"PRIu64" %-7"PRIu64" %-7"PRIu64"",
-		(uint64_t)s->rx_bytes,
-		(uint64_t)s->rx_packets,
-		(uint64_t)s->rx_errors,
-		(uint64_t)s->rx_dropped,
-		(uint64_t)s->rx_over_errors,
-		(uint64_t)s->multicast);
+
+	fprintf(fp, "    ");
+	print_num(fp, 10, s->rx_bytes);
+	print_num(fp, 8, s->rx_packets);
+	print_num(fp, 7, s->rx_errors);
+	print_num(fp, 7, s->rx_dropped);
+	print_num(fp, 7, s->rx_over_errors);
+	print_num(fp, 7, s->multicast);
 	if (s->rx_compressed)
-		fprintf(fp, " %-7"PRIu64"",
-			(uint64_t)s->rx_compressed);
+		print_num(fp, 7, s->rx_compressed);
+
+	/* RX error stats */
 	if (show_stats > 1) {
 		fprintf(fp, "%s", _SL_);
-		fprintf(fp, "    RX errors: length  crc     frame   fifo    missed%s", _SL_);
-		fprintf(fp, "               %-7"PRIu64"  %-7"PRIu64" %-7"PRIu64" %-7"PRIu64" %-7"PRIu64"",
-			(uint64_t)s->rx_length_errors,
-			(uint64_t)s->rx_crc_errors,
-			(uint64_t)s->rx_frame_errors,
-			(uint64_t)s->rx_fifo_errors,
-			(uint64_t)s->rx_missed_errors);
+		fprintf(fp, "    RX errors: length   crc     frame   fifo    missed%s", _SL_);
+
+		fprintf(fp, "               ");
+		print_num(fp, 8, s->rx_length_errors);
+		print_num(fp, 7, s->rx_crc_errors);
+		print_num(fp, 7, s->rx_frame_errors);
+		print_num(fp, 7, s->rx_fifo_errors);
+		print_num(fp, 7, s->rx_missed_errors);
 	}
 	fprintf(fp, "%s", _SL_);
+
+	/* TX stats */
 	fprintf(fp, "    TX: bytes  packets  errors  dropped carrier collsns %s%s",
-		(uint64_t)s->tx_compressed ? "compressed" : "", _SL_);
-	fprintf(fp, "    %-10"PRIu64" %-8"PRIu64" %-7"PRIu64" %-7"PRIu64" %-7"PRIu64" %-7"PRIu64"",
-		(uint64_t)s->tx_bytes,
-		(uint64_t)s->tx_packets,
-		(uint64_t)s->tx_errors,
-		(uint64_t)s->tx_dropped,
-		(uint64_t)s->tx_carrier_errors,
-		(uint64_t)s->collisions);
+		s->tx_compressed ? "compressed" : "", _SL_);
+
+
+	fprintf(fp, "    ");
+	print_num(fp, 10, s->tx_bytes);
+	print_num(fp, 8, s->tx_packets);
+	print_num(fp, 7, s->tx_errors);
+	print_num(fp, 7, s->tx_dropped);
+	print_num(fp, 7, s->tx_carrier_errors);
+	print_num(fp, 7, s->collisions);
 	if (s->tx_compressed)
-		fprintf(fp, " %-7"PRIu64"",
-			(uint64_t)s->tx_compressed);
+		print_num(fp, 7, s->tx_compressed);
+
+	/* TX error stats */
 	if (show_stats > 1) {
 		fprintf(fp, "%s", _SL_);
-		fprintf(fp, "    TX errors: aborted fifo    window  heartbeat");
+		fprintf(fp, "    TX errors: aborted  fifo   window heartbeat");
                 if (carrier_changes)
 			fprintf(fp, " transns");
 		fprintf(fp, "%s", _SL_);
-		fprintf(fp, "               %-7"PRIu64"  %-7"PRIu64" %-7"PRIu64" %-8"PRIu64"",
-			(uint64_t)s->tx_aborted_errors,
-			(uint64_t)s->tx_fifo_errors,
-			(uint64_t)s->tx_window_errors,
-			(uint64_t)s->tx_heartbeat_errors);
+
+		fprintf(fp, "               ");
+		print_num(fp, 8, s->tx_aborted_errors);
+		print_num(fp, 7, s->tx_fifo_errors);
+		print_num(fp, 7, s->tx_window_errors);
+		print_num(fp, 7, s->tx_heartbeat_errors);
 		if (carrier_changes)
-			fprintf(fp, " %-7u",
-				*(uint32_t*)RTA_DATA(carrier_changes));
+			print_num(fp, 7, *(uint32_t*)RTA_DATA(carrier_changes));
 	}
 }
 
-static void print_link_stats(FILE *fp, const struct rtnl_link_stats *s,
-			     const struct rtattr *carrier_changes)
+static void print_link_stats32(FILE *fp, const struct rtnl_link_stats *s,
+			       const struct rtattr *carrier_changes)
 {
-	fprintf(fp, "%s", _SL_);
+	/* RX stats */
 	fprintf(fp, "    RX: bytes  packets  errors  dropped overrun mcast   %s%s",
 		s->rx_compressed ? "compressed" : "", _SL_);
-	fprintf(fp, "    %-10u %-8u %-7u %-7u %-7u %-7u",
-		s->rx_bytes, s->rx_packets, s->rx_errors,
-		s->rx_dropped, s->rx_over_errors,
-		s->multicast
-		);
+
+
+	fprintf(fp, "    ");
+	print_num(fp, 10, s->rx_bytes);
+	print_num(fp, 8, s->rx_packets);
+	print_num(fp, 7, s->rx_errors);
+	print_num(fp, 7, s->rx_dropped);
+	print_num(fp, 7, s->rx_over_errors);
+	print_num(fp, 7, s->multicast);
 	if (s->rx_compressed)
-		fprintf(fp, " %-7u", s->rx_compressed);
+		print_num(fp, 7, s->rx_compressed);
+
+	/* RX error stats */
 	if (show_stats > 1) {
 		fprintf(fp, "%s", _SL_);
-		fprintf(fp, "    RX errors: length  crc     frame   fifo    missed%s", _SL_);
-		fprintf(fp, "               %-7u  %-7u %-7u %-7u %-7u",
-			s->rx_length_errors,
-			s->rx_crc_errors,
-			s->rx_frame_errors,
-			s->rx_fifo_errors,
-			s->rx_missed_errors
-			);
+		fprintf(fp, "    RX errors: length   crc     frame   fifo    missed%s", _SL_);
+		fprintf(fp, "               ");
+		print_num(fp, 8, s->rx_length_errors);
+		print_num(fp, 7, s->rx_crc_errors);
+		print_num(fp, 7, s->rx_frame_errors);
+		print_num(fp, 7, s->rx_fifo_errors);
+		print_num(fp, 7, s->rx_missed_errors);
 	}
 	fprintf(fp, "%s", _SL_);
+
+	/* TX stats */
 	fprintf(fp, "    TX: bytes  packets  errors  dropped carrier collsns %s%s",
 		s->tx_compressed ? "compressed" : "", _SL_);
-	fprintf(fp, "    %-10u %-8u %-7u %-7u %-7u %-7u",
-		s->tx_bytes, s->tx_packets, s->tx_errors,
-		s->tx_dropped, s->tx_carrier_errors, s->collisions);
+
+	fprintf(fp, "    ");
+	print_num(fp, 10, s->tx_bytes);
+	print_num(fp, 8, s->tx_packets);
+	print_num(fp, 7, s->tx_errors);
+	print_num(fp, 7, s->tx_dropped);
+	print_num(fp, 7, s->tx_carrier_errors);
+	print_num(fp, 7, s->collisions);
 	if (s->tx_compressed)
-		fprintf(fp, " %-7u", s->tx_compressed);
+		print_num(fp, 7, s->tx_compressed);
+
+	/* TX error stats */
 	if (show_stats > 1) {
 		fprintf(fp, "%s", _SL_);
-		fprintf(fp, "    TX errors: aborted fifo    window  heartbeat");
+		fprintf(fp, "    TX errors: aborted  fifo   window heartbeat");
                 if (carrier_changes)
 			fprintf(fp, " transns");
 		fprintf(fp, "%s", _SL_);
-		fprintf(fp, "               %-7u  %-7u %-7u %-8u",
-			s->tx_aborted_errors,
-			s->tx_fifo_errors,
-			s->tx_window_errors,
-			s->tx_heartbeat_errors
-			);
+
+		fprintf(fp, "               ");
+		print_num(fp, 8, s->tx_aborted_errors);
+		print_num(fp, 7, s->tx_fifo_errors);
+		print_num(fp, 7, s->tx_window_errors);
+		print_num(fp, 7, s->tx_heartbeat_errors);
 		if (carrier_changes)
-			fprintf(fp, " %-7u",
-				*(uint32_t*)RTA_DATA(carrier_changes));
+			print_num(fp, 7, *(uint32_t*)RTA_DATA(carrier_changes));
 	}
+}
+
+static void __print_link_stats(FILE *fp, struct rtattr **tb)
+{
+	if (tb[IFLA_STATS64])
+		print_link_stats64(fp, RTA_DATA(tb[IFLA_STATS64]),
+					tb[IFLA_CARRIER_CHANGES]);
+	else if (tb[IFLA_STATS])
+		print_link_stats32(fp, RTA_DATA(tb[IFLA_STATS]),
+					tb[IFLA_CARRIER_CHANGES]);
+}
+
+static void print_link_stats(FILE *fp, struct nlmsghdr *n)
+{
+	struct ifinfomsg *ifi = NLMSG_DATA(n);
+	struct rtattr * tb[IFLA_MAX+1];
+
+	parse_rtattr(tb, IFLA_MAX, IFLA_RTA(ifi),
+		     n->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi)));
+	__print_link_stats(fp, tb);
+	fprintf(fp, "%s", _SL_);
 }
 
 int print_linkinfo(const struct sockaddr_nl *who,
@@ -461,6 +584,25 @@ int print_linkinfo(const struct sockaddr_nl *who,
 			return -1;
 	}
 
+	if (tb[IFLA_MASTER]) {
+		int master = *(int*)RTA_DATA(tb[IFLA_MASTER]);
+		if (filter.master > 0 && master != filter.master)
+			return -1;
+	}
+	else if (filter.master > 0)
+		return -1;
+
+	if (filter.kind) {
+		if (tb[IFLA_LINKINFO]) {
+			char *kind = parse_link_kind(tb[IFLA_LINKINFO]);
+
+			if (strcmp(kind, filter.kind))
+				return -1;
+		} else {
+			return -1;
+		}
+	}
+
 	if (n->nlmsg_type == RTM_DELLINK)
 		fprintf(fp, "Deleted ");
 
@@ -473,9 +615,13 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		if (iflink == 0)
 			fprintf(fp, "@NONE: ");
 		else {
-			fprintf(fp, "@%s: ", ll_idx_n2a(iflink, b1));
-			m_flag = ll_index_to_flags(iflink);
-			m_flag = !(m_flag & IFF_UP);
+			if (tb[IFLA_LINK_NETNSID])
+				fprintf(fp, "@if%d: ", iflink);
+			else {
+				fprintf(fp, "@%s: ", ll_idx_n2a(iflink, b1));
+				m_flag = ll_index_to_flags(iflink);
+				m_flag = !(m_flag & IFF_UP);
+			}
 		}
 	} else {
 		fprintf(fp, ": ");
@@ -514,7 +660,7 @@ int print_linkinfo(const struct sockaddr_nl *who,
 	if (filter.showqueue)
 		print_queuelen(fp, tb);
 
-	if (!filter.family || filter.family == AF_PACKET) {
+	if (!filter.family || filter.family == AF_PACKET || show_details) {
 		SPRINT_BUF(b1);
 		fprintf(fp, "%s", _SL_);
 		fprintf(fp, "    link/%s ", ll_type_n2a(ifi->ifi_type, b1, sizeof(b1)));
@@ -537,28 +683,36 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		}
 	}
 
-	if (do_link && tb[IFLA_PROMISCUITY] && show_details)
+	if (tb[IFLA_LINK_NETNSID]) {
+		int id = *(int*)RTA_DATA(tb[IFLA_LINK_NETNSID]);
+
+		if (id >= 0)
+			fprintf(fp, " link-netnsid %d", id);
+		else
+			fprintf(fp, " link-netnsid unknown");
+	}
+
+	if (tb[IFLA_PROMISCUITY] && show_details)
 		fprintf(fp, " promiscuity %u ",
 			*(int*)RTA_DATA(tb[IFLA_PROMISCUITY]));
 
-	if (do_link && tb[IFLA_LINKINFO] && show_details)
+	if (tb[IFLA_LINKINFO] && show_details)
 		print_linktype(fp, tb[IFLA_LINKINFO]);
 
-	if (do_link && tb[IFLA_IFALIAS]) {
+	if (do_link && tb[IFLA_AF_SPEC] && show_details)
+		print_af_spec(fp, tb[IFLA_AF_SPEC]);
+
+	if ((do_link || show_details) && tb[IFLA_IFALIAS]) {
 		fprintf(fp, "%s    alias %s", _SL_,
 			rta_getattr_str(tb[IFLA_IFALIAS]));
 	}
 
 	if (do_link && show_stats) {
-		if (tb[IFLA_STATS64])
-			print_link_stats64(fp, RTA_DATA(tb[IFLA_STATS64]),
-					   tb[IFLA_CARRIER_CHANGES]);
-		else if (tb[IFLA_STATS])
-			print_link_stats(fp, RTA_DATA(tb[IFLA_STATS]),
-					 tb[IFLA_CARRIER_CHANGES]);
+		fprintf(fp, "%s", _SL_);
+		__print_link_stats(fp, tb);
 	}
 
-	if (do_link && tb[IFLA_VFINFO_LIST] && tb[IFLA_NUM_VF]) {
+	if ((do_link || show_details) && tb[IFLA_VFINFO_LIST] && tb[IFLA_NUM_VF]) {
 		struct rtattr *i, *vflist = tb[IFLA_VFINFO_LIST];
 		int rem = RTA_PAYLOAD(vflist);
 		for (i = RTA_DATA(vflist); RTA_OK(i, rem); i = RTA_NEXT(i, rem))
@@ -567,7 +721,7 @@ int print_linkinfo(const struct sockaddr_nl *who,
 
 	fprintf(fp, "\n");
 	fflush(fp);
-	return 0;
+	return 1;
 }
 
 static int flush_update(void)
@@ -830,7 +984,8 @@ struct nlmsg_chain
 	struct nlmsg_list *tail;
 };
 
-static int print_selected_addrinfo(int ifindex, struct nlmsg_list *ainfo, FILE *fp)
+static int print_selected_addrinfo(struct ifinfomsg *ifi,
+				   struct nlmsg_list *ainfo, FILE *fp)
 {
 	for ( ;ainfo ;  ainfo = ainfo->next) {
 		struct nlmsghdr *n = &ainfo->h;
@@ -842,8 +997,11 @@ static int print_selected_addrinfo(int ifindex, struct nlmsg_list *ainfo, FILE *
 		if (n->nlmsg_len < NLMSG_LENGTH(sizeof(ifa)))
 			return -1;
 
-		if (ifa->ifa_index != ifindex ||
+		if (ifa->ifa_index != ifi->ifi_index ||
 		    (filter.family && filter.family != ifa->ifa_family))
+			continue;
+
+		if (filter.up && !(ifi->ifi_flags&IFF_UP))
 			continue;
 
 		print_addrinfo(NULL, n, fp);
@@ -1120,7 +1278,7 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	char *filter_dev = NULL;
 	int no_link = 0;
 
-	ipaddr_reset_filter(oneline);
+	ipaddr_reset_filter(oneline, 0);
 	filter.showqueue = 1;
 
 	if (filter.family == AF_UNSPEC)
@@ -1175,8 +1333,14 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 		} else if (strcmp(*argv, "tentative") == 0) {
 			filter.flags |= IFA_F_TENTATIVE;
 			filter.flagmask |= IFA_F_TENTATIVE;
+		} else if (strcmp(*argv, "-tentative") == 0) {
+			filter.flags &= ~IFA_F_TENTATIVE;
+			filter.flagmask |= IFA_F_TENTATIVE;
 		} else if (strcmp(*argv, "deprecated") == 0) {
 			filter.flags |= IFA_F_DEPRECATED;
+			filter.flagmask |= IFA_F_DEPRECATED;
+		} else if (strcmp(*argv, "-deprecated") == 0) {
+			filter.flags &= ~IFA_F_DEPRECATED;
 			filter.flagmask |= IFA_F_DEPRECATED;
 		} else if (strcmp(*argv, "home") == 0) {
 			filter.flags |= IFA_F_HOMEADDRESS;
@@ -1193,6 +1357,9 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 		} else if (strcmp(*argv, "dadfailed") == 0) {
 			filter.flags |= IFA_F_DADFAILED;
 			filter.flagmask |= IFA_F_DADFAILED;
+		} else if (strcmp(*argv, "-dadfailed") == 0) {
+			filter.flags &= ~IFA_F_DADFAILED;
+			filter.flagmask |= IFA_F_DADFAILED;
 		} else if (strcmp(*argv, "label") == 0) {
 			NEXT_ARG();
 			filter.label = *argv;
@@ -1200,6 +1367,16 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 			NEXT_ARG();
 			if (rtnl_group_a2n(&filter.group, *argv))
 				invarg("Invalid \"group\" value\n", *argv);
+		} else if (strcmp(*argv, "master") == 0) {
+			int ifindex;
+			NEXT_ARG();
+			ifindex = ll_name_to_index(*argv);
+			if (!ifindex)
+				invarg("Device does not exist\n", *argv);
+			filter.master = ifindex;
+		} else if (do_link && strcmp(*argv, "type") == 0) {
+			NEXT_ARG();
+			filter.kind = *argv;
 		} else {
 			if (strcmp(*argv, "dev") == 0) {
 				NEXT_ARG();
@@ -1282,11 +1459,15 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	}
 
 	for (l = linfo.head; l; l = l->next) {
-		if (no_link || print_linkinfo(NULL, &l->h, stdout) == 0) {
+		int res = 0;
+
+		if (no_link || (res = print_linkinfo(NULL, &l->h, stdout)) >= 0) {
 			struct ifinfomsg *ifi = NLMSG_DATA(&l->h);
 			if (filter.family != AF_PACKET)
-				print_selected_addrinfo(ifi->ifi_index,
+				print_selected_addrinfo(ifi,
 							ainfo.head, stdout);
+			if (res > 0 && !do_link && show_stats)
+				print_link_stats(stdout, &l->h);
 		}
 	}
 	fflush(stdout);
@@ -1361,10 +1542,11 @@ int ipaddr_list_link(int argc, char **argv)
 	return ipaddr_list_flush_or_save(argc, argv, IPADD_LIST);
 }
 
-void ipaddr_reset_filter(int oneline)
+void ipaddr_reset_filter(int oneline, int ifindex)
 {
 	memset(&filter, 0, sizeof(filter));
 	filter.oneline = oneline;
+	filter.ifindex = ifindex;
 }
 
 static int default_scope(inet_prefix *lcl)

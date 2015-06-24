@@ -31,6 +31,9 @@
 
 
 #include "utils.h"
+#include "namespace.h"
+
+int timestamp_short = 0;
 
 int get_integer(int *val, const char *arg, int base)
 {
@@ -144,8 +147,8 @@ int get_time_rtt(unsigned *val, const char *arg, int *raw)
 		if (t < 0.0)
 			return -1;
 
-		/* extra non-digits */
-		if (!p || p == arg || *p)
+		/* no digits? */
+		if (!p || p == arg)
 			return -1;
 
 		/* over/underflow */
@@ -154,8 +157,8 @@ int get_time_rtt(unsigned *val, const char *arg, int *raw)
 	} else {
 		res = strtoul(arg, &p, 0);
 
-		/* empty string or trailing non-digits */
-		if (!p || p == arg || *p)
+		/* empty string? */
+		if (!p || p == arg)
 			return -1;
 
 		/* overflow */
@@ -428,6 +431,27 @@ int get_addr_1(inet_prefix *addr, const char *name, int family)
 	return 0;
 }
 
+int af_bit_len(int af)
+{
+	switch (af) {
+	case AF_INET6:
+		return 128;
+	case AF_INET:
+		return 32;
+	case AF_DECnet:
+		return 16;
+	case AF_IPX:
+		return 80;
+	}
+
+	return 0;
+}
+
+int af_byte_len(int af)
+{
+	return af_bit_len(af) / 8;
+}
+
 int get_prefix_1(inet_prefix *dst, char *arg, int family)
 {
 	int err;
@@ -453,17 +477,8 @@ int get_prefix_1(inet_prefix *dst, char *arg, int family)
 
 	err = get_addr_1(dst, arg, family);
 	if (err == 0) {
-		switch(dst->family) {
-		case AF_INET6:
-			dst->bitlen = 128;
-			break;
-		case AF_DECnet:
-			dst->bitlen = 16;
-			break;
-		default:
-		case AF_INET:
-			dst->bitlen = 32;
-		}
+		dst->bitlen = af_bit_len(dst->family);
+
 		if (slash) {
 			if (get_netmask(&plen, slash+1, 0)
 			    || plen > dst->bitlen) {
@@ -694,7 +709,6 @@ static const char *resolve_address(const void *addr, int len, int af)
 }
 #endif
 
-
 const char *format_host(int af, int len, const void *addr,
 			char *buf, int buflen)
 {
@@ -702,27 +716,8 @@ const char *format_host(int af, int len, const void *addr,
 	if (resolve_hosts) {
 		const char *n;
 
-		if (len <= 0) {
-			switch (af) {
-			case AF_INET:
-				len = 4;
-				break;
-			case AF_INET6:
-				len = 16;
-				break;
-			case AF_IPX:
-				len = 10;
-				break;
-#ifdef AF_DECnet
-			/* I see no reasons why gethostbyname
-			   may not work for DECnet */
-			case AF_DECnet:
-				len = 2;
-				break;
-#endif
-			default: ;
-			}
-		}
+		len = len <= 0 ? af_byte_len(af) : len;
+
 		if (len > 0 &&
 		    (n = resolve_address(addr, len, af)) != NULL)
 			return n;
@@ -772,14 +767,24 @@ __u8* hexstring_a2n(const char *str, __u8 *buf, int blen)
 int print_timestamp(FILE *fp)
 {
 	struct timeval tv;
-	char *tstr;
+	struct tm *tm;
 
-	memset(&tv, 0, sizeof(tv));
 	gettimeofday(&tv, NULL);
+	tm = localtime(&tv.tv_sec);
 
-	tstr = asctime(localtime(&tv.tv_sec));
-	tstr[strlen(tstr)-1] = 0;
-	fprintf(fp, "Timestamp: %s %ld usec\n", tstr, (long)tv.tv_usec);
+	if (timestamp_short) {
+		char tshort[40];
+
+		strftime(tshort, sizeof(tshort), "%Y-%m-%dT%H:%M:%S", tm);
+		fprintf(fp, "[%s.%06ld] ", tshort, tv.tv_usec);
+	} else {
+		char *tstr = asctime(tm);
+
+		tstr[strlen(tstr)-1] = 0;
+		fprintf(fp, "Timestamp: %s %ld usec\n",
+			tstr, tv.tv_usec);
+	}
+
 	return 0;
 }
 
@@ -855,4 +860,47 @@ int inet_get_addr(const char *src, __u32 *dst, struct in6_addr *dst6)
 		return inet_pton(AF_INET6, src, dst6);
 	else
 		return inet_pton(AF_INET, src, dst);
+}
+
+void print_nlmsg_timestamp(FILE *fp, const struct nlmsghdr *n)
+{
+	char *tstr;
+	time_t secs = ((__u32*)NLMSG_DATA(n))[0];
+	long usecs = ((__u32*)NLMSG_DATA(n))[1];
+	tstr = asctime(localtime(&secs));
+	tstr[strlen(tstr)-1] = 0;
+	fprintf(fp, "Timestamp: %s %lu us\n", tstr, usecs);
+}
+
+static int on_netns(char *nsname, void *arg)
+{
+	struct netns_func *f = arg;
+
+	if (netns_switch(nsname))
+		return -1;
+
+	return f->func(nsname, f->arg);
+}
+
+static int on_netns_label(char *nsname, void *arg)
+{
+	printf("\nnetns: %s\n", nsname);
+	return on_netns(nsname, arg);
+}
+
+int do_each_netns(int (*func)(char *nsname, void *arg), void *arg,
+		bool show_label)
+{
+	struct netns_func nsf = { .func = func, .arg = arg };
+
+	if (show_label)
+		return netns_foreach(on_netns_label, &nsf);
+
+	return netns_foreach(on_netns, &nsf);
+}
+
+char *int_to_str(int val, char *buf)
+{
+	sprintf(buf, "%d", val);
+	return buf;
 }

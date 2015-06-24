@@ -7,7 +7,7 @@ Uploaders: Andreas Henriksson <andreas@fatal.se>,
 Homepage: http://www.linux-foundation.org/en/Net:Iproute2
 Vcs-Browser: http://git.debian.org/?p=collab-maint/pkg-iproute.git
 Vcs-Git: git://git.debian.org/git/collab-maint/pkg-iproute.git
-Standards-Version: 3.9.5
+Standards-Version: 3.9.6
 Build-Depends: bison,
                cm-super-minimal,
                debhelper (>= 8),

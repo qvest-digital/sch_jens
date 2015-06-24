@@ -53,6 +53,7 @@ static const char *mx_names[RTAX_MAX+1] = {
 	[RTAX_RTO_MIN]	= "rto_min",
 	[RTAX_INITRWND]	= "initrwnd",
 	[RTAX_QUICKACK]	= "quickack",
+	[RTAX_CC_ALGO]	= "congctl",
 };
 static void usage(void) __attribute__((noreturn));
 
@@ -80,7 +81,7 @@ static void usage(void)
 	fprintf(stderr, "           [ window NUMBER] [ cwnd NUMBER ] [ initcwnd NUMBER ]\n");
 	fprintf(stderr, "           [ ssthresh NUMBER ] [ realms REALM ] [ src ADDRESS ]\n");
 	fprintf(stderr, "           [ rto_min TIME ] [ hoplimit NUMBER ] [ initrwnd NUMBER ]\n");
-	fprintf(stderr, "           [ quickack BOOL ]\n");
+	fprintf(stderr, "           [ features FEATURES ] [ quickack BOOL ] [ congctl NAME ]\n");
 	fprintf(stderr, "TYPE := [ unicast | local | broadcast | multicast | throw |\n");
 	fprintf(stderr, "          unreachable | prohibit | blackhole | nat ]\n");
 	fprintf(stderr, "TABLE_ID := [ local | main | default | all | NUMBER ]\n");
@@ -89,6 +90,7 @@ static void usage(void)
 	fprintf(stderr, "RTPROTO := [ kernel | boot | static | NUMBER ]\n");
 	fprintf(stderr, "TIME := NUMBER[s|ms]\n");
 	fprintf(stderr, "BOOL := [1|0]\n");
+	fprintf(stderr, "FEATURES := ecn\n");
 	exit(-1);
 }
 
@@ -266,18 +268,17 @@ static int filter_nlmsg(struct nlmsghdr *n, struct rtattr **tb, int host_len)
 	return 1;
 }
 
-static int calc_host_len(const struct rtmsg *r)
+static void print_rtax_features(FILE *fp, unsigned int features)
 {
-	if (r->rtm_family == AF_INET6)
-		return 128;
-	else if (r->rtm_family == AF_INET)
-		return 32;
-	else if (r->rtm_family == AF_DECnet)
-		return 16;
-	else if (r->rtm_family == AF_IPX)
-		return 80;
-	else
-		return -1;
+	unsigned int of = features;
+
+	if (features & RTAX_FEATURE_ECN) {
+		fprintf(fp, " ecn");
+		features &= ~RTAX_FEATURE_ECN;
+	}
+
+	if (features)
+		fprintf(fp, " 0x%x", of);
 }
 
 int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
@@ -287,7 +288,7 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 	int len = n->nlmsg_len;
 	struct rtattr * tb[RTA_MAX+1];
 	char abuf[256];
-	int host_len = -1;
+	int host_len;
 	__u32 table;
 	SPRINT_BUF(b1);
 	static int hz;
@@ -305,7 +306,7 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 		return -1;
 	}
 
-	host_len = calc_host_len(r);
+	host_len = af_bit_len(r->rtm_family);
 
 	parse_rtattr(tb, RTA_MAX, RTM_RTA(r), len);
 	table = rtm_get_table(r, tb);
@@ -521,7 +522,7 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 			mxlock = *(unsigned*)RTA_DATA(mxrta[RTAX_LOCK]);
 
 		for (i=2; i<= RTAX_MAX; i++) {
-			unsigned val;
+			__u32 val;
 
 			if (mxrta[i] == NULL)
 				continue;
@@ -530,11 +531,16 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				fprintf(fp, " %s", mx_names[i]);
 			else
 				fprintf(fp, " metric %d", i);
+
 			if (mxlock & (1<<i))
 				fprintf(fp, " lock");
+			if (i != RTAX_CC_ALGO)
+				val = rta_getattr_u32(mxrta[i]);
 
-			val = *(unsigned*)RTA_DATA(mxrta[i]);
 			switch (i) {
+			case RTAX_FEATURES:
+				print_rtax_features(fp, val);
+				break;
 			case RTAX_HOPLIMIT:
 				if ((int)val == -1)
 					val = 0;
@@ -555,6 +561,10 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 					fprintf(fp, " %gs", val/1e3);
 				else
 					fprintf(fp, " %ums", val);
+				break;
+			case RTAX_CC_ALGO:
+				fprintf(fp, " %s", rta_getattr_str(mxrta[i]));
+				break;
 			}
 		}
 	}
@@ -885,6 +895,20 @@ static int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (get_unsigned(&win, *argv, 0))
 				invarg("\"initrwnd\" value is invalid\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_INITRWND, win);
+		} else if (matches(*argv, "features") == 0) {
+			unsigned int features = 0;
+
+			while (argc > 0) {
+				NEXT_ARG();
+
+				if (strcmp(*argv, "ecn") == 0)
+					features |= RTAX_FEATURE_ECN;
+				else
+					invarg("\"features\" value not valid\n", *argv);
+				break;
+			}
+
+			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_FEATURES, features);
 		} else if (matches(*argv, "quickack") == 0) {
 			unsigned quickack;
 			NEXT_ARG();
@@ -893,6 +917,14 @@ static int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 			if (quickack != 1 && quickack != 0)
 				invarg("\"quickack\" value should be 0 or 1\n", *argv);
 			rta_addattr32(mxrta, sizeof(mxbuf), RTAX_QUICKACK, quickack);
+		} else if (matches(*argv, "congctl") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "lock") == 0) {
+				mxlock |= 1 << RTAX_CC_ALGO;
+				NEXT_ARG();
+			}
+			rta_addattr_l(mxrta, sizeof(mxbuf), RTAX_CC_ALGO, *argv,
+				      strlen(*argv));
 		} else if (matches(*argv, "rttvar") == 0) {
 			unsigned win;
 			NEXT_ARG();
@@ -975,6 +1007,9 @@ static int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 		argc--; argv++;
 	}
 
+	if (!dst_ok)
+		usage();
+
 	if (d || nhs_ok)  {
 		int idx;
 
@@ -1024,7 +1059,7 @@ static int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 		req.r.rtm_family = AF_INET;
 
 	if (rtnl_talk(&rth, &req.n, 0, 0, NULL) < 0)
-		exit(2);
+		return -1;
 
 	return 0;
 }
@@ -1085,9 +1120,9 @@ static int save_route(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	int len = n->nlmsg_len;
 	struct rtmsg *r = NLMSG_DATA(n);
 	struct rtattr *tb[RTA_MAX+1];
-	int host_len = -1;
+	int host_len;
 
-	host_len = calc_host_len(r);
+	host_len = af_bit_len(r->rtm_family);
 	len -= NLMSG_LENGTH(sizeof(*r));
 	parse_rtattr(tb, RTA_MAX, RTM_RTA(r), len);
 
@@ -1137,7 +1172,7 @@ static int iproute_list_flush_or_save(int argc, char **argv, int action)
 	} else
 		filter_fn = print_route;
 
-	iproute_reset_filter();
+	iproute_reset_filter(0);
 	filter.tb = RT_TABLE_MAIN;
 
 	if ((action == IPROUTE_FLUSH) && argc <= 0) {
@@ -1385,7 +1420,7 @@ static int iproute_get(int argc, char **argv)
 
 	memset(&req, 0, sizeof(req));
 
-	iproute_reset_filter();
+	iproute_reset_filter(0);
 	filter.cloned = 2;
 
 	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct rtmsg));
@@ -1590,11 +1625,14 @@ static int iproute_showdump(void)
 	exit(rtnl_from_file(stdin, &show_handler, NULL));
 }
 
-void iproute_reset_filter(void)
+void iproute_reset_filter(int ifindex)
 {
 	memset(&filter, 0, sizeof(filter));
 	filter.mdst.bitlen = -1;
 	filter.msrc.bitlen = -1;
+	filter.oif = ifindex;
+	if (filter.oif > 0)
+		filter.oifmask = -1;
 }
 
 int do_iproute(int argc, char **argv)

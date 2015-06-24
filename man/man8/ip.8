@@ -31,7 +31,9 @@ ip \- show / manipulate routing, devices, policy routing and tunnels
 \fB\-r\fR[\fIesolve\fR] |
 \fB\-f\fR[\fIamily\fR] {
 .BR inet " | " inet6 " | " ipx " | " dnet " | " link " } | "
-\fB\-o\fR[\fIneline\fR] }
+\fB\-o\fR[\fIneline\fR] |
+\fB\-n\fR[\fIetns\fR] name |
+\fB\-a\fR[\fIll\fR] }
 
 
 .SH OPTIONS
@@ -54,14 +56,18 @@ If there were any errors during execution of the commands, the application retur
 
 .TP
 .BR "\-s" , " \-stats" , " \-statistics"
-Output more information.  If the option
+Output more information. If the option
 appears twice or more, the amount of information increases.
 As a rule, the information is statistics or some time values.
 
 .TP
+.BR "\-d" , " \-details"
+Output more detailed information.
+
+.TP
 .BR "\-l" , " \-loops " <COUNT>
 Specify maximum number of loops the 'ip addr flush' logic
-will attempt before giving up.  The default is 10.
+will attempt before giving up. The default is 10.
 Zero (0) means loop until all addresses are removed.
 
 .TP
@@ -71,7 +77,7 @@ Specifies the protocol family to use. The protocol family identifier can be one 
 or
 .BR link .
 If this option is not present,
-the protocol family is guessed from other arguments.  If the rest
+the protocol family is guessed from other arguments. If the rest
 of the command line does not give enough information to guess the
 family,
 .B ip
@@ -129,6 +135,30 @@ the output.
 .BR "\-r" , " \-resolve"
 use the system's name resolver to print DNS names instead of
 host addresses.
+
+.TP
+.BR "\-n" , " \-net" , " \-netns " <NETNS>
+switches
+.B ip
+to the specified network namespace
+.IR NETNS .
+Actually it just simplifies executing of:
+
+.B ip netns exec
+.IR NETNS
+.B ip
+.RI "[ " OPTIONS " ] " OBJECT " { " COMMAND " | "
+.BR help " }"
+
+to
+
+.B ip
+.RI "-n[etns] " NETNS " [ " OPTIONS " ] " OBJECT " { " COMMAND " | "
+.BR help " }"
+
+.TP
+.BR "\-a" , " \-all"
+executes specified command over all objects, it depends if command supports this option.
 
 .SH IP - COMMAND SYNTAX
 
@@ -224,9 +254,9 @@ and
 (or
 .B list
 ) objects, but some objects do not allow all of these operations
-or have some additional commands.  The
+or have some additional commands. The
 .B help
-command is available for all objects.  It prints
+command is available for all objects. It prints
 out a list of available commands and argument syntax conventions.
 .sp
 If no command is given, some default command is assumed.

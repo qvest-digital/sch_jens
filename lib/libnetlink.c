@@ -43,6 +43,7 @@ int rtnl_open_byproto(struct rtnl_handle *rth, unsigned subscriptions,
 
 	memset(rth, 0, sizeof(*rth));
 
+	rth->proto = protocol;
 	rth->fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC, protocol);
 	if (rth->fd < 0) {
 		perror("Cannot open netlink socket");
@@ -219,12 +220,15 @@ int rtnl_dump_filter_l(struct rtnl_handle *rth,
 			return -1;
 		}
 
+		if (rth->dump_fp)
+			fwrite(buf, 1, NLMSG_ALIGN(status), rth->dump_fp);
+
 		for (a = arg; a->filter; a++) {
 			struct nlmsghdr *h = (struct nlmsghdr*)buf;
 			msglen = status;
 
 			while (NLMSG_OK(h, msglen)) {
-				int err;
+				int err = 0;
 
 				if (nladdr.nl_pid != 0 ||
 				    h->nlmsg_pid != rth->local.nl_pid ||
@@ -245,13 +249,21 @@ int rtnl_dump_filter_l(struct rtnl_handle *rth,
 							"ERROR truncated\n");
 					} else {
 						errno = -err->error;
+						if (rth->proto == NETLINK_SOCK_DIAG &&
+						    (errno == ENOENT ||
+						     errno == EOPNOTSUPP))
+							return -1;
+
 						perror("RTNETLINK answers");
 					}
 					return -1;
 				}
-				err = a->filter(&nladdr, h, a->arg1);
-				if (err < 0)
-					return err;
+
+				if (!rth->dump_fp) {
+					err = a->filter(&nladdr, h, a->arg1);
+					if (err < 0)
+						return err;
+				}
 
 skip_it:
 				h = NLMSG_NEXT(h, msglen);
@@ -420,7 +432,7 @@ int rtnl_listen(struct rtnl_handle *rtnl,
 		.msg_iov = &iov,
 		.msg_iovlen = 1,
 	};
-	char   buf[8192];
+	char   buf[16384];
 
 	memset(&nladdr, 0, sizeof(nladdr));
 	nladdr.nl_family = AF_NETLINK;
@@ -486,7 +498,7 @@ int rtnl_from_file(FILE *rtnl, rtnl_filter_t handler,
 {
 	int status;
 	struct sockaddr_nl nladdr;
-	char   buf[8192];
+	char   buf[16384];
 	struct nlmsghdr *h = (void*)buf;
 
 	memset(&nladdr, 0, sizeof(nladdr));
@@ -699,6 +711,18 @@ int parse_rtattr_byindex(struct rtattr *tb[], int max, struct rtattr *rta, int l
 	if (len)
 		fprintf(stderr, "!!!Deficit %d, rta_len=%d\n", len, rta->rta_len);
 	return i;
+}
+
+struct rtattr *parse_rtattr_one(int type, struct rtattr *rta, int len)
+{
+	while (RTA_OK(rta, len)) {
+		if (rta->rta_type == type)
+			return rta;
+		rta = RTA_NEXT(rta, len);
+	}
+	if (len)
+		fprintf(stderr, "!!!Deficit %d, rta_len=%d\n", len, rta->rta_len);
+	return NULL;
 }
 
 int __parse_rtattr_nested_compat(struct rtattr *tb[], int max, struct rtattr *rta,

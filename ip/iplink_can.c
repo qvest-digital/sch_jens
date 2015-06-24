@@ -19,9 +19,9 @@
 #include "utils.h"
 #include "ip_common.h"
 
-static void usage(void)
+static void print_usage(FILE *f)
 {
-	fprintf(stderr,
+	fprintf(f,
 		"Usage: ip link set DEVICE type can\n"
 		"\t[ bitrate BITRATE [ sample-point SAMPLE-POINT] ] | \n"
 		"\t[ tq TQ prop-seg PROP_SEG phase-seg1 PHASE-SEG1\n "
@@ -37,6 +37,8 @@ static void usage(void)
 		"\t[ one-shot { on | off } ]\n"
 		"\t[ berr-reporting { on | off } ]\n"
 		"\t[ fd { on | off } ]\n"
+		"\t[ fd-non-iso { on | off } ]\n"
+		"\t[ presume-ack { on | off } ]\n"
 		"\n"
 		"\t[ restart-ms TIME-MS ]\n"
 		"\t[ restart ]\n"
@@ -50,6 +52,11 @@ static void usage(void)
 		"\t	  SJW		:= { 1..4 }\n"
 		"\t	  RESTART-MS	:= { 0 | NUMBER }\n"
 		);
+}
+
+static void usage(void)
+{
+	print_usage(stderr);
 }
 
 static int get_float(float *val, const char *arg)
@@ -94,6 +101,8 @@ static void print_ctrlmode(FILE *f, __u32 cm)
 	_PF(CAN_CTRLMODE_ONE_SHOT, "ONE-SHOT");
 	_PF(CAN_CTRLMODE_BERR_REPORTING, "BERR-REPORTING");
 	_PF(CAN_CTRLMODE_FD, "FD");
+	_PF(CAN_CTRLMODE_FD_NON_ISO, "FD-NON-ISO");
+	_PF(CAN_CTRLMODE_PRESUME_ACK, "PRESUME-ACK");
 #undef _PF
 	if (cm)
 		fprintf(f, "%x", cm);
@@ -196,6 +205,14 @@ static int can_parse_opt(struct link_util *lu, int argc, char **argv,
 			NEXT_ARG();
 			set_ctrlmode("fd", *argv, &cm,
 				     CAN_CTRLMODE_FD);
+		} else if (matches(*argv, "fd-non-iso") == 0) {
+			NEXT_ARG();
+			set_ctrlmode("fd-non-iso", *argv, &cm,
+				     CAN_CTRLMODE_FD_NON_ISO);
+		} else if (matches(*argv, "presume-ack") == 0) {
+			NEXT_ARG();
+			set_ctrlmode("presume-ack", *argv, &cm,
+				     CAN_CTRLMODE_PRESUME_ACK);
 		} else if (matches(*argv, "restart") == 0) {
 			__u32 val = 1;
 
@@ -344,10 +361,17 @@ static void can_print_xstats(struct link_util *lu,
 	}
 }
 
+static void can_print_help(struct link_util *lu, int argc, char **argv,
+	FILE *f)
+{
+	print_usage(f);
+}
+
 struct link_util can_link_util = {
 	.id		= "can",
 	.maxattr	= IFLA_CAN_MAX,
 	.parse_opt	= can_parse_opt,
 	.print_opt	= can_print_opt,
 	.print_xstats	= can_print_xstats,
+	.print_help	= can_print_help,
 };

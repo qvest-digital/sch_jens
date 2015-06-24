@@ -22,8 +22,11 @@
 #include "SNAPSHOT.h"
 #include "utils.h"
 #include "ip_common.h"
+#include "namespace.h"
 
 int preferred_family = AF_UNSPEC;
+int human_readable = 0;
+int use_iec = 0;
 int show_stats = 0;
 int show_details = 0;
 int resolve_hosts = 0;
@@ -33,6 +36,7 @@ char * _SL_ = NULL;
 int force = 0;
 int max_flush_loops = 10;
 int batch_mode = 0;
+bool do_all = false;
 
 struct rtnl_handle rth = { .fd = -1 };
 
@@ -45,13 +49,14 @@ static void usage(void)
 "       ip [ -force ] -batch filename\n"
 "where  OBJECT := { link | addr | addrlabel | route | rule | neigh | ntable |\n"
 "                   tunnel | tuntap | maddr | mroute | mrule | monitor | xfrm |\n"
-"                   netns | l2tp | tcp_metrics | token | netconf }\n"
+"                   netns | l2tp | fou | tcp_metrics | token | netconf }\n"
 "       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n"
+"                    -h[uman-readable] | -iec |\n"
 "                    -f[amily] { inet | inet6 | ipx | dnet | bridge | link } |\n"
 "                    -4 | -6 | -I | -D | -B | -0 |\n"
 "                    -l[oops] { maximum-addr-flush-attempts } |\n"
-"                    -o[neline] | -t[imestamp] | -b[atch] [filename] |\n"
-"                    -rc[vbuf] [size]}\n");
+"                    -o[neline] | -t[imestamp] | -ts[hort] | -b[atch] [filename] |\n"
+"                    -rc[vbuf] [size] | -n[etns] name | -a[ll] }\n");
 	exit(-1);
 }
 
@@ -76,6 +81,7 @@ static const struct cmd {
 	{ "ntbl",	do_ipntable },
 	{ "link",	do_iplink },
 	{ "l2tp",	do_ipl2tp },
+	{ "fou",	do_ipfou },
 	{ "tunnel",	do_iptunnel },
 	{ "tunl",	do_iptunnel },
 	{ "tuntap",	do_iptuntap },
@@ -212,6 +218,11 @@ int main(int argc, char **argv)
 			preferred_family = AF_DECnet;
 		} else if (strcmp(opt, "-B") == 0) {
 			preferred_family = AF_BRIDGE;
+		} else if (matches(opt, "-human") == 0 ||
+			   matches(opt, "-human-readable") == 0) {
+			++human_readable;
+		} else if (matches(opt, "-iec") == 0) {
+			++use_iec;
 		} else if (matches(opt, "-stats") == 0 ||
 			   matches(opt, "-statistics") == 0) {
 			++show_stats;
@@ -223,6 +234,9 @@ int main(int argc, char **argv)
 			++oneline;
 		} else if (matches(opt, "-timestamp") == 0) {
 			++timestamp;
+		} else if (matches(opt, "-tshort") == 0) {
+			++timestamp;
+			++timestamp_short;
 #if 0
 		} else if (matches(opt, "-numeric") == 0) {
 			rtnl_names_numeric++;
@@ -253,6 +267,12 @@ int main(int argc, char **argv)
 			rcvbuf = size;
 		} else if (matches(opt, "-help") == 0) {
 			usage();
+		} else if (matches(opt, "-netns") == 0) {
+			NEXT_ARG();
+			if (netns_switch(argv[1]))
+				exit(-1);
+		} else if (matches(opt, "-all") == 0) {
+			do_all = true;
 		} else {
 			fprintf(stderr, "Option \"%s\" is unknown, try \"ip -help\".\n", opt);
 			exit(-1);

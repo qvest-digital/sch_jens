@@ -188,6 +188,9 @@ int print_linkinfo(const struct sockaddr_nl *who,
 				if (prtb[IFLA_BRPORT_LEARNING])
 					print_onoff(fp, "learning",
 						    rta_getattr_u8(prtb[IFLA_BRPORT_LEARNING]));
+				if (prtb[IFLA_BRPORT_LEARNING_SYNC])
+					print_onoff(fp, "learning_sync",
+						    rta_getattr_u8(prtb[IFLA_BRPORT_LEARNING_SYNC]));
 				if (prtb[IFLA_BRPORT_UNICAST_FLOOD])
 					print_onoff(fp, "flood",
 						    rta_getattr_u8(prtb[IFLA_BRPORT_UNICAST_FLOOD]));
@@ -221,8 +224,10 @@ static void usage(void)
 	fprintf(stderr, "                               [ fastleave {on | off} ]\n");
 	fprintf(stderr,	"                               [ root_block {on | off} ]\n");
 	fprintf(stderr,	"                               [ learning {on | off} ]\n");
+	fprintf(stderr,	"                               [ learning_sync {on | off} ]\n");
 	fprintf(stderr,	"                               [ flood {on | off} ]\n");
 	fprintf(stderr, "                               [ hwmode {vepa | veb} ]\n");
+	fprintf(stderr, "                               [ self ] [ master ]\n");
 	fprintf(stderr, "       bridge link show [dev DEV]\n");
 	exit(-1);
 }
@@ -252,6 +257,7 @@ static int brlink_modify(int argc, char **argv)
 	} req;
 	char *d = NULL;
 	__s8 learning = -1;
+	__s8 learning_sync = -1;
 	__s8 flood = -1;
 	__s8 hairpin = -1;
 	__s8 bpdu_guard = -1;
@@ -261,7 +267,7 @@ static int brlink_modify(int argc, char **argv)
 	__s16 priority = -1;
 	__s8 state = -1;
 	__s16 mode = -1;
-	__u16 flags = BRIDGE_FLAGS_MASTER;
+	__u16 flags = 0;
 	struct rtattr *nest;
 
 	memset(&req, 0, sizeof(req));
@@ -278,27 +284,31 @@ static int brlink_modify(int argc, char **argv)
 		} else if (strcmp(*argv, "guard") == 0) {
 			NEXT_ARG();
 			if (!on_off("guard", &bpdu_guard, *argv))
-				exit(-1);
+				return -1;
 		} else if (strcmp(*argv, "hairpin") == 0) {
 			NEXT_ARG();
 			if (!on_off("hairping", &hairpin, *argv))
-				exit(-1);
+				return -1;
 		} else if (strcmp(*argv, "fastleave") == 0) {
 			NEXT_ARG();
 			if (!on_off("fastleave", &fast_leave, *argv))
-				exit(-1);
+				return -1;
 		} else if (strcmp(*argv, "root_block") == 0) {
 			NEXT_ARG();
 			if (!on_off("root_block", &root_block, *argv))
-				exit(-1);
+				return -1;
 		} else if (strcmp(*argv, "learning") == 0) {
 			NEXT_ARG();
 			if (!on_off("learning", &learning, *argv))
-				exit(-1);
+				return -1;
+		} else if (strcmp(*argv, "learning_sync") == 0) {
+			NEXT_ARG();
+			if (!on_off("learning_sync", &learning_sync, *argv))
+				return -1;
 		} else if (strcmp(*argv, "flood") == 0) {
 			NEXT_ARG();
 			if (!on_off("flood", &flood, *argv))
-				exit(-1);
+				return -1;
 		} else if (strcmp(*argv, "cost") == 0) {
 			NEXT_ARG();
 			cost = atoi(*argv);
@@ -307,7 +317,19 @@ static int brlink_modify(int argc, char **argv)
 			priority = atoi(*argv);
 		} else if (strcmp(*argv, "state") == 0) {
 			NEXT_ARG();
-			state = atoi(*argv);
+			char *endptr;
+			size_t nstates = sizeof(port_states) / sizeof(*port_states);
+			state = strtol(*argv, &endptr, 10);
+			if (!(**argv != '\0' && *endptr == '\0')) {
+				for (state = 0; state < nstates; state++)
+					if (strcmp(port_states[state], *argv) == 0)
+						break;
+				if (state == nstates) {
+					fprintf(stderr,
+						"Error: invalid STP port state\n");
+					return -1;
+				}
+			}
 		} else if (strcmp(*argv, "hwmode") == 0) {
 			NEXT_ARG();
 			flags = BRIDGE_FLAGS_SELF;
@@ -319,8 +341,12 @@ static int brlink_modify(int argc, char **argv)
 				fprintf(stderr,
 					"Mode argument must be \"vepa\" or "
 					"\"veb\".\n");
-				exit(-1);
+				return -1;
 			}
+		} else if (strcmp(*argv, "self") == 0) {
+			flags |= BRIDGE_FLAGS_SELF;
+		} else if (strcmp(*argv, "master") == 0) {
+			flags |= BRIDGE_FLAGS_MASTER;
 		} else {
 			usage();
 		}
@@ -328,14 +354,14 @@ static int brlink_modify(int argc, char **argv)
 	}
 	if (d == NULL) {
 		fprintf(stderr, "Device is a required argument.\n");
-		exit(-1);
+		return -1;
 	}
 
 
 	req.ifm.ifi_index = ll_name_to_index(d);
 	if (req.ifm.ifi_index == 0) {
 		fprintf(stderr, "Cannot find bridge device \"%s\"\n", d);
-		exit(-1);
+		return -1;
 	}
 
 	/* Nested PROTINFO attribute.  Contains: port flags, cost, priority and
@@ -357,6 +383,9 @@ static int brlink_modify(int argc, char **argv)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_UNICAST_FLOOD, flood);
 	if (learning >= 0)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_LEARNING, learning);
+	if (learning_sync >= 0)
+		addattr8(&req.n, sizeof(req), IFLA_BRPORT_LEARNING_SYNC,
+			 learning_sync);
 
 	if (cost > 0)
 		addattr32(&req.n, sizeof(req), IFLA_BRPORT_COST, cost);
@@ -369,16 +398,16 @@ static int brlink_modify(int argc, char **argv)
 
 	addattr_nest_end(&req.n, nest);
 
-	/* IFLA_AF_SPEC nested attribute.  Contains IFLA_BRIDGE_FLAGS that
-	 * designates master or self operation as well as 'vepa' or 'veb'
-	 * operation modes.  These are only valid in 'self' mode on some
-	 * devices so far.  Thus we only need to include the flags attribute
-	 * if we are setting the hw mode.
+	/* IFLA_AF_SPEC nested attribute. Contains IFLA_BRIDGE_FLAGS that
+	 * designates master or self operation and IFLA_BRIDGE_MODE
+	 * for hw 'vepa' or 'veb' operation modes. The hwmodes are
+	 * only valid in 'self' mode on some devices so far.
 	 */
-	if (mode >= 0) {
+	if (mode >= 0 || flags > 0) {
 		nest = addattr_nest(&req.n, sizeof(req), IFLA_AF_SPEC);
 
-		addattr16(&req.n, sizeof(req), IFLA_BRIDGE_FLAGS, flags);
+		if (flags > 0)
+			addattr16(&req.n, sizeof(req), IFLA_BRIDGE_FLAGS, flags);
 
 		if (mode >= 0)
 			addattr16(&req.n, sizeof(req), IFLA_BRIDGE_MODE, mode);
@@ -387,7 +416,7 @@ static int brlink_modify(int argc, char **argv)
 	}
 
 	if (rtnl_talk(&rth, &req.n, 0, 0, NULL) < 0)
-		exit(2);
+		return -1;
 
 	return 0;
 }

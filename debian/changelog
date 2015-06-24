@@ -1,3 +1,13 @@
+iproute2 (4.0.0-1) unstable; urgency=medium
+
+  * [6dd90fb] Imported Upstream version 4.0.0
+  * [03b830b] Remove obsolete patch 
+              0003-ip-link-Remove-unnecessary-device-checking
+  * [8c27170] Refresh patches
+  * [0c99cce] Bump standards version (no changes)
+
+ -- Alexander Wirt <formorer@debian.org>  Wed, 24 Jun 2015 10:01:45 +0200
+
 iproute2 (3.16.0-2) unstable; urgency=medium
 
   * Cherry-pick upstream commit f1b66ff8

@@ -33,7 +33,8 @@ ip \- show / manipulate routing, devices, policy routing and tunnels
 .BR inet " | " inet6 " | " ipx " | " dnet " | " link " } | "
 \fB\-o\fR[\fIneline\fR] |
 \fB\-n\fR[\fIetns\fR] name |
-\fB\-a\fR[\fIll\fR] }
+\fB\-a\fR[\fIll\fR] |
+\fB\-c\fR[\fIolor\fR] }
 
 
 .SH OPTIONS
@@ -73,7 +74,7 @@ Zero (0) means loop until all addresses are removed.
 .TP
 .BR "\-f" , " \-family " <FAMILY>
 Specifies the protocol family to use. The protocol family identifier can be one of
-.BR "inet" , " inet6" , " bridge" , " ipx" , " dnet"
+.BR "inet" , " inet6" , " bridge" , " ipx" , " dnet" , " mpls"
 or
 .BR link .
 If this option is not present,
@@ -113,6 +114,11 @@ shortcut for
 .B \-I
 shortcut for
 .BR "\-family ipx" .
+
+.TP
+.B \-M
+shortcut for
+.BR "\-family mpls" .
 
 .TP
 .B \-0
@@ -159,6 +165,10 @@ to
 .TP
 .BR "\-a" , " \-all"
 executes specified command over all objects, it depends if command supports this option.
+
+.TP
+.BR "\-c" , " -color"
+Use color output.
 
 .SH IP - COMMAND SYNTAX
 
@@ -235,7 +245,7 @@ executes specified command over all objects, it depends if command supports this
 
 .PP
 The names of all objects may be written in full or
-abbreviated form, for exampe
+abbreviated form, for example
 .B address
 can be abbreviated as
 .B addr
@@ -264,6 +274,10 @@ Usually it is
 .B list
 or, if the objects of this class cannot be listed,
 .BR "help" .
+
+.SH EXIT STATUS
+Exit status is 0 if command was successful, and 1 if there is a syntax error.
+If an error was reported by the kernel exit status is 2.
 
 .SH HISTORY
 .B ip

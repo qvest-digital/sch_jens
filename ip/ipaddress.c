@@ -34,6 +34,7 @@
 #include "utils.h"
 #include "ll_map.h"
 #include "ip_common.h"
+#include "color.h"
 
 enum {
 	IPADD_LIST,
@@ -85,7 +86,7 @@ static void usage(void)
 	fprintf(stderr, "           [-]tentative | [-]deprecated | [-]dadfailed | temporary |\n");
 	fprintf(stderr, "           CONFFLAG-LIST ]\n");
 	fprintf(stderr, "CONFFLAG-LIST := [ CONFFLAG-LIST ] CONFFLAG\n");
-	fprintf(stderr, "CONFFLAG  := [ home | nodad | mngtmpaddr | noprefixroute ]\n");
+	fprintf(stderr, "CONFFLAG  := [ home | nodad | mngtmpaddr | noprefixroute | autojoin ]\n");
 	fprintf(stderr, "LIFETIME := [ valid_lft LFT ] [ preferred_lft LFT ]\n");
 	fprintf(stderr, "LFT := forever | SECONDS\n");
 
@@ -136,8 +137,15 @@ static void print_operstate(FILE *f, __u8 state)
 {
 	if (state >= sizeof(oper_states)/sizeof(oper_states[0]))
 		fprintf(f, "state %#x ", state);
-	else
-		fprintf(f, "state %s ", oper_states[state]);
+	else {
+		fprintf(f, "state ");
+		if (strcmp(oper_states[state], "UP") == 0)
+			color_fprintf(f, COLOR_OPERSTATE_UP, "%s ", oper_states[state]);
+		else if (strcmp(oper_states[state], "DOWN") == 0)
+			color_fprintf(f, COLOR_OPERSTATE_DOWN, "%s ", oper_states[state]);
+		else
+			fprintf(f, "%s ", oper_states[state]);
+	}
 }
 
 int get_operstate(const char *name)
@@ -606,7 +614,8 @@ int print_linkinfo(const struct sockaddr_nl *who,
 	if (n->nlmsg_type == RTM_DELLINK)
 		fprintf(fp, "Deleted ");
 
-	fprintf(fp, "%d: %s", ifi->ifi_index,
+	fprintf(fp, "%d: ", ifi->ifi_index);
+	color_fprintf(fp, COLOR_IFNAME, "%s",
 		tb[IFLA_IFNAME] ? rta_getattr_str(tb[IFLA_IFNAME]) : "<nil>");
 
 	if (tb[IFLA_LINK]) {
@@ -666,10 +675,11 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		fprintf(fp, "    link/%s ", ll_type_n2a(ifi->ifi_type, b1, sizeof(b1)));
 
 		if (tb[IFLA_ADDRESS]) {
-			fprintf(fp, "%s", ll_addr_n2a(RTA_DATA(tb[IFLA_ADDRESS]),
-						      RTA_PAYLOAD(tb[IFLA_ADDRESS]),
-						      ifi->ifi_type,
-						      b1, sizeof(b1)));
+			color_fprintf(fp, COLOR_MAC, "%s",
+					ll_addr_n2a(RTA_DATA(tb[IFLA_ADDRESS]),
+						RTA_PAYLOAD(tb[IFLA_ADDRESS]),
+						ifi->ifi_type,
+						b1, sizeof(b1)));
 		}
 		if (tb[IFLA_BROADCAST]) {
 			if (ifi->ifi_flags&IFF_POINTOPOINT)
@@ -849,10 +859,21 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 		fprintf(fp, "    family %d ", ifa->ifa_family);
 
 	if (rta_tb[IFA_LOCAL]) {
-		fprintf(fp, "%s", format_host(ifa->ifa_family,
-					      RTA_PAYLOAD(rta_tb[IFA_LOCAL]),
-					      RTA_DATA(rta_tb[IFA_LOCAL]),
-					      abuf, sizeof(abuf)));
+		if (ifa->ifa_family == AF_INET)
+			color_fprintf(fp, COLOR_INET, "%s", format_host(ifa->ifa_family,
+						RTA_PAYLOAD(rta_tb[IFA_LOCAL]),
+						RTA_DATA(rta_tb[IFA_LOCAL]),
+						abuf, sizeof(abuf)));
+		else if (ifa->ifa_family == AF_INET6)
+			color_fprintf(fp, COLOR_INET6, "%s", format_host(ifa->ifa_family,
+						RTA_PAYLOAD(rta_tb[IFA_LOCAL]),
+						RTA_DATA(rta_tb[IFA_LOCAL]),
+						abuf, sizeof(abuf)));
+		else
+			fprintf(fp, "%s", format_host(ifa->ifa_family,
+						RTA_PAYLOAD(rta_tb[IFA_LOCAL]),
+						RTA_DATA(rta_tb[IFA_LOCAL]),
+						abuf, sizeof(abuf)));
 
 		if (rta_tb[IFA_ADDRESS] == NULL ||
 		    memcmp(RTA_DATA(rta_tb[IFA_ADDRESS]), RTA_DATA(rta_tb[IFA_LOCAL]),
@@ -914,6 +935,10 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	if (ifa_flags & IFA_F_NOPREFIXROUTE) {
 		ifa_flags &= ~IFA_F_NOPREFIXROUTE;
 		fprintf(fp, "noprefixroute ");
+	}
+	if (ifa_flags & IFA_F_MCAUTOJOIN) {
+		ifa_flags &= ~IFA_F_MCAUTOJOIN;
+		fprintf(fp, "autojoin ");
 	}
 	if (!(ifa_flags & IFA_F_PERMANENT)) {
 		fprintf(fp, "dynamic ");
@@ -1111,7 +1136,7 @@ static int restore_handler(const struct sockaddr_nl *nl, struct nlmsghdr *n, voi
 
 	ll_init_map(&rth);
 
-	ret = rtnl_talk(&rth, n, 0, 0, n);
+	ret = rtnl_talk(&rth, n, n, sizeof(*n));
 	if ((ret < 0) && (errno == EEXIST))
 		ret = 0;
 
@@ -1354,6 +1379,9 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 		} else if (strcmp(*argv, "noprefixroute") == 0) {
 			filter.flags |= IFA_F_NOPREFIXROUTE;
 			filter.flagmask |= IFA_F_NOPREFIXROUTE;
+		} else if (strcmp(*argv, "autojoin") == 0) {
+			filter.flags |= IFA_F_MCAUTOJOIN;
+			filter.flagmask |= IFA_F_MCAUTOJOIN;
 		} else if (strcmp(*argv, "dadfailed") == 0) {
 			filter.flags |= IFA_F_DADFAILED;
 			filter.flagmask |= IFA_F_DADFAILED;
@@ -1558,6 +1586,16 @@ static int default_scope(inet_prefix *lcl)
 	return 0;
 }
 
+static bool ipaddr_is_multicast(inet_prefix *a)
+{
+	if (a->family == AF_INET)
+		return IN_MULTICAST(ntohl(a->data[0]));
+	else if (a->family == AF_INET6)
+		return IN6_IS_ADDR_MULTICAST(a->data);
+	else
+		return false;
+}
+
 static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 {
 	struct {
@@ -1665,6 +1703,8 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 			ifa_flags |= IFA_F_MANAGETEMPADDR;
 		} else if (strcmp(*argv, "noprefixroute") == 0) {
 			ifa_flags |= IFA_F_NOPREFIXROUTE;
+		} else if (strcmp(*argv, "autojoin") == 0) {
+			ifa_flags |= IFA_F_MCAUTOJOIN;
 		} else {
 			if (strcmp(*argv, "local") == 0) {
 				NEXT_ARG();
@@ -1755,7 +1795,12 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 			  sizeof(cinfo));
 	}
 
-	if (rtnl_talk(&rth, &req.n, 0, 0, NULL) < 0)
+	if ((ifa_flags & IFA_F_MCAUTOJOIN) && !ipaddr_is_multicast(&lcl)) {
+		fprintf(stderr, "autojoin needs multicast address\n");
+		return -1;
+	}
+
+	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
 		return -2;
 
 	return 0;

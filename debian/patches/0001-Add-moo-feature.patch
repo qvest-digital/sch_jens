@@ -8,8 +8,8 @@ Subject: Add moo feature
 
 --- a/ip/ip.c
 +++ b/ip/ip.c
-@@ -66,6 +66,20 @@
-         return 0;
+@@ -68,6 +68,20 @@
+ 	return 0;
  }
  
 +static int do_moo(int argc, char **argv)
@@ -29,7 +29,7 @@ Subject: Add moo feature
  static const struct cmd {
  	const char *cmd;
  	int (*func)(int argc, char **argv);
-@@ -96,6 +110,7 @@
+@@ -98,6 +112,7 @@
  	{ "netns",	do_netns },
  	{ "netconf",	do_ipnetconf },
  	{ "help",	do_help },

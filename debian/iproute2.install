@@ -6,3 +6,4 @@ misc/lnstat misc/nstat /usr/bin/
 misc/ss ip/ip /bin
 netem/*.dist /usr/lib/tc
 tc/*.so /usr/lib/tc
+genl/genl /usr/sbin

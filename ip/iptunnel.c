@@ -167,10 +167,14 @@ static int parse_args(int argc, char **argv, int cmd, struct ip_tunnel_parm *p)
 			NEXT_ARG();
 			if (strcmp(*argv, "any"))
 				p->iph.daddr = get_addr32(*argv);
+			else
+				p->iph.daddr = htonl(INADDR_ANY);
 		} else if (strcmp(*argv, "local") == 0) {
 			NEXT_ARG();
 			if (strcmp(*argv, "any"))
 				p->iph.saddr = get_addr32(*argv);
+			else
+				p->iph.saddr = htonl(INADDR_ANY);
 		} else if (strcmp(*argv, "dev") == 0) {
 			NEXT_ARG();
 			strncpy(medium, *argv, IFNAMSIZ-1);
@@ -342,8 +346,8 @@ static void print_tunnel(struct ip_tunnel_parm *p)
 	printf("%s: %s/ip  remote %s  local %s ",
 	       p->name,
 	       tnl_strproto(p->iph.protocol),
-	       p->iph.daddr ? format_host(AF_INET, 4, &p->iph.daddr, s1, sizeof(s1))  : "any",
-	       p->iph.saddr ? rt_addr_n2a(AF_INET, &p->iph.saddr, s2, sizeof(s2)) : "any");
+	       p->iph.daddr ? format_host(AF_INET, 4, &p->iph.daddr, s1, sizeof(s1)) : "any",
+	       p->iph.saddr ? rt_addr_n2a(AF_INET, 4, &p->iph.saddr, s2, sizeof(s2)) : "any");
 
 	if (p->iph.protocol == IPPROTO_IPV6 && (p->i_flags & SIT_ISATAP)) {
 		struct ip_tunnel_prl prl[16];

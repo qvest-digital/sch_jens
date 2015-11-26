@@ -179,7 +179,7 @@ static int ipneigh_modify(int cmd, int flags, int argc, char **argv)
 		return -1;
 	}
 
-	if (rtnl_talk(&rth, &req.n, 0, 0, NULL) < 0)
+	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
 		exit(2);
 
 	return 0;
@@ -256,7 +256,7 @@ int print_neigh(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 	}
 
 	if (n->nlmsg_type == RTM_DELNEIGH)
-		fprintf(fp, "delete ");
+		fprintf(fp, "Deleted ");
 	else if (n->nlmsg_type == RTM_GETNEIGH)
 		fprintf(fp, "miss ");
 	if (tb[NDA_DST]) {

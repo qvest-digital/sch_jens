@@ -1,3 +1,14 @@
+iproute2 (4.3.0-1) unstable; urgency=medium
+
+  * Add debian/gbp.conf
+  * Imported Upstream version 4.3.0
+  * Have quilt unfuzz debian/patches/0001-Add-moo-feature.patch
+  * Ship new generic netlink utility: genl
+  * Ship examples via debian/iproute2-doc.examples instead
+  * Add myself to debian/copyright
+
+ -- Andreas Henriksson <andreas@fatal.se>  Thu, 26 Nov 2015 18:34:59 +0100
+
 iproute2 (4.1.1-1) unstable; urgency=medium
 
   * [be9f298] Imported Upstream version 4.1.1

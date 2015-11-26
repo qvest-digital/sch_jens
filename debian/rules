@@ -19,9 +19,6 @@ override_dh_clean:
 	make distclean
 	-rm -f doc/*.txt
 
-override_dh_installexamples:
-	dh_installexamples -p iproute2-doc examples/*
-
 override_dh_shlibdeps:
 	dh_shlibdeps -a -Xq_atm.so -Xm_xt.so -Xm_ipt.so
 	dh_shlibdeps -a -- -pipmods -dRecommends -e debian/iproute2/usr/lib/tc/m_xt.so -e debian/iproute2/usr/lib/tc/q_atm.so -xlibc6

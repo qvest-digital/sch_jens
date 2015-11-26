@@ -531,7 +531,8 @@ done:
 int get_addr(inet_prefix *dst, const char *arg, int family)
 {
 	if (get_addr_1(dst, arg, family)) {
-		fprintf(stderr, "Error: an inet address is expected rather than \"%s\".\n", arg);
+		fprintf(stderr, "Error: %s address is expected rather than \"%s\".\n",
+				family_name(family) ,arg);
 		exit(1);
 	}
 	return 0;
@@ -544,7 +545,8 @@ int get_prefix(inet_prefix *dst, char *arg, int family)
 		exit(1);
 	}
 	if (get_prefix_1(dst, arg, family)) {
-		fprintf(stderr, "Error: an inet prefix is expected rather than \"%s\".\n", arg);
+		fprintf(stderr, "Error: %s prefix is expected rather than \"%s\".\n",
+				family_name(family) ,arg);
 		exit(1);
 	}
 	return 0;
@@ -914,12 +916,31 @@ int makeargs(char *line, char *argv[], int maxargs)
 	char *cp;
 	int argc = 0;
 
-	for (cp = strtok(line, ws); cp; cp = strtok(NULL, ws)) {
+	for (cp = line + strspn(line, ws); *cp; cp += strspn(cp, ws)) {
 		if (argc >= (maxargs - 1)) {
 			fprintf(stderr, "Too many arguments to command\n");
 			exit(1);
 		}
+
+		/* word begins with quote */
+		if (*cp == '\'' || *cp == '"') {
+			char quote = *cp++;
+
+			argv[argc++] = cp;
+			/* find ending quote */
+			cp = strchr(cp, quote);
+			if (cp == NULL) {
+				fprintf(stderr, "Unterminated quoted string\n");
+				exit(1);
+			}
+			*cp++ = 0;
+			continue;
+		}
+
 		argv[argc++] = cp;
+		/* find end of word */
+		cp += strcspn(cp, ws);
+		*cp++ = 0;
 	}
 	argv[argc] = NULL;
 

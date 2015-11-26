@@ -25,6 +25,10 @@
 
 #include "libnetlink.h"
 
+#ifndef SOL_NETLINK
+#define SOL_NETLINK 270
+#endif
+
 #ifndef MIN
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
@@ -422,8 +426,21 @@ int rtnl_talk(struct rtnl_handle *rtnl, struct nlmsghdr *n,
 	}
 }
 
+int rtnl_listen_all_nsid(struct rtnl_handle *rth)
+{
+	unsigned int on = 1;
+
+	if (setsockopt(rth->fd, SOL_NETLINK, NETLINK_LISTEN_ALL_NSID, &on,
+		       sizeof(on)) < 0) {
+		perror("NETLINK_LISTEN_ALL_NSID");
+		return -1;
+	}
+	rth->flags |= RTNL_HANDLE_F_LISTEN_ALL_NSID;
+	return 0;
+}
+
 int rtnl_listen(struct rtnl_handle *rtnl,
-		rtnl_filter_t handler,
+		rtnl_listen_filter_t handler,
 		void *jarg)
 {
 	int status;
@@ -437,6 +454,12 @@ int rtnl_listen(struct rtnl_handle *rtnl,
 		.msg_iovlen = 1,
 	};
 	char   buf[16384];
+	char   cmsgbuf[BUFSIZ];
+
+	if (rtnl->flags & RTNL_HANDLE_F_LISTEN_ALL_NSID) {
+		msg.msg_control = &cmsgbuf;
+		msg.msg_controllen = sizeof(cmsgbuf);
+	}
 
 	memset(&nladdr, 0, sizeof(nladdr));
 	nladdr.nl_family = AF_NETLINK;
@@ -445,6 +468,9 @@ int rtnl_listen(struct rtnl_handle *rtnl,
 
 	iov.iov_base = buf;
 	while (1) {
+		struct rtnl_ctrl_data ctrl;
+		struct cmsghdr *cmsg;
+
 		iov.iov_len = sizeof(buf);
 		status = recvmsg(rtnl->fd, &msg, 0);
 
@@ -465,6 +491,21 @@ int rtnl_listen(struct rtnl_handle *rtnl,
 			fprintf(stderr, "Sender address length == %d\n", msg.msg_namelen);
 			exit(1);
 		}
+
+		if (rtnl->flags & RTNL_HANDLE_F_LISTEN_ALL_NSID) {
+			memset(&ctrl, 0, sizeof(ctrl));
+			ctrl.nsid = -1;
+			for (cmsg = CMSG_FIRSTHDR(&msg); cmsg;
+			     cmsg = CMSG_NXTHDR(&msg, cmsg))
+				if (cmsg->cmsg_level == SOL_NETLINK &&
+				    cmsg->cmsg_type == NETLINK_LISTEN_ALL_NSID &&
+				    cmsg->cmsg_len == CMSG_LEN(sizeof(int))) {
+					int *data = (int *)CMSG_DATA(cmsg);
+
+					ctrl.nsid = *data;
+				}
+		}
+
 		for (h = (struct nlmsghdr*)buf; status >= sizeof(*h); ) {
 			int err;
 			int len = h->nlmsg_len;
@@ -479,7 +520,7 @@ int rtnl_listen(struct rtnl_handle *rtnl,
 				exit(1);
 			}
 
-			err = handler(&nladdr, h, jarg);
+			err = handler(&nladdr, &ctrl, h, jarg);
 			if (err < 0)
 				return err;
 
@@ -497,7 +538,7 @@ int rtnl_listen(struct rtnl_handle *rtnl,
 	}
 }
 
-int rtnl_from_file(FILE *rtnl, rtnl_filter_t handler,
+int rtnl_from_file(FILE *rtnl, rtnl_listen_filter_t handler,
 		   void *jarg)
 {
 	int status;
@@ -545,7 +586,7 @@ int rtnl_from_file(FILE *rtnl, rtnl_filter_t handler,
 			return -1;
 		}
 
-		err = handler(&nladdr, h, jarg);
+		err = handler(&nladdr, NULL, h, jarg);
 		if (err < 0)
 			return err;
 	}
@@ -678,6 +719,37 @@ int rta_addattr_l(struct rtattr *rta, int maxlen, int type,
 	memcpy(RTA_DATA(subrta), data, alen);
 	rta->rta_len = NLMSG_ALIGN(rta->rta_len) + RTA_ALIGN(len);
 	return 0;
+}
+
+int rta_addattr8(struct rtattr *rta, int maxlen, int type, __u8 data)
+{
+	return rta_addattr_l(rta, maxlen, type, &data, sizeof(__u8));
+}
+
+int rta_addattr16(struct rtattr *rta, int maxlen, int type, __u16 data)
+{
+	return rta_addattr_l(rta, maxlen, type, &data, sizeof(__u16));
+}
+
+int rta_addattr64(struct rtattr *rta, int maxlen, int type, __u64 data)
+{
+	return rta_addattr_l(rta, maxlen, type, &data, sizeof(__u64));
+}
+
+struct rtattr *rta_nest(struct rtattr *rta, int maxlen, int type)
+{
+	struct rtattr *nest = RTA_TAIL(rta);
+
+	rta_addattr_l(rta, maxlen, type, NULL, 0);
+
+	return nest;
+}
+
+int rta_nest_end(struct rtattr *rta, struct rtattr *nest)
+{
+	nest->rta_len = (void *)RTA_TAIL(rta) - (void *)nest;
+
+	return rta->rta_len;
 }
 
 int parse_rtattr(struct rtattr *tb[], int max, struct rtattr *rta, int len)

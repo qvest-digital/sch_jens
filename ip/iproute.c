@@ -145,6 +145,9 @@ static int filter_nlmsg(struct nlmsghdr *n, struct rtattr **tb, int host_len)
 
 	table = rtm_get_table(r, tb);
 
+	if (preferred_family != AF_UNSPEC && r->rtm_family != preferred_family)
+		return 0;
+
 	if (r->rtm_family == AF_INET6 && table != RT_TABLE_MAIN)
 		ip6_multiple_tables = 1;
 
@@ -451,6 +454,8 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 		fprintf(fp, "offload ");
 	if (r->rtm_flags & RTM_F_NOTIFY)
 		fprintf(fp, "notify ");
+	if (r->rtm_flags & RTNH_F_LINKDOWN)
+		fprintf(fp, "linkdown ");
 	if (tb[RTA_MARK]) {
 		unsigned int mark = *(unsigned int*)RTA_DATA(tb[RTA_MARK]);
 		if (mark) {
@@ -670,6 +675,8 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				fprintf(fp, " onlink");
 			if (nh->rtnh_flags & RTNH_F_PERVASIVE)
 				fprintf(fp, " pervasive");
+			if (nh->rtnh_flags & RTNH_F_LINKDOWN)
+				fprintf(fp, " linkdown");
 			len -= NLMSG_ALIGN(nh->rtnh_len);
 			nh = RTNH_NEXT(nh);
 		}
@@ -742,7 +749,7 @@ static int parse_one_nh(struct rtmsg *r, struct rtattr *rta,
 		} else if (matches(*argv, "realms") == 0) {
 			__u32 realm;
 			NEXT_ARG();
-			if (get_rt_realms(&realm, *argv))
+			if (get_rt_realms_or_raw(&realm, *argv))
 				invarg("\"realm\" value is invalid\n", *argv);
 			rta_addattr32(rta, 4096, RTA_FLOW, realm);
 			rtnh->rtnh_len += sizeof(struct rtattr) + 4;
@@ -1043,7 +1050,7 @@ static int iproute_modify(int cmd, unsigned flags, int argc, char **argv)
 		} else if (matches(*argv, "realms") == 0) {
 			__u32 realm;
 			NEXT_ARG();
-			if (get_rt_realms(&realm, *argv))
+			if (get_rt_realms_or_raw(&realm, *argv))
 				invarg("\"realm\" value is invalid\n", *argv);
 			addattr32(&req.n, sizeof(req), RTA_FLOW, realm);
 		} else if (strcmp(*argv, "onlink") == 0) {
@@ -1209,7 +1216,8 @@ static int iproute_flush_cache(void)
 	char *buffer = "-1";
 
 	if (flush_fd < 0) {
-		fprintf (stderr, "Cannot open \"%s\"\n", ROUTE_FLUSH_PATH);
+		fprintf (stderr, "Cannot open \"%s\": %s\n",
+				ROUTE_FLUSH_PATH, strerror(errno));
 		return -1;
 	}
 
@@ -1375,7 +1383,7 @@ static int iproute_list_flush_or_save(int argc, char **argv, int action)
 		} else if (matches(*argv, "realms") == 0) {
 			__u32 realm;
 			NEXT_ARG();
-			if (get_rt_realms(&realm, *argv))
+			if (get_rt_realms_or_raw(&realm, *argv))
 				invarg("invalid realms\n", *argv);
 			filter.realm = realm;
 			filter.realmmask = ~0U;
@@ -1635,7 +1643,7 @@ static int iproute_get(int argc, char **argv)
 		req.r.rtm_family = AF_INET;
 
 	if (rtnl_talk(&rth, &req.n, &req.n, sizeof(req)) < 0)
-		exit(2);
+		return -2;
 
 	if (connected && !from_ok) {
 		struct rtmsg *r = NLMSG_DATA(&req.n);
@@ -1678,19 +1686,20 @@ static int iproute_get(int argc, char **argv)
 		req.n.nlmsg_type = RTM_GETROUTE;
 
 		if (rtnl_talk(&rth, &req.n, &req.n, sizeof(req)) < 0)
-			exit(2);
+			return -2;
 	}
 
 	if (print_route(NULL, &req.n, (void*)stdout) < 0) {
 		fprintf(stderr, "An error :-)\n");
-		exit(1);
+		return -1;
 	}
 
-	exit(0);
+	return 0;
 }
 
-static int restore_handler(const struct sockaddr_nl *nl, struct nlmsghdr *n,
-			   void *arg)
+static int restore_handler(const struct sockaddr_nl *nl,
+			   struct rtnl_ctrl_data *ctrl,
+			   struct nlmsghdr *n, void *arg)
 {
 	int ret;
 
@@ -1732,7 +1741,9 @@ static int iproute_restore(void)
 	exit(rtnl_from_file(stdin, &restore_handler, NULL));
 }
 
-static int show_handler(const struct sockaddr_nl *nl, struct nlmsghdr *n, void *arg)
+static int show_handler(const struct sockaddr_nl *nl,
+			struct rtnl_ctrl_data *ctrl,
+			struct nlmsghdr *n, void *arg)
 {
 	print_route(nl, n, stdout);
 	return 0;
@@ -1800,4 +1811,3 @@ int do_iproute(int argc, char **argv)
 	fprintf(stderr, "Command \"%s\" is unknown, try \"ip route help\".\n", *argv);
 	exit(-1);
 }
-

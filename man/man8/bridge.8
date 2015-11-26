@@ -21,6 +21,7 @@ bridge \- show / manipulate bridge addresses and devices
 \fB\-V\fR[\fIersion\fR] |
 \fB\-s\fR[\fItatistics\fR] |
 \fB\-n\fR[\fIetns\fR] name }
+\fB\-b\fR[\fIatch\fR] filename }
 
 .ti -8
 .BR "bridge link set"
@@ -53,8 +54,8 @@ bridge \- show / manipulate bridge addresses and devices
 .I LLADDR
 .B  dev
 .IR DEV " { "
-.BR local " | " temp " } { "
-.BR self " } { " router " } [ "
+.BR local " | " temp " } [ "
+.BR self " ] [ " master " ] [ " router " ] [ " use " ] [ "
 .B  dst
 .IR IPADDR " ] [ "
 .B vni
@@ -77,7 +78,9 @@ bridge \- show / manipulate bridge addresses and devices
 .IR PORT
 .B grp
 .IR GROUP " [ "
-.BR permanent " | " temp " ]"
+.BR permanent " | " temp " ] [ "
+.B vid
+.IR VID " ] "
 
 .ti -8
 .BR "bridge mdb show " [ "
@@ -135,6 +138,16 @@ to
 .RI "-n[etns] " NETNS " [ " OPTIONS " ] " OBJECT " { " COMMAND " | "
 .BR help " }"
 
+.TP
+.BR "\-b", " \-batch " <FILENAME>
+Read commands from provided file or standard input and invoke them.
+First failure will cause termination of bridge command.
+
+.TP
+.BR "\-force"
+Don't terminate bridge command on errors in batch mode.
+If there were any errors during execution of the commands, the application
+return code will be non zero.
 
 .SH BRIDGE - COMMAND SYNTAX
 
@@ -295,6 +308,9 @@ link setting is configured on specified physical device
 .BI master
 link setting is configured on the software bridge (default)
 
+.TP
+.BR "\-t" , " \-timestamp"
+display current time when using monitor option.
 
 .SS bridge link show - list bridge port configuration.
 
@@ -323,13 +339,22 @@ the Ethernet MAC address.
 the interface to which this address is associated.
 
 .B self
-- the address is associated with a software fdb (default)
+- the address is associated with the port drivers fdb. Usually hardware.
+.sp
+
+.B master
+- the address is associated with master devices fdb. Usually software (default).
 .sp
 
 .B router
 - the destination address is associated with a router.
 Valid if the referenced device is a VXLAN type device and has
 route shortcircuit enabled.
+.sp
+
+.B use
+- the address is in use. User space can use this option to
+indicate to the kernel that the fdb entry is in use.
 .sp
 
 .in -8
@@ -425,6 +450,10 @@ the port.
 .B temp
 - the mdb entry is temporary (default)
 .sp
+
+.TP
+.BI vid " VID"
+the VLAN ID which is known to have members of this multicast group.
 
 .in -8
 .SS bridge mdb delete - delete a multicast group database entry
@@ -535,8 +564,7 @@ described in previous sections.
 .P
 If a file name is given, it does not listen on RTNETLINK,
 but opens the file containing RTNETLINK messages saved in binary format
-and dumps them. Such a history file can be generated with the
-
+and dumps them.
 
 .SH NOTES
 This command uses facilities added in Linux 3.0.

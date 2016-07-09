@@ -1,12 +1,12 @@
-iproute2 (4.6.0-0.1) unstable; urgency=medium
+iproute2 (4.6.0-1) unstable; urgency=medium
 
-  * Non-maintainer upload.
+  [ Julian Wollrath ]
   * Imported upstream version 4.6.0:
     - Add build-dep on texlive-latex-extra for fullpage
   * Remove debian/patches/f_u32
   * Change VCS URLs to the canonical ones
 
- -- Julian Wollrath <jwollrath@web.de>  Sat, 09 Jul 2016 11:23:59 +0200
+ -- Andreas Henriksson <andreas@fatal.se>  Sat, 09 Jul 2016 13:17:22 +0200
 
 iproute2 (4.3.0-1) unstable; urgency=medium
 

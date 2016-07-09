@@ -43,6 +43,7 @@ TCMODULES += m_gact.o
 TCMODULES += m_mirred.o
 TCMODULES += m_nat.o
 TCMODULES += m_pedit.o
+TCMODULES += m_ife.o
 TCMODULES += m_skbedit.o
 TCMODULES += m_csum.o
 TCMODULES += m_simple.o
@@ -64,6 +65,7 @@ TCMODULES += q_fq_codel.o
 TCMODULES += q_fq.o
 TCMODULES += q_pie.o
 TCMODULES += q_hhf.o
+TCMODULES += q_clsact.o
 TCMODULES += e_bpf.o
 
 ifeq ($(TC_CONFIG_IPSET), y)

@@ -30,24 +30,21 @@ extern int show_pretty;
 
 static void explain(void)
 {
-	fprintf(stderr, "Usage: ... u32 [ match SELECTOR ... ] [ link HTID ]"
-		" [ classid CLASSID ]\n");
-	fprintf(stderr, "               [ action ACTION_SPEC ]"
-		" [ offset OFFSET_SPEC ]\n");
+	fprintf(stderr, "Usage: ... u32 [ match SELECTOR ... ] [ link HTID ] [ classid CLASSID ]\n");
+	fprintf(stderr, "               [ action ACTION_SPEC ] [ offset OFFSET_SPEC ]\n");
 	fprintf(stderr, "               [ ht HTID ] [ hashkey HASHKEY_SPEC ]\n");
 	fprintf(stderr, "               [ sample SAMPLE ]\n");
 	fprintf(stderr, "or         u32 divisor DIVISOR\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Where: SELECTOR := SAMPLE SAMPLE ...\n");
-	fprintf(stderr, "       SAMPLE := { ip | ip6 | udp | tcp | icmp |"
-		" u{32|16|8} | mark } SAMPLE_ARGS [divisor DIVISOR]\n");
+	fprintf(stderr, "       SAMPLE := { ip | ip6 | udp | tcp | icmp | u{32|16|8} | mark } SAMPLE_ARGS [divisor DIVISOR]\n");
 	fprintf(stderr, "       FILTERID := X:Y:Z\n");
 	fprintf(stderr, "\nNOTE: CLASSID is parsed at hexadecimal input.\n");
 }
 
 static int get_u32_handle(__u32 *handle, const char *str)
 {
-	__u32 htid=0, hash=0, nodeid=0;
+	__u32 htid = 0, hash = 0, nodeid = 0;
 	char *tmp = strchr(str, ':');
 
 	if (tmp == NULL) {
@@ -58,21 +55,21 @@ static int get_u32_handle(__u32 *handle, const char *str)
 	htid = strtoul(str, &tmp, 16);
 	if (tmp == str && *str != ':' && *str != 0)
 		return -1;
-	if (htid>=0x1000)
+	if (htid >= 0x1000)
 		return -1;
 	if (*tmp) {
 		str = tmp + 1;
 		hash = strtoul(str, &tmp, 16);
 		if (tmp == str && *str != ':' && *str != 0)
 			return -1;
-		if (hash>=0x100)
+		if (hash >= 0x100)
 			return -1;
 		if (*tmp) {
 			str = tmp + 1;
 			nodeid = strtoul(str, &tmp, 16);
 			if (tmp == str && *str != 0)
 				return -1;
-			if (nodeid>=0x1000)
+			if (nodeid >= 0x1000)
 				return -1;
 		}
 	}
@@ -80,7 +77,7 @@ static int get_u32_handle(__u32 *handle, const char *str)
 	return 0;
 }
 
-static char * sprint_u32_handle(__u32 handle, char *buf)
+static char *sprint_u32_handle(__u32 handle, char *buf)
 {
 	int bsize = SPRINT_BSIZE-1;
 	__u32 htid = TC_U32_HTID(handle);
@@ -94,17 +91,20 @@ static char * sprint_u32_handle(__u32 handle, char *buf)
 	}
 	if (htid) {
 		int l = snprintf(b, bsize, "%x:", htid>>20);
+
 		bsize -= l;
 		b += l;
 	}
 	if (nodeid|hash) {
 		if (hash) {
 			int l = snprintf(b, bsize, "%x", hash);
+
 			bsize -= l;
 			b += l;
 		}
 		if (nodeid) {
 			int l = snprintf(b, bsize, ":%x", nodeid);
+
 			bsize -= l;
 			b += l;
 		}
@@ -122,7 +122,7 @@ static int pack_key(struct tc_u32_sel *sel, __u32 key, __u32 mask,
 
 	key &= mask;
 
-	for (i=0; i<hwm; i++) {
+	for (i = 0; i < hwm; i++) {
 		if (sel->keys[i].off == off && sel->keys[i].offmask == offmask) {
 			__u32 intersect = mask & sel->keys[i].mask;
 
@@ -382,7 +382,7 @@ static int parse_ip6_addr(int *argc_p, char ***argv_p,
 
 	plen = addr.bitlen;
 	for (i = 0; i < plen; i += 32) {
-//		if (((i + 31) & ~0x1F) <= plen) {
+		/* if (((i + 31) & ~0x1F) <= plen) { */
 		if (i + 31 <= plen) {
 			res = pack_key(sel, addr.data[i / 32],
 				       0xFFFFFFFF, off + 4 * (i / 32), offmask);
@@ -390,6 +390,7 @@ static int parse_ip6_addr(int *argc_p, char ***argv_p,
 				return -1;
 		} else if (i < plen) {
 			__u32 mask = htonl(0xFFFFFFFF << (32 - (plen - i)));
+
 			res = pack_key(sel, addr.data[i / 32],
 				       mask, off + 4 * (i / 32), offmask);
 			if (res < 0)
@@ -712,7 +713,7 @@ static int parse_selector(int *argc_p, char ***argv_p,
 	} else if (matches(*argv, "ip") == 0) {
 		NEXT_ARG();
 		res = parse_ip(&argc, &argv, sel);
-	} else 	if (matches(*argv, "ip6") == 0) {
+	} else	if (matches(*argv, "ip6") == 0) {
 		NEXT_ARG();
 		res = parse_ip6(&argc, &argv, sel);
 	} else if (matches(*argv, "udp") == 0) {
@@ -746,6 +747,7 @@ static int parse_offset(int *argc_p, char ***argv_p, struct tc_u32_sel *sel)
 	while (argc > 0) {
 		if (matches(*argv, "plus") == 0) {
 			int off;
+
 			NEXT_ARG();
 			if (get_integer(&off, *argv, 0))
 				return -1;
@@ -753,6 +755,7 @@ static int parse_offset(int *argc_p, char ***argv_p, struct tc_u32_sel *sel)
 			sel->flags |= TC_U32_OFFSET;
 		} else if (matches(*argv, "at") == 0) {
 			int off;
+
 			NEXT_ARG();
 			if (get_integer(&off, *argv, 0))
 				return -1;
@@ -764,6 +767,7 @@ static int parse_offset(int *argc_p, char ***argv_p, struct tc_u32_sel *sel)
 			sel->flags |= TC_U32_VAROFFSET;
 		} else if (matches(*argv, "mask") == 0) {
 			__u16 mask;
+
 			NEXT_ARG();
 			if (get_u16(&mask, *argv, 16))
 				return -1;
@@ -771,6 +775,7 @@ static int parse_offset(int *argc_p, char ***argv_p, struct tc_u32_sel *sel)
 			sel->flags |= TC_U32_VAROFFSET;
 		} else if (matches(*argv, "shift") == 0) {
 			int shift;
+
 			NEXT_ARG();
 			if (get_integer(&shift, *argv, 0))
 				return -1;
@@ -797,12 +802,14 @@ static int parse_hashkey(int *argc_p, char ***argv_p, struct tc_u32_sel *sel)
 	while (argc > 0) {
 		if (matches(*argv, "mask") == 0) {
 			__u32 mask;
+
 			NEXT_ARG();
 			if (get_u32(&mask, *argv, 16))
 				return -1;
 			sel->hmask = htonl(mask);
 		} else if (matches(*argv, "at") == 0) {
 			int num;
+
 			NEXT_ARG();
 			if (get_integer(&num, *argv, 0))
 				return -1;
@@ -844,6 +851,7 @@ static void print_ipv4(FILE *f, const struct tc_u32_key *key)
 	case 12:
 	case 16: {
 			int bits = mask2bits(key->mask);
+
 			if (bits >= 0) {
 				fprintf(f, "\n  %s %s/%d",
 					key->off == 12 ? "match IP src" : "match IP dst",
@@ -900,6 +908,7 @@ static void print_ipv6(FILE *f, const struct tc_u32_key *key)
 	case 12:
 	case 16: {
 			int bits = mask2bits(key->mask);
+
 			if (bits >= 0) {
 				fprintf(f, "\n  %s %s/%d",
 					key->off == 12 ? "match IP src" : "match IP dst",
@@ -946,7 +955,7 @@ static const struct {
 	__u16 pad;
 	void (*pprinter)(FILE *f, const struct tc_u32_key *key);
 } u32_pprinters[] = {
-	{0, 	   0, print_raw},
+	{0,	   0, print_raw},
 	{ETH_P_IP, 0, print_ipv4},
 	{ETH_P_IPV6, 0, print_ipv6},
 };
@@ -958,7 +967,7 @@ static void show_keys(FILE *f, const struct tc_u32_key *key)
 	if (!show_pretty)
 		goto show_k;
 
-	for (i = 0; i < sizeof(u32_pprinters) / sizeof(u32_pprinters[0]); i++) {
+	for (i = 0; i < ARRAY_SIZE(u32_pprinters); i++) {
 		if (u32_pprinters[i].proto == ntohs(f_proto)) {
 show_k:
 			u32_pprinters[i].pprinter(f, key);
@@ -1022,7 +1031,8 @@ static int u32_parse_opt(struct filter_util *qu, char *handle,
 			continue;
 		} else if (matches(*argv, "classid") == 0 ||
 			   strcmp(*argv, "flowid") == 0) {
-			unsigned handle;
+			unsigned int handle;
+
 			NEXT_ARG();
 			if (get_tc_classid(&handle, *argv)) {
 				fprintf(stderr, "Illegal \"classid\"\n");
@@ -1031,7 +1041,8 @@ static int u32_parse_opt(struct filter_util *qu, char *handle,
 			addattr_l(n, MAX_MSG, TCA_U32_CLASSID, &handle, 4);
 			sel.sel.flags |= TC_U32_TERMINAL;
 		} else if (matches(*argv, "divisor") == 0) {
-			unsigned divisor;
+			unsigned int divisor;
+
 			NEXT_ARG();
 			if (get_unsigned(&divisor, *argv, 0) ||
 			    divisor == 0 ||
@@ -1047,7 +1058,8 @@ static int u32_parse_opt(struct filter_util *qu, char *handle,
 				return -1;
 			}
 		} else if (strcmp(*argv, "link") == 0) {
-			unsigned handle;
+			unsigned int handle;
+
 			NEXT_ARG();
 			if (get_u32_handle(&handle, *argv)) {
 				fprintf(stderr, "Illegal \"link\"\n");
@@ -1059,7 +1071,8 @@ static int u32_parse_opt(struct filter_util *qu, char *handle,
 			}
 			addattr_l(n, MAX_MSG, TCA_U32_LINK, &handle, 4);
 		} else if (strcmp(*argv, "ht") == 0) {
-			unsigned handle;
+			unsigned int handle;
+
 			NEXT_ARG();
 			if (get_u32_handle(&handle, *argv)) {
 				fprintf(stderr, "Illegal \"ht\"\n");
@@ -1075,7 +1088,7 @@ static int u32_parse_opt(struct filter_util *qu, char *handle,
 				htid = (handle & 0xFFFFF000);
 		} else if (strcmp(*argv, "sample") == 0) {
 			__u32 hash;
-			unsigned divisor = 0x100;
+			unsigned int divisor = 0x100;
 
 			struct {
 				struct tc_u32_sel sel;
@@ -1088,8 +1101,7 @@ static int u32_parse_opt(struct filter_util *qu, char *handle,
 				return -1;
 			}
 			if (sel2.sel.nkeys != 1) {
-				fprintf(stderr, "\"sample\" must contain"
-					" exactly ONE key.\n");
+				fprintf(stderr, "\"sample\" must contain exactly ONE key.\n");
 				return -1;
 			}
 			if (*argv != 0 && strcmp(*argv, "divisor") == 0) {
@@ -1109,14 +1121,15 @@ static int u32_parse_opt(struct filter_util *qu, char *handle,
 			continue;
 		} else if (strcmp(*argv, "indev") == 0) {
 			char ind[IFNAMSIZ + 1];
-			memset(ind, 0, sizeof (ind));
+
+			memset(ind, 0, sizeof(ind));
 			argc--;
 			argv++;
 			if (argc < 1) {
 				fprintf(stderr, "Illegal indev\n");
 				return -1;
 			}
-			strncpy(ind, *argv, sizeof (ind) - 1);
+			strncpy(ind, *argv, sizeof(ind) - 1);
 			addattr_l(n, MAX_MSG, TCA_U32_INDEV, ind, strlen(ind) + 1);
 
 		} else if (matches(*argv, "action") == 0) {
@@ -1199,6 +1212,7 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 		fprintf(f, "ht divisor %d ", rta_getattr_u32(tb[TCA_U32_DIVISOR]));
 	} else if (tb[TCA_U32_HASH]) {
 		__u32 htid = rta_getattr_u32(tb[TCA_U32_HASH]);
+
 		fprintf(f, "key ht %x bkt %x ", TC_U32_USERHTID(htid),
 			TC_U32_HASH(htid));
 	} else {
@@ -1220,7 +1234,7 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 
 	if (tb[TCA_U32_PCNT]) {
 		if (RTA_PAYLOAD(tb[TCA_U32_PCNT])  < sizeof(*pf)) {
-			fprintf(f, "Broken perf counters \n");
+			fprintf(f, "Broken perf counters\n");
 			return -1;
 		}
 		pf = RTA_DATA(tb[TCA_U32_PCNT]);
@@ -1233,6 +1247,7 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 
 	if (tb[TCA_U32_MARK]) {
 		struct tc_u32_mark *mark = RTA_DATA(tb[TCA_U32_MARK]);
+
 		if (RTA_PAYLOAD(tb[TCA_U32_MARK]) < sizeof(*mark)) {
 			fprintf(f, "\n  Invalid mark (kernel&iproute2 mismatch)\n");
 		} else {
@@ -1244,7 +1259,8 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 	if (sel) {
 		if (sel->nkeys) {
 			int i;
-			for (i=0; i<sel->nkeys; i++) {
+
+			for (i = 0; i < sel->nkeys; i++) {
 				show_keys(f, sel->keys + i);
 				if (show_stats && NULL != pf)
 					fprintf(f, " (success %llu ) ",
@@ -1276,6 +1292,7 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 	}
 	if (tb[TCA_U32_INDEV]) {
 		struct rtattr *idev = tb[TCA_U32_INDEV];
+
 		fprintf(f, "\n  input dev %s\n", rta_getattr_str(idev));
 	}
 	if (tb[TCA_U32_ACT]) {

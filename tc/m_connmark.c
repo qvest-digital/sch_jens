@@ -27,10 +27,10 @@
 static void
 explain(void)
 {
-	fprintf(stderr, "Usage: ... connmark [ZONE] [BRANCH] [index <INDEX>]\n");
+	fprintf(stderr, "Usage: ... connmark [zone ZONE] [CONTROL] [index <INDEX>]\n");
 	fprintf(stderr, "where :\n"
 		"\tZONE is the conntrack zone\n"
-		"\tBRANCH := reclassify|pipe|drop|continue|ok\n");
+		"\tCONTROL := reclassify|pipe|drop|continue|ok\n");
 }
 
 static void
@@ -99,7 +99,8 @@ parse_connmark(struct action_util *a, int *argc_p, char ***argv_p, int tca_id,
 			sel.action = TC_ACT_UNSPEC;
 			argc--;
 			argv++;
-		} else if (matches(*argv, "pass") == 0) {
+		} else if (matches(*argv, "pass") == 0 ||
+			   matches(*argv, "ok") == 0) {
 			sel.action = TC_ACT_OK;
 			argc--;
 			argv++;
@@ -151,6 +152,7 @@ static int print_connmark(struct action_util *au, FILE *f, struct rtattr *arg)
 	if (show_stats) {
 		if (tb[TCA_CONNMARK_TM]) {
 			struct tcf_t *tm = RTA_DATA(tb[TCA_CONNMARK_TM]);
+
 			print_tm(f, tm);
 		}
 	}

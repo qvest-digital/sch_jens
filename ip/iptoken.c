@@ -51,7 +51,6 @@ static int print_token(const struct sockaddr_nl *who, struct nlmsghdr *n, void *
 	int len = n->nlmsg_len;
 	struct rtattr *tb[IFLA_MAX + 1];
 	struct rtattr *ltb[IFLA_INET6_MAX + 1];
-	char abuf[256];
 
 	if (n->nlmsg_type != RTM_NEWLINK)
 		return -1;
@@ -79,13 +78,9 @@ static int print_token(const struct sockaddr_nl *who, struct nlmsghdr *n, void *
 		return -1;
 	}
 
-	fprintf(fp, "token %s ",
-		format_host(ifi->ifi_family,
-			    RTA_PAYLOAD(ltb[IFLA_INET6_TOKEN]),
-			    RTA_DATA(ltb[IFLA_INET6_TOKEN]),
-			    abuf, sizeof(abuf)));
-	fprintf(fp, "dev %s ", ll_index_to_name(ifi->ifi_index));
-	fprintf(fp, "\n");
+	fprintf(fp, "token %s dev %s\n",
+	        format_host_rta(ifi->ifi_family, ltb[IFLA_INET6_TOKEN]),
+	        ll_index_to_name(ifi->ifi_index));
 	fflush(fp);
 
 	return 0;
@@ -95,10 +90,6 @@ static int iptoken_list(int argc, char **argv)
 {
 	int af = AF_INET6;
 	struct rtnl_dump_args da;
-	const struct rtnl_dump_filter_arg a[2] = {
-		{ .filter = print_token, .arg1 = &da, },
-		{ .filter = NULL, .arg1 = NULL, },
-	};
 
 	memset(&da, 0, sizeof(da));
 	da.fp = stdout;
@@ -118,7 +109,7 @@ static int iptoken_list(int argc, char **argv)
 		return -1;
 	}
 
-	if (rtnl_dump_filter_l(&rth, a) < 0) {
+	if (rtnl_dump_filter(&rth, print_token, &da) < 0) {
 		fprintf(stderr, "Dump terminated\n");
 		return -1;
 	}
@@ -172,13 +163,11 @@ static int iptoken_set(int argc, char **argv)
 	}
 
 	if (!have_token) {
-		fprintf(stderr, "Not enough information: token "
-			"is required.\n");
+		fprintf(stderr, "Not enough information: token is required.\n");
 		return -1;
 	}
 	if (!have_dev) {
-		fprintf(stderr, "Not enough information: \"dev\" "
-			"argument is required.\n");
+		fprintf(stderr, "Not enough information: \"dev\" argument is required.\n");
 		return -1;
 	}
 

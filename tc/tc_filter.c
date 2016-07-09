@@ -26,31 +26,27 @@
 #include "tc_util.h"
 #include "tc_common.h"
 
-static void usage(void);
-
 static void usage(void)
 {
 	fprintf(stderr, "Usage: tc filter [ add | del | change | replace | show ] dev STRING\n");
 	fprintf(stderr, "       [ pref PRIO ] protocol PROTO\n");
 	fprintf(stderr, "       [ estimator INTERVAL TIME_CONSTANT ]\n");
-	fprintf(stderr, "       [ root | classid CLASSID ] [ handle FILTERID ]\n");
-	fprintf(stderr, "       [ [ FILTER_TYPE ] [ help | OPTIONS ] ]\n");
+	fprintf(stderr, "       [ root | ingress | egress | parent CLASSID ]\n");
+	fprintf(stderr, "       [ handle FILTERID ] [ [ FILTER_TYPE ] [ help | OPTIONS ] ]\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "       tc filter show [ dev STRING ] [ root | parent CLASSID ]\n");
+	fprintf(stderr, "       tc filter show [ dev STRING ] [ root | ingress | egress | parent CLASSID ]\n");
 	fprintf(stderr, "Where:\n");
 	fprintf(stderr, "FILTER_TYPE := { rsvp | u32 | bpf | fw | route | etc. }\n");
 	fprintf(stderr, "FILTERID := ... format depends on classifier, see there\n");
 	fprintf(stderr, "OPTIONS := ... try tc filter add <desired FILTER_KIND> help\n");
-	return;
 }
 
-
-static int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
+static int tc_filter_modify(int cmd, unsigned int flags, int argc, char **argv)
 {
 	struct {
-		struct nlmsghdr 	n;
-		struct tcmsg 		t;
-		char   			buf[MAX_MSG];
+		struct nlmsghdr	n;
+		struct tcmsg		t;
+		char			buf[MAX_MSG];
 	} req;
 	struct filter_util *q = NULL;
 	__u32 prio = 0;
@@ -87,8 +83,23 @@ static int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
 				return -1;
 			}
 			req.t.tcm_parent = TC_H_ROOT;
+		} else if (strcmp(*argv, "ingress") == 0) {
+			if (req.t.tcm_parent) {
+				fprintf(stderr, "Error: \"ingress\" is duplicate parent ID\n");
+				return -1;
+			}
+			req.t.tcm_parent = TC_H_MAKE(TC_H_CLSACT,
+						     TC_H_MIN_INGRESS);
+		} else if (strcmp(*argv, "egress") == 0) {
+			if (req.t.tcm_parent) {
+				fprintf(stderr, "Error: \"egress\" is duplicate parent ID\n");
+				return -1;
+			}
+			req.t.tcm_parent = TC_H_MAKE(TC_H_CLSACT,
+						     TC_H_MIN_EGRESS);
 		} else if (strcmp(*argv, "parent") == 0) {
 			__u32 handle;
+
 			NEXT_ARG();
 			if (req.t.tcm_parent)
 				duparg("parent", *argv);
@@ -109,6 +120,7 @@ static int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
 				invarg("invalid priority value", *argv);
 		} else if (matches(*argv, "protocol") == 0) {
 			__u16 id;
+
 			NEXT_ARG();
 			if (protocol_set)
 				duparg("protocol", *argv);
@@ -143,8 +155,7 @@ static int tc_filter_modify(int cmd, unsigned flags, int argc, char **argv)
 			return 1;
 	} else {
 		if (fhandle) {
-			fprintf(stderr, "Must specify filter type when using "
-				"\"handle\"\n");
+			fprintf(stderr, "Must specify filter type when using \"handle\"\n");
 			return -1;
 		}
 		if (argc) {
@@ -179,16 +190,16 @@ static __u32 filter_parent;
 static int filter_ifindex;
 static __u32 filter_prio;
 static __u32 filter_protocol;
-__u16 f_proto = 0;
+__u16 f_proto;
 
 int print_filter(const struct sockaddr_nl *who,
 			struct nlmsghdr *n,
 			void *arg)
 {
-	FILE *fp = (FILE*)arg;
+	FILE *fp = (FILE *)arg;
 	struct tcmsg *t = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
-	struct rtattr * tb[TCA_MAX+1];
+	struct rtattr *tb[TCA_MAX+1];
 	struct filter_util *q;
 	char abuf[256];
 
@@ -220,14 +231,20 @@ int print_filter(const struct sockaddr_nl *who,
 	if (!filter_parent || filter_parent != t->tcm_parent) {
 		if (t->tcm_parent == TC_H_ROOT)
 			fprintf(fp, "root ");
+		else if (t->tcm_parent == TC_H_MAKE(TC_H_CLSACT, TC_H_MIN_INGRESS))
+			fprintf(fp, "ingress ");
+		else if (t->tcm_parent == TC_H_MAKE(TC_H_CLSACT, TC_H_MIN_EGRESS))
+			fprintf(fp, "egress ");
 		else {
 			print_tc_classid(abuf, sizeof(abuf), t->tcm_parent);
 			fprintf(fp, "parent %s ", abuf);
 		}
 	}
+
 	if (t->tcm_info) {
 		f_proto = TC_H_MIN(t->tcm_info);
 		__u32 prio = TC_H_MAJ(t->tcm_info)>>16;
+
 		if (!filter_protocol || filter_protocol != f_proto) {
 			if (f_proto) {
 				SPRINT_BUF(b1);
@@ -259,7 +276,6 @@ int print_filter(const struct sockaddr_nl *who,
 	return 0;
 }
 
-
 static int tc_filter_list(int argc, char **argv)
 {
 	struct tcmsg t;
@@ -284,8 +300,25 @@ static int tc_filter_list(int argc, char **argv)
 				return -1;
 			}
 			filter_parent = t.tcm_parent = TC_H_ROOT;
+		} else if (strcmp(*argv, "ingress") == 0) {
+			if (t.tcm_parent) {
+				fprintf(stderr, "Error: \"ingress\" is duplicate parent ID\n");
+				return -1;
+			}
+			filter_parent = TC_H_MAKE(TC_H_CLSACT,
+						  TC_H_MIN_INGRESS);
+			t.tcm_parent = filter_parent;
+		} else if (strcmp(*argv, "egress") == 0) {
+			if (t.tcm_parent) {
+				fprintf(stderr, "Error: \"egress\" is duplicate parent ID\n");
+				return -1;
+			}
+			filter_parent = TC_H_MAKE(TC_H_CLSACT,
+						  TC_H_MIN_EGRESS);
+			t.tcm_parent = filter_parent;
 		} else if (strcmp(*argv, "parent") == 0) {
 			__u32 handle;
+
 			NEXT_ARG();
 			if (t.tcm_parent)
 				duparg("parent", *argv);
@@ -307,6 +340,7 @@ static int tc_filter_list(int argc, char **argv)
 			filter_prio = prio;
 		} else if (matches(*argv, "protocol") == 0) {
 			__u16 res;
+
 			NEXT_ARG();
 			if (protocol)
 				duparg("protocol", *argv);
@@ -371,7 +405,7 @@ int do_filter(int argc, char **argv)
 	if (matches(*argv, "help") == 0) {
 		usage();
 		return 0;
-        }
+	}
 	fprintf(stderr, "Command \"%s\" is unknown, try \"tc filter help\".\n", *argv);
 	return -1;
 }

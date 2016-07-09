@@ -6,23 +6,10 @@ ip-link \- network device configuration
 .ad l
 .in +8
 .ti -8
-.B ip
-.RI "[ " OPTIONS " ]"
-.B link
+.B ip link
 .RI  " { " COMMAND " | "
 .BR help " }"
 .sp
-
-.ti -8
-.IR OPTIONS " := { "
-\fB\-V\fR[\fIersion\fR] |
-\fB\-h\fR[\fIuman-readable\fR] |
-\fB\-s\fR[\fItatistics\fR] |
-\fB\-r\fR[\fIesolve\fR] |
-\fB\-f\fR[\fIamily\fR] {
-.BR inet " | " inet6 " | " ipx " | " dnet " | " link " } | "
-\fB\-o\fR[\fIneline\fR] |
-\fB\-br\fR[\fIief\fR] }
 
 .ti -8
 .BI "ip link add"
@@ -49,7 +36,7 @@ ip-link \- network device configuration
 .RB "[ " numrxqueues
 .IR QUEUE_COUNT " ]"
 .br
-.BR type " TYPE"
+.BI type " TYPE"
 .RI "[ " ARGS " ]"
 
 .ti -8
@@ -92,78 +79,89 @@ ip-link \- network device configuration
 .BR "ip link set " {
 .IR DEVICE " | "
 .BI "group " GROUP
-.RB "} { " up " | " down " | " arp " { " on " | " off " } |"
+.RB "} [ { " up " | " down " } ]"
 .br
-.BR promisc " { " on " | " off " } |"
+.RB "[ " arp " { " on " | " off " } ]"
 .br
-.BR allmulticast " { " on " | " off " } |"
+.RB "[ " dynamic " { " on " | " off " } ]"
 .br
-.BR dynamic " { " on " | " off " } |"
+.RB "[ " multicast " { " on " | " off " } ]"
 .br
-.BR multicast " { " on " | " off " } |"
+.RB "[ " allmulticast " { " on " | " off " } ]"
 .br
-.BR protodown " { " on " | " off " } |"
+.RB "[ " promisc " { " on " | " off " } ]"
 .br
-.B  txqueuelen
-.IR PACKETS " |"
+.RB "[ " protodown " { " on " | " off " } ]"
 .br
-.B  name
-.IR NEWNAME " |"
+.RB "[ " trailers " { " on " | " off " } ]"
 .br
-.B  address
-.IR LLADDR " |"
-.B  broadcast
-.IR LLADDR " |"
+.RB "[ " txqueuelen
+.IR PACKETS " ]"
 .br
-.B  mtu
-.IR MTU " |"
+.RB "[ " name
+.IR NEWNAME " ]"
 .br
-.B  netns
-.IR PID " |"
+.RB "[ " address
+.IR LLADDR " ]"
 .br
-.B  netns
-.IR NETNSNAME " |"
+.RB "[ " broadcast
+.IR LLADDR " ]"
 .br
-.B alias
-.IR NAME  " |"
+.RB "[ " mtu
+.IR MTU " ]"
 .br
-.B vf
+.RB "[ " netns " {"
+.IR PID " | " NETNSNAME " } ]"
+.br
+.RB "[ " link-netnsid
+.IR ID " ]"
+.br
+.RB "[ " alias
+.IR NAME  " ]"
+.br
+.RB "[ " vf
 .IR NUM " ["
 .B  mac
-.IR LLADDR " ] ["
-.B vlan
+.IR LLADDR " ]"
+.br
+.in +9
+.RB "[ " vlan
 .IR VLANID " [ "
 .B qos
-.IR VLAN-QOS " ] ] ["
-.B rate
-.IR TXRATE " ] ["
-.B max_tx_rate
-.IR TXRATE " ] ["
-.B min_tx_rate
-.IR TXRATE " ] ["
-.B spoofchk { on | off } ] [
-.B state { auto | enable | disable}
-] |
+.IR VLAN-QOS " ] ]"
 .br
-.B master
-.IR DEVICE " |"
+.RB "[ " rate
+.IR TXRATE " ]"
 .br
-.B nomaster " |"
+.RB "[ " max_tx_rate
+.IR TXRATE " ]"
 .br
-.B addrgenmode { eui64 | none }
+.RB "[ " min_tx_rate
+.IR TXRATE " ]"
 .br
-.B link-netnsid ID
-.BR " }"
+.RB "[ " spoofchk " { " on " | " off " } ]"
+.br
+.RB "[ " state " { " auto " | " enable " | " disable " } ]"
+.br
+.RB "[ " trust " { " on " | " off " } ] ]"
+.br
+.in -9
+.RB "[ " master
+.IR DEVICE " ]"
+.br
+.RB "[ " nomaster " ]"
+.br
+.RB "[ " addrgenmode " { " eui64 " | " none " | " stable_secret " | " random " } ]"
 
 
 .ti -8
 .B ip link show
 .RI "[ " DEVICE " | "
 .B group
-.IR GROUP " | "
-.BR up " | "
+.IR GROUP " ] ["
+.BR up " ] ["
 .B master
-.IR DEVICE " | "
+.IR DEVICE " ] ["
 .B type
 .IR TYPE " ]"
 
@@ -284,28 +282,28 @@ the following additional arguments are supported:
 .BI link " DEVICE "
 .BI name " NAME "
 .BI type " vlan "
-.R " [ "
+[
 .BI protocol " VLAN_PROTO "
-.R " ] "
+]
 .BI id " VLANID "
-.R " [ "
+[
 .BR reorder_hdr " { " on " | " off " } "
-.R " ] "
-.R " [ "
+]
+[
 .BR gvrp " { " on " | " off " } "
-.R " ] "
-.R " [ "
+]
+[
 .BR mvrp " { " on " | " off " } "
-.R " ] "
-.R " [ "
+]
+[
 .BR loose_binding " { " on " | " off " } "
-.R " ] "
-.R " [ "
+]
+[
 .BI ingress-qos-map " QOS-MAP "
-.R " ] "
-.R " [ "
+]
+[
 .BI egress-qos-map " QOS-MAP "
-.R " ] "
+]
 
 .in +8
 .sp
@@ -386,43 +384,46 @@ the following additional arguments are supported:
 
 .BI "ip link add " DEVICE
 .BI type " vxlan " id " ID"
-.R " [ "
+[
 .BI dev " PHYS_DEV "
 .RB " ] [ { " group " | " remote " } "
 .I IPADDR
-.R " ] [ "
-.BI local " IPADDR "
-.R " ] [ "
+] [
+.B local
+.RI "{ "IPADDR " | "any " } "
+] [
 .BI ttl " TTL "
-.R " ] [ "
+] [
 .BI tos " TOS "
-.R " ] [ "
+] [
+.BI flowlabel " FLOWLABEL "
+] [
 .BI dstport " PORT "
-.R " ] [ "
+] [
 .BI srcport " MIN MAX "
-.R " ] [ "
+] [
 .I "[no]learning "
-.R " ] [ "
+] [
 .I "[no]proxy "
-.R " ] [ "
+] [
 .I "[no]rsc "
-.R " ] [ "
+] [
 .I "[no]l2miss "
-.R " ] [ "
+] [
 .I "[no]l3miss "
-.R " ] [ "
+] [
 .I "[no]udpcsum "
-.R " ] [ "
+] [
 .I "[no]udp6zerocsumtx "
-.R " ] [ "
+] [
 .I "[no]udp6zerocsumrx "
-.R " ] [ "
+] [
 .BI ageing " SECONDS "
-.R " ] [ "
+] [
 .BI maxaddress " NUMBER "
-.R " ] [ "
+] [
 .B gbp
-.R " ]"
+]
 
 .in +8
 .sp
@@ -461,6 +462,10 @@ parameter.
 - specifies the TOS value to use in outgoing packets.
 
 .sp
+.BI flowlabel " FLOWLABEL"
+- specifies the flow label to use in outgoing packets.
+
+.sp
 .BI dstport " PORT"
 - specifies the UDP destination port to communicate to the remote VXLAN tunnel endpoint.
 
@@ -492,15 +497,15 @@ are entered into the VXLAN device forwarding database.
 
 .sp
 .I [no]udpcsum
-- specifies if UDP checksum is filled in
+- specifies if UDP checksum is calculated for transmitted packets over IPv4.
 
 .sp
 .I [no]udp6zerocsumtx
-- specifies if UDP checksum is filled in
+- skip UDP checksum calculation for transmitted packets over IPv6.
 
 .sp
 .I [no]udp6zerocsumrx
-- specifies if UDP checksum is received
+- allow incoming UDP packets over IPv6 with zero checksum field.
 
 .sp
 .BI ageing " SECONDS"
@@ -564,17 +569,17 @@ the following additional arguments are supported:
 .BI "ip link add " DEVICE
 .BR type " { gre | ipip | sit } "
 .BI " remote " ADDR " local " ADDR
-.R " [ "
+[
 .BR encap " { fou | gue | none } "
-.R " ] [ "
+] [
 .BI "encap-sport { " PORT " | auto } "
-.R " ] [ "
+] [
 .BI "encap-dport " PORT
-.R " ] [ "
+] [
 .I " [no]encap-csum "
-.R " ] [ "
+] [
 .I " [no]encap-remcsum "
-.R " ]"
+]
 
 .in +8
 .sp
@@ -620,25 +625,25 @@ the following additional arguments are supported:
 
 .BI "ip link add " DEVICE
 .BI type " { ip6gre | ip6gretap }  " remote " ADDR " local " ADDR
-.R " [ "
+[
 .I "[i|o]seq]"
-.R " ] [ "
+] [
 .I "[i|o]key" KEY
-.R " ] [ "
+] [
 .I " [i|o]csum "
-.R " ] [ "
+] [
 .BI hoplimit " TTL "
-.R " ] [ "
+] [
 .BI encaplimit " ELIM "
-.R " ] [ "
+] [
 .BI tclass " TCLASS "
-.R " ] [ "
+] [
 .BI flowlabel " FLOWLABEL "
-.R " ] [ "
+] [
 .BI "dscp inherit"
-.R " ] [ "
+] [
 .BI dev " PHYS_DEV "
-.R " ]"
+]
 
 .in +8
 .sp
@@ -743,11 +748,13 @@ the following additional arguments are supported:
 
 .BI "ip link add " DEVICE
 .BI type " geneve " id " ID " remote " IPADDR"
-.R " [ "
+[
 .BI ttl " TTL "
-.R " ] [ "
+] [
 .BI tos " TOS "
-.R " ]"
+] [
+.BI flowlabel " FLOWLABEL "
+]
 
 .in +8
 .sp
@@ -765,6 +772,10 @@ the following additional arguments are supported:
 .sp
 .BI tos " TOS"
 - specifies the TOS value to use in outgoing packets.
+
+.sp
+.BI flowlabel " FLOWLABEL"
+- specifies the flow label to use in outgoing packets.
 
 .in -8
 
@@ -1018,6 +1029,10 @@ parameter must be specified.
 reflection of the PF link state, enable lets the VF to communicate with other VFs on
 this host even if the PF link state is down, disable causes the HW to drop any packets
 sent by the VF.
+.sp
+.BI trust " on|off"
+- trust the specified VF user. This enables that VF user can set a specific feature
+which may impact security and/or performance. (e.g. VF multicast promiscuous mode)
 .in -8
 
 .TP
@@ -1029,8 +1044,20 @@ set master device of the device (enslave device).
 unset master device of the device (release device).
 
 .TP
-.BR "addrgenmode eui64 " or " addrgenmode none"
-set IPv6 address generation mode
+.BI addrgenmode " eui64|none|stable_secret|random"
+set the IPv6 address generation mode
+
+.I eui64
+- use a Modified EUI-64 format interface identifier
+
+.I none
+- disable automatic address generation
+
+.I stable_secret
+- generate the interface identifier based on a preset /proc/sys/net/ipv6/conf/{default,DEVICE}/stable_secret
+
+.I random
+- like stable_secret, but auto-generate a new random secret if none is set
 
 .TP
 .BR "link-netnsid "

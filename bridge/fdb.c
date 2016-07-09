@@ -27,19 +27,19 @@
 #include "rt_names.h"
 #include "utils.h"
 
-static unsigned int filter_index;
+static unsigned int filter_index, filter_vlan;
 
 static void usage(void)
 {
 	fprintf(stderr, "Usage: bridge fdb { add | append | del | replace } ADDR dev DEV\n"
 			"              [ self ] [ master ] [ use ] [ router ]\n"
-			"              [ local | temp ] [ dst IPADDR ] [ vlan VID ]\n"
-		        "              [ port PORT] [ vni VNI ] [ via DEV ]\n");
-	fprintf(stderr, "       bridge fdb [ show [ br BRDEV ] [ brport DEV ] ]\n");
+			"              [ local | static | dynamic ] [ dst IPADDR ] [ vlan VID ]\n"
+			"              [ port PORT] [ vni VNI ] [ via DEV ]\n");
+	fprintf(stderr, "       bridge fdb [ show [ br BRDEV ] [ brport DEV ] [ vlan VID ] ]\n");
 	exit(-1);
 }
 
-static const char *state_n2a(unsigned s)
+static const char *state_n2a(unsigned int s)
 {
 	static char buf[32];
 
@@ -64,7 +64,8 @@ int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 	FILE *fp = arg;
 	struct ndmsg *r = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
-	struct rtattr * tb[NDA_MAX+1];
+	struct rtattr *tb[NDA_MAX+1];
+	__u16 vid = 0;
 
 	if (n->nlmsg_type != RTM_NEWNEIGH && n->nlmsg_type != RTM_DELNEIGH) {
 		fprintf(stderr, "Not RTM_NEWNEIGH: %08x %08x %08x\n",
@@ -88,6 +89,12 @@ int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 	parse_rtattr(tb, NDA_MAX, NDA_RTA(r),
 		     n->nlmsg_len - NLMSG_LENGTH(sizeof(*r)));
 
+	if (tb[NDA_VLAN])
+		vid = rta_getattr_u16(tb[NDA_VLAN]);
+
+	if (filter_vlan && filter_vlan != vid)
+		return 0;
+
 	if (n->nlmsg_type == RTM_DELNEIGH)
 		fprintf(fp, "Deleted ");
 
@@ -104,7 +111,6 @@ int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 		fprintf(fp, "dev %s ", ll_index_to_name(r->ndm_ifindex));
 
 	if (tb[NDA_DST]) {
-		SPRINT_BUF(abuf);
 		int family = AF_INET;
 
 		if (RTA_PAYLOAD(tb[NDA_DST]) == sizeof(struct in6_addr))
@@ -113,14 +119,11 @@ int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 		fprintf(fp, "dst %s ",
 			format_host(family,
 				    RTA_PAYLOAD(tb[NDA_DST]),
-				    RTA_DATA(tb[NDA_DST]),
-				    abuf, sizeof(abuf)));
+				    RTA_DATA(tb[NDA_DST])));
 	}
 
-	if (tb[NDA_VLAN]) {
-		__u16 vid = rta_getattr_u16(tb[NDA_VLAN]);
+	if (vid)
 		fprintf(fp, "vlan %hu ", vid);
-	}
 
 	if (tb[NDA_PORT])
 		fprintf(fp, "port %d ", ntohs(rta_getattr_u16(tb[NDA_PORT])));
@@ -171,9 +174,9 @@ int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 static int fdb_show(int argc, char **argv)
 {
 	struct {
-		struct nlmsghdr 	n;
+		struct nlmsghdr	n;
 		struct ifinfomsg	ifm;
-		char   			buf[256];
+		char			buf[256];
 	} req;
 
 	char *filter_dev = NULL;
@@ -191,6 +194,11 @@ static int fdb_show(int argc, char **argv)
 		} else if (strcmp(*argv, "br") == 0) {
 			NEXT_ARG();
 			br = *argv;
+		} else if (strcmp(*argv, "vlan") == 0) {
+			NEXT_ARG();
+			if (filter_vlan)
+				duparg("vlan", *argv);
+			filter_vlan = atoi(*argv);
 		} else {
 			if (matches(*argv, "help") == 0)
 				usage();
@@ -200,6 +208,7 @@ static int fdb_show(int argc, char **argv)
 
 	if (br) {
 		int br_ifindex = ll_name_to_index(br);
+
 		if (br_ifindex == 0) {
 			fprintf(stderr, "Cannot find bridge device \"%s\"\n", br);
 			return -1;
@@ -235,9 +244,9 @@ static int fdb_show(int argc, char **argv)
 static int fdb_modify(int cmd, int flags, int argc, char **argv)
 {
 	struct {
-		struct nlmsghdr 	n;
-		struct ndmsg 		ndm;
-		char   			buf[256];
+		struct nlmsghdr	n;
+		struct ndmsg		ndm;
+		char			buf[256];
 	} req;
 	char *addr = NULL;
 	char *d = NULL;
@@ -298,11 +307,15 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 			req.ndm.ndm_flags |= NTF_MASTER;
 		} else if (matches(*argv, "router") == 0) {
 			req.ndm.ndm_flags |= NTF_ROUTER;
-		} else if (matches(*argv, "local") == 0||
+		} else if (matches(*argv, "local") == 0 ||
 			   matches(*argv, "permanent") == 0) {
 			req.ndm.ndm_state |= NUD_PERMANENT;
-		} else if (matches(*argv, "temp") == 0) {
+		} else if (matches(*argv, "temp") == 0 ||
+			   matches(*argv, "static") == 0) {
 			req.ndm.ndm_state |= NUD_REACHABLE;
+		} else if (matches(*argv, "dynamic") == 0) {
+			req.ndm.ndm_state |= NUD_REACHABLE;
+			req.ndm.ndm_state &= ~NUD_NOARP;
 		} else if (matches(*argv, "vlan") == 0) {
 			if (vid >= 0)
 				duparg2("vlan", *argv);

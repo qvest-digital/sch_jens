@@ -33,11 +33,13 @@ static void usage(void) __attribute__((noreturn));
 
 static void usage(void)
 {
-	fprintf(stderr, "Usage: ip rule [ list | add | del | flush | save ] SELECTOR ACTION\n");
-	fprintf(stderr, "       ip rule restore\n");
+	fprintf(stderr, "Usage: ip rule { add | del } SELECTOR ACTION\n");
+	fprintf(stderr, "       ip rule { flush | save | restore }\n");
+	fprintf(stderr, "       ip rule [ list ]\n");
 	fprintf(stderr, "SELECTOR := [ not ] [ from PREFIX ] [ to PREFIX ] [ tos TOS ] [ fwmark FWMARK[/MASK] ]\n");
 	fprintf(stderr, "            [ iif STRING ] [ oif STRING ] [ pref NUMBER ]\n");
 	fprintf(stderr, "ACTION := [ table TABLE_ID ]\n");
+	fprintf(stderr, "          [ nat ADDRESS ]\n");
 	fprintf(stderr, "          [ realms [SRCREALM/]DSTREALM ]\n");
 	fprintf(stderr, "          [ goto NUMBER ]\n");
 	fprintf(stderr, "          SUPPRESSOR\n");
@@ -49,13 +51,12 @@ static void usage(void)
 
 int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 {
-	FILE *fp = (FILE*)arg;
+	FILE *fp = (FILE *)arg;
 	struct rtmsg *r = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
 	int host_len = -1;
 	__u32 table;
-	struct rtattr * tb[FRA_MAX+1];
-	char abuf[256];
+	struct rtattr *tb[FRA_MAX+1];
 	SPRINT_BUF(b1);
 
 	if (n->nlmsg_type != RTM_NEWRULE && n->nlmsg_type != RTM_DELRULE)
@@ -73,7 +74,7 @@ int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 		fprintf(fp, "Deleted ");
 
 	if (tb[FRA_PRIORITY])
-		fprintf(fp, "%u:\t", *(unsigned*)RTA_DATA(tb[FRA_PRIORITY]));
+		fprintf(fp, "%u:\t", *(unsigned *)RTA_DATA(tb[FRA_PRIORITY]));
 	else
 		fprintf(fp, "0:\t");
 
@@ -82,18 +83,12 @@ int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 
 	if (tb[FRA_SRC]) {
 		if (r->rtm_src_len != host_len) {
-			fprintf(fp, "from %s/%u ", rt_addr_n2a(r->rtm_family,
-						       RTA_PAYLOAD(tb[FRA_SRC]),
-						       RTA_DATA(tb[FRA_SRC]),
-						       abuf, sizeof(abuf)),
-				r->rtm_src_len
-				);
+			fprintf(fp, "from %s/%u ",
+			        rt_addr_n2a_rta(r->rtm_family, tb[FRA_SRC]),
+			        r->rtm_src_len);
 		} else {
-			fprintf(fp, "from %s ", format_host(r->rtm_family,
-						       RTA_PAYLOAD(tb[FRA_SRC]),
-						       RTA_DATA(tb[FRA_SRC]),
-						       abuf, sizeof(abuf))
-				);
+			fprintf(fp, "from %s ",
+			        format_host_rta(r->rtm_family, tb[FRA_SRC]));
 		}
 	} else if (r->rtm_src_len) {
 		fprintf(fp, "from 0/%d ", r->rtm_src_len);
@@ -103,17 +98,12 @@ int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 
 	if (tb[FRA_DST]) {
 		if (r->rtm_dst_len != host_len) {
-			fprintf(fp, "to %s/%u ", rt_addr_n2a(r->rtm_family,
-						       RTA_PAYLOAD(tb[FRA_DST]),
-						       RTA_DATA(tb[FRA_DST]),
-						       abuf, sizeof(abuf)),
-				r->rtm_dst_len
-				);
+			fprintf(fp, "to %s/%u ",
+			        rt_addr_n2a_rta(r->rtm_family, tb[FRA_DST]),
+			        r->rtm_dst_len);
 		} else {
-			fprintf(fp, "to %s ", format_host(r->rtm_family,
-						       RTA_PAYLOAD(tb[FRA_DST]),
-						       RTA_DATA(tb[FRA_DST]),
-						       abuf, sizeof(abuf)));
+			fprintf(fp, "to %s ",
+			        format_host_rta(r->rtm_family, tb[FRA_DST]));
 		}
 	} else if (r->rtm_dst_len) {
 		fprintf(fp, "to 0/%d ", r->rtm_dst_len);
@@ -155,12 +145,14 @@ int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 
 		if (tb[FRA_SUPPRESS_PREFIXLEN]) {
 			int pl = rta_getattr_u32(tb[FRA_SUPPRESS_PREFIXLEN]);
+
 			if (pl != -1) {
 				fprintf(fp, "suppress_prefixlength %d ", pl);
 			}
 		}
 		if (tb[FRA_SUPPRESS_IFGROUP]) {
 			int group = rta_getattr_u32(tb[FRA_SUPPRESS_IFGROUP]);
+
 			if (group != -1) {
 				SPRINT_BUF(b1);
 				fprintf(fp, "suppress_ifgroup %s ", rtnl_group_n2a(group, b1, sizeof(b1)));
@@ -171,6 +163,7 @@ int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 	if (tb[FRA_FLOW]) {
 		__u32 to = rta_getattr_u32(tb[FRA_FLOW]);
 		__u32 from = to>>16;
+
 		to &= 0xFFFF;
 		if (from) {
 			fprintf(fp, "realms %s/",
@@ -183,10 +176,8 @@ int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 	if (r->rtm_type == RTN_NAT) {
 		if (tb[RTA_GATEWAY]) {
 			fprintf(fp, "map-to %s ",
-				format_host(r->rtm_family,
-					    RTA_PAYLOAD(tb[RTA_GATEWAY]),
-					    RTA_DATA(tb[RTA_GATEWAY]),
-					    abuf, sizeof(abuf)));
+			        format_host_rta(r->rtm_family,
+			                        tb[RTA_GATEWAY]));
 		} else
 			fprintf(fp, "masquerade");
 	} else if (r->rtm_type == FR_ACT_GOTO) {
@@ -324,7 +315,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 	struct {
 		struct nlmsghdr	n;
 		struct rtmsg		r;
-		char  			buf[1024];
+		char			buf[1024];
 	} req;
 
 	memset(&req, 0, sizeof(req));
@@ -349,12 +340,14 @@ static int iprule_modify(int cmd, int argc, char **argv)
 			req.r.rtm_flags |= FIB_RULE_INVERT;
 		} else if (strcmp(*argv, "from") == 0) {
 			inet_prefix dst;
+
 			NEXT_ARG();
 			get_prefix(&dst, *argv, req.r.rtm_family);
 			req.r.rtm_src_len = dst.bitlen;
 			addattr_l(&req.n, sizeof(req), FRA_SRC, &dst.data, dst.bytelen);
 		} else if (strcmp(*argv, "to") == 0) {
 			inet_prefix dst;
+
 			NEXT_ARG();
 			get_prefix(&dst, *argv, req.r.rtm_family);
 			req.r.rtm_dst_len = dst.bitlen;
@@ -363,6 +356,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 			   matches(*argv, "order") == 0 ||
 			   matches(*argv, "priority") == 0) {
 			__u32 pref;
+
 			NEXT_ARG();
 			if (get_u32(&pref, *argv, 0))
 				invarg("preference value is invalid\n", *argv);
@@ -370,6 +364,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 		} else if (strcmp(*argv, "tos") == 0 ||
 			   matches(*argv, "dsfield") == 0) {
 			__u32 tos;
+
 			NEXT_ARG();
 			if (rtnl_dsfield_a2n(&tos, *argv))
 				invarg("TOS value is invalid\n", *argv);
@@ -377,6 +372,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 		} else if (strcmp(*argv, "fwmark") == 0) {
 			char *slash;
 			__u32 fwmark, fwmask;
+
 			NEXT_ARG();
 			if ((slash = strchr(*argv, '/')) != NULL)
 				*slash = '\0';
@@ -390,6 +386,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 			}
 		} else if (matches(*argv, "realms") == 0) {
 			__u32 realm;
+
 			NEXT_ARG();
 			if (get_rt_realms_or_raw(&realm, *argv))
 				invarg("invalid realms\n", *argv);
@@ -397,6 +394,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 		} else if (matches(*argv, "table") == 0 ||
 			   strcmp(*argv, "lookup") == 0) {
 			__u32 tid;
+
 			NEXT_ARG();
 			if (rtnl_rttable_a2n(&tid, *argv))
 				invarg("invalid table ID\n", *argv);
@@ -410,6 +408,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 		} else if (matches(*argv, "suppress_prefixlength") == 0 ||
 			   strcmp(*argv, "sup_pl") == 0) {
 			int pl;
+
 			NEXT_ARG();
 			if (get_s32(&pl, *argv, 0) || pl < 0)
 				invarg("suppress_prefixlength value is invalid\n", *argv);
@@ -418,6 +417,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 			   strcmp(*argv, "sup_group") == 0) {
 			NEXT_ARG();
 			int group;
+
 			if (rtnl_group_a2n(&group, *argv))
 				invarg("Invalid \"suppress_ifgroup\" value\n", *argv);
 			addattr32(&req.n, sizeof(req), FRA_SUPPRESS_IFGROUP, group);
@@ -444,6 +444,7 @@ static int iprule_modify(int cmd, int argc, char **argv)
 				usage();
 			else if (matches(*argv, "goto") == 0) {
 				__u32 target;
+
 				type = FR_ACT_GOTO;
 				NEXT_ARG();
 				if (get_u32(&target, *argv, 0))
@@ -478,7 +479,7 @@ static int flush_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *a
 	struct rtnl_handle rth2;
 	struct rtmsg *r = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
-	struct rtattr * tb[FRA_MAX+1];
+	struct rtattr *tb[FRA_MAX+1];
 
 	len -= NLMSG_LENGTH(sizeof(*r));
 	if (len < 0)

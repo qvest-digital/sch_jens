@@ -22,9 +22,10 @@
 static void explain(void)
 {
 	fprintf(stderr, "Usage: vlan pop\n");
-	fprintf(stderr, "       vlan push [ protocol VLANPROTO ] id VLANID\n");
+	fprintf(stderr, "       vlan push [ protocol VLANPROTO ] id VLANID [CONTROL]\n");
 	fprintf(stderr, "       VLANPROTO is one of 802.1Q or 802.1AD\n");
 	fprintf(stderr, "            with default: 802.1Q\n");
+	fprintf(stderr, "       CONTROL := reclassify | pipe | drop | continue | pass\n");
 }
 
 static void usage(void)
@@ -118,7 +119,8 @@ static int parse_vlan(struct action_util *a, int *argc_p, char ***argv_p,
 			parm.action = TC_ACT_UNSPEC;
 			argc--;
 			argv++;
-		} else if (matches(*argv, "pass") == 0) {
+		} else if (matches(*argv, "pass") == 0 ||
+			   matches(*argv, "ok") == 0) {
 			parm.action = TC_ACT_OK;
 			argc--;
 			argv++;
@@ -186,7 +188,7 @@ static int print_vlan(struct action_util *au, FILE *f, struct rtattr *arg)
 
 	fprintf(f, " vlan");
 
-	switch(parm->v_action) {
+	switch (parm->v_action) {
 	case TCA_VLAN_ACT_POP:
 		fprintf(f, " pop");
 		break;
@@ -203,7 +205,7 @@ static int print_vlan(struct action_util *au, FILE *f, struct rtattr *arg)
 		}
 		break;
 	}
-	fprintf(f, " %s", action_n2a(parm->action, b1, sizeof (b1)));
+	fprintf(f, " %s", action_n2a(parm->action, b1, sizeof(b1)));
 
 	fprintf(f, "\n\t index %d ref %d bind %d", parm->index, parm->refcnt,
 		parm->bindcnt);
@@ -211,6 +213,7 @@ static int print_vlan(struct action_util *au, FILE *f, struct rtattr *arg)
 	if (show_stats) {
 		if (tb[TCA_VLAN_TM]) {
 			struct tcf_t *tm = RTA_DATA(tb[TCA_VLAN_TM]);
+
 			print_tm(f, tm);
 		}
 	}

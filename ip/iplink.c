@@ -70,21 +70,21 @@ void iplink_usage(void)
 	fprintf(stderr, "	                  [ address LLADDR ]\n");
 	fprintf(stderr, "	                  [ broadcast LLADDR ]\n");
 	fprintf(stderr, "	                  [ mtu MTU ]\n");
-	fprintf(stderr, "	                  [ netns PID ]\n");
-	fprintf(stderr, "	                  [ netns NAME ]\n");
+	fprintf(stderr, "	                  [ netns { PID | NAME } ]\n");
 	fprintf(stderr, "	                  [ link-netnsid ID ]\n");
 	fprintf(stderr, "			  [ alias NAME ]\n");
 	fprintf(stderr, "	                  [ vf NUM [ mac LLADDR ]\n");
 	fprintf(stderr, "				   [ vlan VLANID [ qos VLAN-QOS ] ]\n");
 
-	fprintf(stderr, "				   [ rate TXRATE ] ]\n");
+	fprintf(stderr, "				   [ rate TXRATE ]\n");
 
-	fprintf(stderr, "				   [ spoofchk { on | off} ] ]\n");
-	fprintf(stderr, "				   [ query_rss { on | off} ] ]\n");
+	fprintf(stderr, "				   [ spoofchk { on | off} ]\n");
+	fprintf(stderr, "				   [ query_rss { on | off} ]\n");
 	fprintf(stderr, "				   [ state { auto | enable | disable} ] ]\n");
+	fprintf(stderr, "				   [ trust { on | off} ] ]\n");
 	fprintf(stderr, "			  [ master DEVICE ]\n");
 	fprintf(stderr, "			  [ nomaster ]\n");
-	fprintf(stderr, "			  [ addrgenmode { eui64 | none } ]\n");
+	fprintf(stderr, "			  [ addrgenmode { eui64 | none | stable_secret | random } ]\n");
 	fprintf(stderr, "	                  [ protodown { on | off } ]\n");
 	fprintf(stderr, "       ip link show [ DEVICE | group GROUP ] [up] [master DEV] [type TYPE]\n");
 
@@ -176,6 +176,10 @@ static int get_addr_gen_mode(const char *mode)
 		return IN6_ADDR_GEN_MODE_EUI64;
 	if (strcasecmp(mode, "none") == 0)
 		return IN6_ADDR_GEN_MODE_NONE;
+	if (strcasecmp(mode, "stable_secret") == 0)
+		return IN6_ADDR_GEN_MODE_STABLE_PRIVACY;
+	if (strcasecmp(mode, "random") == 0)
+		return IN6_ADDR_GEN_MODE_RANDOM;
 	return -1;
 }
 
@@ -351,6 +355,19 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 				return on_off("query_rss", *argv);
 			ivs.vf = vf;
 			addattr_l(&req->n, sizeof(*req), IFLA_VF_RSS_QUERY_EN, &ivs, sizeof(ivs));
+
+		} else if (matches(*argv, "trust") == 0) {
+			struct ifla_vf_trust ivt;
+
+			NEXT_ARG();
+			if (matches(*argv, "on") == 0)
+				ivt.setting = 1;
+			else if (matches(*argv, "off") == 0)
+				ivt.setting = 0;
+			else
+				invarg("Invalid \"trust\" value\n", *argv);
+			ivt.vf = vf;
+			addattr_l(&req->n, sizeof(*req), IFLA_VF_TRUST, &ivt, sizeof(ivt));
 
 		} else if (matches(*argv, "state") == 0) {
 			struct ifla_vf_link_state ivl;
@@ -696,34 +713,30 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 					&group, sizeof(group));
 		else {
 			if (argc) {
-				fprintf(stderr, "Garbage instead of arguments "
-						"\"%s ...\". Try \"ip link "
+				fprintf(stderr, "Garbage instead of arguments \"%s ...\". Try \"ip link "
 						"help\".\n", *argv);
 				return -1;
 			}
 			if (flags & NLM_F_CREATE) {
-				fprintf(stderr, "group cannot be used when "
-						"creating devices.\n");
+				fprintf(stderr, "group cannot be used when creating devices.\n");
 				return -1;
 			}
 
 			req.i.ifi_index = 0;
 			addattr32(&req.n, sizeof(req), IFLA_GROUP, group);
 			if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
-				exit(2);
+				return -2;
 			return 0;
 		}
 	}
 
 	if (!(flags & NLM_F_CREATE)) {
 		if (!dev) {
-			fprintf(stderr, "Not enough information: \"dev\" "
-					"argument is required.\n");
+			fprintf(stderr, "Not enough information: \"dev\" argument is required.\n");
 			exit(-1);
 		}
 		if (cmd == RTM_NEWLINK && index != -1) {
-			fprintf(stderr, "index can be used only when "
-					"creating devices.\n");
+			fprintf(stderr, "index can be used only when creating devices.\n");
 			exit(-1);
 		}
 
@@ -797,19 +810,18 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 		} else if (argc) {
 			if (matches(*argv, "help") == 0)
 				usage();
-			fprintf(stderr, "Garbage instead of arguments \"%s ...\". "
-					"Try \"ip link help\".\n", *argv);
+			fprintf(stderr, "Garbage instead of arguments \"%s ...\". Try \"ip link help\".\n",
+					*argv);
 			return -1;
 		}
 		addattr_nest_end(&req.n, linkinfo);
 	} else if (flags & NLM_F_CREATE) {
-		fprintf(stderr, "Not enough information: \"type\" argument "
-				"is required\n");
+		fprintf(stderr, "Not enough information: \"type\" argument is required\n");
 		return -1;
 	}
 
 	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
-		exit(2);
+		return -2;
 
 	return 0;
 }

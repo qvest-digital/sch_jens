@@ -18,7 +18,7 @@
 #include <linux/net_namespace.h>
 
 #include "utils.h"
-#include "hlist.h"
+#include "list.h"
 #include "ip_common.h"
 #include "namespace.h"
 
@@ -172,7 +172,7 @@ static int netns_map_add(int nsid, const char *name)
 	if (netns_map_get_by_nsid(nsid) != NULL)
 		return -EEXIST;
 
-	c = malloc(sizeof(*c) + strlen(name));
+	c = malloc(sizeof(*c) + strlen(name) + 1);
 	if (c == NULL) {
 		perror("malloc");
 		return -ENOMEM;
@@ -389,6 +389,7 @@ static int cmd_exec(const char *cmd, char **argv, bool do_fork)
 static int on_netns_exec(char *nsname, void *arg)
 {
 	char **argv = arg;
+
 	cmd_exec(argv[1], argv + 1, true);
 	return 0;
 }
@@ -426,6 +427,7 @@ static int netns_exec(int argc, char **argv)
 static int is_pid(const char *str)
 {
 	int ch;
+
 	for (; (ch = *str); str++) {
 		if (!isdigit(ch))
 			return 0;
@@ -470,9 +472,10 @@ static int netns_pids(int argc, char **argv)
 			strerror(errno));
 		return -1;
 	}
-	while((entry = readdir(dir))) {
+	while ((entry = readdir(dir))) {
 		char pid_net_path[PATH_MAX];
 		struct stat st;
+
 		if (!is_pid(entry->d_name))
 			continue;
 		snprintf(pid_net_path, sizeof(pid_net_path), "/proc/%s/ns/net",
@@ -535,7 +538,7 @@ static int netns_identify(int argc, char **argv)
 		return -1;
 	}
 
-	while((entry = readdir(dir))) {
+	while ((entry = readdir(dir))) {
 		char name_path[PATH_MAX];
 		struct stat st;
 
@@ -737,6 +740,7 @@ static int netns_monitor(int argc, char **argv)
 	char buf[4096];
 	struct inotify_event *event;
 	int fd;
+
 	fd = inotify_init();
 	if (fd < 0) {
 		fprintf(stderr, "inotify_init failed: %s\n",
@@ -752,8 +756,9 @@ static int netns_monitor(int argc, char **argv)
 			strerror(errno));
 		return -1;
 	}
-	for(;;) {
+	for (;;) {
 		ssize_t len = read(fd, buf, sizeof(buf));
+
 		if (len < 0) {
 			fprintf(stderr, "read failed: %s\n",
 				strerror(errno));

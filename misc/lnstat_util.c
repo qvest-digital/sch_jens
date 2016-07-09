@@ -38,22 +38,27 @@
 /* Read (and summarize for SMP) the different stats vars. */
 static int scan_lines(struct lnstat_file *lf, int i)
 {
+	char buf[FGETS_BUF_SIZE];
 	int j, num_lines = 0;
 
 	for (j = 0; j < lf->num_fields; j++)
 		lf->fields[j].values[i] = 0;
 
-	while(!feof(lf->fp)) {
-		char buf[FGETS_BUF_SIZE];
+	rewind(lf->fp);
+	/* skip first line */
+	if (!lf->compat && !fgets(buf, sizeof(buf)-1, lf->fp))
+		return -1;
+
+	while (!feof(lf->fp) && fgets(buf, sizeof(buf)-1, lf->fp)) {
 		char *ptr = buf;
 
 		num_lines++;
 
-		fgets(buf, sizeof(buf)-1, lf->fp);
 		gettimeofday(&lf->last_read, NULL);
 
 		for (j = 0; j < lf->num_fields; j++) {
 			unsigned long f = strtoul(ptr, &ptr, 16);
+
 			if (j == 0)
 				lf->fields[j].values[i] = f;
 			else
@@ -81,7 +86,6 @@ static int time_after(struct timeval *last,
 int lnstat_update(struct lnstat_file *lnstat_files)
 {
 	struct lnstat_file *lf;
-	char buf[FGETS_BUF_SIZE];
 	struct timeval tv;
 
 	gettimeofday(&tv, NULL);
@@ -91,11 +95,6 @@ int lnstat_update(struct lnstat_file *lnstat_files)
 			int i;
 			struct lnstat_field *lfi;
 
-			rewind(lf->fp);
-			if (!lf->compat) {
-				/* skip first line */
-				fgets(buf, sizeof(buf)-1, lf->fp);
-			}
 			scan_lines(lf, 1);
 
 			for (i = 0, lfi = &lf->fields[i];
@@ -104,11 +103,9 @@ int lnstat_update(struct lnstat_file *lnstat_files)
 					lfi->result = lfi->values[1];
 				else
 					lfi->result = (lfi->values[1]-lfi->values[0])
-				    			/ lf->interval.tv_sec;
+							/ lf->interval.tv_sec;
 			}
 
-			rewind(lf->fp);
-			fgets(buf, sizeof(buf)-1, lf->fp);
 			scan_lines(lf, 0);
 		}
 	}
@@ -142,7 +139,8 @@ static int lnstat_scan_fields(struct lnstat_file *lf)
 	char buf[FGETS_BUF_SIZE];
 
 	rewind(lf->fp);
-	fgets(buf, sizeof(buf)-1, lf->fp);
+	if (!fgets(buf, sizeof(buf)-1, lf->fp))
+		return -1;
 
 	return __lnstat_scan_fields(lf, buf);
 }
@@ -161,6 +159,7 @@ static int lnstat_scan_compat_rtstat_fields(struct lnstat_file *lf)
 static int name_in_array(const int num, const char **arr, const char *name)
 {
 	int i;
+
 	for (i = 0; i < num; i++) {
 		if (!strcmp(arr[i], name))
 			return 1;
@@ -175,8 +174,10 @@ static struct lnstat_file *alloc_and_open(const char *path, const char *file)
 
 	/* allocate */
 	lf = malloc(sizeof(*lf));
-	if (!lf)
+	if (!lf) {
+		fprintf(stderr, "out of memory\n");
 		return NULL;
+	}
 
 	/* initialize */
 	memset(lf, 0, sizeof(*lf));
@@ -193,6 +194,7 @@ static struct lnstat_file *alloc_and_open(const char *path, const char *file)
 	/* open */
 	lf->fp = fopen(lf->path, "r");
 	if (!lf->fp) {
+		perror(lf->path);
 		free(lf);
 		return NULL;
 	}
@@ -259,12 +261,16 @@ struct lnstat_file *lnstat_scan_dir(const char *path, const int num_req_files,
 			continue;
 
 		lf = alloc_and_open(path, de->d_name);
-		if (!lf)
+		if (!lf) {
+			closedir(dir);
 			return NULL;
+		}
 
 		/* fill in field structure */
-		if (lnstat_scan_fields(lf) < 0)
+		if (lnstat_scan_fields(lf) < 0) {
+			closedir(dir);
 			return NULL;
+		}
 
 		/* prepend to global list */
 		lf->next = lnstat_files;

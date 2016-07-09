@@ -95,7 +95,7 @@ static int get_netmask(unsigned *val, const char *arg, int base)
 	/* try coverting dotted quad to CIDR */
 	if (!get_addr_1(&addr, arg, AF_INET) && addr.family == AF_INET) {
 		int b = mask2bits(addr.data[0]);
-		
+
 		if (b >= 0) {
 			*val = b;
 			return 0;
@@ -191,7 +191,7 @@ int get_time_rtt(unsigned *val, const char *arg, int *raw)
 	*val = t;
 	if (*val < t)
 		*val += 1;
-	
+
         return 0;
 
 }
@@ -363,7 +363,7 @@ static int get_addr_ipv4(__u8 *ap, const char *cp)
 	for (i = 0; i < 4; i++) {
 		unsigned long n;
 		char *endp;
-		
+
 		n = strtoul(cp, &endp, 0);
 		if (n > 255)
 			return -1;	/* bogus network value */
@@ -380,6 +380,41 @@ static int get_addr_ipv4(__u8 *ap, const char *cp)
 			return -1; 	/* extra characters */
 		cp = endp + 1;
 	}
+
+	return 1;
+}
+
+int get_addr64(__u64 *ap, const char *cp)
+{
+	int i;
+
+	union {
+		__u16 v16[4];
+		__u64 v64;
+	} val;
+
+	for (i = 0; i < 4; i++) {
+		unsigned long n;
+		char *endp;
+
+		n = strtoul(cp, &endp, 16);
+		if (n > 0xffff)
+			return -1;	/* bogus network value */
+
+		if (endp == cp) /* no digits */
+			return -1;
+
+		val.v16[i] = htons(n);
+
+		if (*endp == '\0')
+			break;
+
+		if (i == 3 || *endp != ':')
+			return -1;	/* extra characters */
+		cp = endp + 1;
+	}
+
+	*ap = val.v64;
 
 	return 1;
 }
@@ -532,7 +567,7 @@ int get_addr(inet_prefix *dst, const char *arg, int family)
 {
 	if (get_addr_1(dst, arg, family)) {
 		fprintf(stderr, "Error: %s address is expected rather than \"%s\".\n",
-				family_name(family) ,arg);
+				family_name(dst->family) ,arg);
 		exit(1);
 	}
 	return 0;
@@ -544,9 +579,10 @@ int get_prefix(inet_prefix *dst, char *arg, int family)
 		fprintf(stderr, "Error: \"%s\" may be inet prefix, but it is not allowed in this context.\n", arg);
 		exit(1);
 	}
+
 	if (get_prefix_1(dst, arg, family)) {
 		fprintf(stderr, "Error: %s prefix is expected rather than \"%s\".\n",
-				family_name(family) ,arg);
+				family_name(dst->family) ,arg);
 		exit(1);
 	}
 	return 0;
@@ -667,7 +703,7 @@ int __get_user_hz(void)
 	return sysconf(_SC_CLK_TCK);
 }
 
-const char *rt_addr_n2a(int af, int len, const void *addr, char *buf, int buflen)
+const char *rt_addr_n2a_r(int af, int len, const void *addr, char *buf, int buflen)
 {
 	switch (af) {
 	case AF_INET:
@@ -688,6 +724,13 @@ const char *rt_addr_n2a(int af, int len, const void *addr, char *buf, int buflen
 	default:
 		return "???";
 	}
+}
+
+const char *rt_addr_n2a(int af, int len, const void *addr)
+{
+	static char buf[256];
+
+	return rt_addr_n2a_r(af, len, addr, buf, 256);
 }
 
 int read_family(const char *name)
@@ -783,7 +826,7 @@ static const char *resolve_address(const void *addr, int len, int af)
 }
 #endif
 
-const char *format_host(int af, int len, const void *addr,
+const char *format_host_r(int af, int len, const void *addr,
 			char *buf, int buflen)
 {
 #ifdef RESOLVE_HOSTNAMES
@@ -797,7 +840,14 @@ const char *format_host(int af, int len, const void *addr,
 			return n;
 	}
 #endif
-	return rt_addr_n2a(af, len, addr, buf, buflen);
+	return rt_addr_n2a_r(af, len, addr, buf, buflen);
+}
+
+const char *format_host(int af, int len, const void *addr)
+{
+	static char buf[256];
+
+	return format_host_r(af, len, addr, buf, 256);
 }
 
 
@@ -836,6 +886,30 @@ __u8* hexstring_a2n(const char *str, __u8 *buf, int blen)
 		str += 2;
 	}
 	return buf;
+}
+
+int addr64_n2a(__u64 addr, char *buff, size_t len)
+{
+	__u16 *words = (__u16 *)&addr;
+	__u16 v;
+	int i, ret;
+	size_t written = 0;
+	char *sep = ":";
+
+	for (i = 0; i < 4; i++) {
+		v = ntohs(words[i]);
+
+		if (i == 3)
+			sep = "";
+
+		ret = snprintf(&buff[written], len - written, "%x%s", v, sep);
+		if (ret < 0)
+			return ret;
+
+		written += ret;
+	}
+
+	return written;
 }
 
 int print_timestamp(FILE *fp)

@@ -1,11 +1,18 @@
-etc/* /etc
-ip/routef ip/routel /usr/bin
-ip/rtmon tc/tc misc/rtacct bridge/bridge /sbin
-misc/arpd /usr/sbin
-misc/lnstat misc/nstat /usr/bin/
-misc/ss ip/ip /bin
-netem/*.dist /usr/lib/tc
-tc/*.so /usr/lib/tc
-genl/genl /usr/sbin
-tipc/tipc /sbin
-devlink/devlink /sbin
+etc/
+sbin/routef /usr/bin
+sbin/routel /usr/bin
+sbin/rtmon
+sbin/tc
+sbin/rtacct
+sbin/bridge
+sbin/arpd /usr/sbin
+sbin/lnstat /usr/bin/
+sbin/nstat /usr/bin/
+sbin/ss /bin
+sbin/ip /bin
+usr/lib/tc/
+sbin/genl /usr/sbin
+sbin/tipc
+sbin/devlink
+
+usr/share/man/

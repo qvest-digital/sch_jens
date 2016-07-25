@@ -16,3 +16,4 @@ sbin/tipc
 sbin/devlink
 
 usr/share/man/
+usr/share/bash-completion/

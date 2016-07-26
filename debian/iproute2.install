@@ -14,6 +14,7 @@ usr/lib/tc/
 sbin/genl /usr/sbin
 sbin/tipc
 sbin/devlink
+sbin/ifstat /usr/bin
 
 usr/share/man/
 usr/share/bash-completion/

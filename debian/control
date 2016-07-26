@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Debian iproute2 Maintainers <ah-iproute@debian.org>
 Uploaders: Andreas Henriksson <andreas@fatal.se>,
            Alexander Wirt <formorer@debian.org>
-Homepage: http://www.linux-foundation.org/en/Net:Iproute2
+Homepage: https://wiki.linuxfoundation.org/networking/iproute2
 Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/pkg-iproute.git
 Vcs-Git: https://anonscm.debian.org/git/collab-maint/pkg-iproute.git
 Standards-Version: 3.9.8

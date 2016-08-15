@@ -1,3 +1,15 @@
+iproute2 (4.6.0-3) unstable; urgency=medium
+
+  * Team upload.
+
+  [ Laurent Bigonville ]
+  * debian/control: Downgrade transitional packages to Priority extra
+
+  [ Andreas Henriksson ]
+  * Revert "Install ifstat executable and manpage" (Closes: #832573)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Mon, 15 Aug 2016 17:36:13 +0200
+
 iproute2 (4.6.0-2) unstable; urgency=medium
 
   * Team upload.

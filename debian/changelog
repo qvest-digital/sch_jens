@@ -1,3 +1,9 @@
+iproute2 (4.6.0-4) unstable; urgency=medium
+
+  * Fix conflict resolution, really remove ifstat binary (Closes: #832573)
+
+ -- Andreas Henriksson <andreas@fatal.se>  Tue, 16 Aug 2016 09:48:05 +0200
+
 iproute2 (4.6.0-3) unstable; urgency=medium
 
   * Team upload.

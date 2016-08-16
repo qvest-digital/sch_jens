@@ -3,7 +3,6 @@ sbin/arpd /usr/sbin
 sbin/bridge
 sbin/devlink
 sbin/genl /usr/sbin
-sbin/ifstat /usr/bin
 sbin/ip /bin
 sbin/lnstat /usr/bin/
 sbin/nstat /usr/bin/

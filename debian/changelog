@@ -1,8 +1,10 @@
-iproute2 (4.6.0-5) UNRELEASED; urgency=medium
+iproute2 (4.8.0-1) unstable; urgency=medium
 
   * Fix debian/gbp.conf to import upstream tag on import-orig
+  * New upstream release.
+  * Ship upstream iproute2 docs in iproute2-doc package
 
- -- Andreas Henriksson <andreas@fatal.se>  Wed, 26 Oct 2016 15:27:46 +0200
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 26 Oct 2016 16:07:30 +0200
 
 iproute2 (4.6.0-4) unstable; urgency=medium
 

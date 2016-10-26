@@ -48,7 +48,8 @@ static void usage(void)
 {
 	fprintf(stderr, "Usage: ip neigh { add | del | change | replace }\n"
 			"                { ADDR [ lladdr LLADDR ] [ nud STATE ] | proxy ADDR } [ dev DEV ]\n");
-	fprintf(stderr, "       ip neigh { show | flush } [ proxy ] [ to PREFIX ] [ dev DEV ] [ nud STATE ]\n\n");
+	fprintf(stderr, "       ip neigh { show | flush } [ proxy ] [ to PREFIX ] [ dev DEV ] [ nud STATE ]\n");
+	fprintf(stderr, "                                 [ vrf NAME ]\n\n");
 	fprintf(stderr, "STATE := { permanent | noarp | stale | reachable | none |\n"
 			"           incomplete | delay | probe | failed }\n");
 	exit(-1);
@@ -100,21 +101,19 @@ static int ipneigh_modify(int cmd, int flags, int argc, char **argv)
 		struct nlmsghdr	n;
 		struct ndmsg		ndm;
 		char			buf[256];
-	} req;
+	} req = {
+		.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ndmsg)),
+		.n.nlmsg_flags = NLM_F_REQUEST | flags,
+		.n.nlmsg_type = cmd,
+		.ndm.ndm_family = preferred_family,
+		.ndm.ndm_state = NUD_PERMANENT,
+	};
 	char  *dev = NULL;
 	int dst_ok = 0;
 	int dev_ok = 0;
 	int lladdr_ok = 0;
 	char *lla = NULL;
 	inet_prefix dst;
-
-	memset(&req, 0, sizeof(req));
-
-	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ndmsg));
-	req.n.nlmsg_flags = NLM_F_REQUEST|flags;
-	req.n.nlmsg_type = cmd;
-	req.ndm.ndm_family = preferred_family;
-	req.ndm.ndm_state = NUD_PERMANENT;
 
 	while (argc > 0) {
 		if (matches(*argv, "lladdr") == 0) {
@@ -238,10 +237,8 @@ int print_neigh(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 
 	if (tb[NDA_DST]) {
 		if (filter.pfx.family) {
-			inet_prefix dst;
+			inet_prefix dst = { .family = r->ndm_family };
 
-			memset(&dst, 0, sizeof(dst));
-			dst.family = r->ndm_family;
 			memcpy(&dst.data, RTA_DATA(tb[NDA_DST]), RTA_PAYLOAD(tb[NDA_DST]));
 			if (inet_addr_match(&dst, &filter.pfx, filter.pfx.bitlen))
 				return 0;
@@ -347,14 +344,12 @@ static int do_show_or_flush(int argc, char **argv, int flush)
 		struct nlmsghdr	n;
 		struct ndmsg		ndm;
 		char			buf[256];
-	} req;
+	} req = {
+		.n.nlmsg_type = RTM_GETNEIGH,
+		.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ndmsg)),
+	};
 	char *filter_dev = NULL;
 	int state_given = 0;
-
-	memset(&req, 0, sizeof(req));
-
-	req.n.nlmsg_type = RTM_GETNEIGH;
-	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ndmsg));
 
 	ipneigh_reset_filter(0);
 
@@ -383,6 +378,17 @@ static int do_show_or_flush(int argc, char **argv, int flush)
 			ifindex = ll_name_to_index(*argv);
 			if (!ifindex)
 				invarg("Device does not exist\n", *argv);
+			addattr32(&req.n, sizeof(req), NDA_MASTER, ifindex);
+			filter.master = ifindex;
+		} else if (strcmp(*argv, "vrf") == 0) {
+			int ifindex;
+
+			NEXT_ARG();
+			ifindex = ll_name_to_index(*argv);
+			if (!ifindex)
+				invarg("Not a valid VRF name\n", *argv);
+			if (!name_is_vrf(*argv))
+				invarg("Not a valid VRF name\n", *argv);
 			addattr32(&req.n, sizeof(req), NDA_MASTER, ifindex);
 			filter.master = ifindex;
 		} else if (strcmp(*argv, "unused") == 0) {

@@ -37,6 +37,18 @@
 
 int timestamp_short = 0;
 
+int get_hex(char c)
+{
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	if (c >= '0' && c <= '9')
+		return c - '0';
+
+	return -1;
+}
+
 int get_integer(int *val, const char *arg, int base)
 {
 	long res;
@@ -351,6 +363,39 @@ int get_s8(__s8 *val, const char *arg, int base)
 		return -1;
 	*val = res;
 	return 0;
+}
+
+int get_be64(__be64 *val, const char *arg, int base)
+{
+	__u64 v;
+	int ret = get_u64(&v, arg, base);
+
+	if (!ret)
+		*val = htonll(v);
+
+	return ret;
+}
+
+int get_be32(__be32 *val, const char *arg, int base)
+{
+	__u32 v;
+	int ret = get_u32(&v, arg, base);
+
+	if (!ret)
+		*val = htonl(v);
+
+	return ret;
+}
+
+int get_be16(__be16 *val, const char *arg, int base)
+{
+	__u16 v;
+	int ret = get_u16(&v, arg, base);
+
+	if (!ret)
+		*val = htons(v);
+
+	return ret;
 }
 
 /* This uses a non-standard parsing (ie not inet_aton, or inet_pton)
@@ -866,9 +911,9 @@ char *hexstring_n2a(const __u8 *str, int len, char *buf, int blen)
 	return buf;
 }
 
-__u8* hexstring_a2n(const char *str, __u8 *buf, int blen)
+__u8 *hexstring_a2n(const char *str, __u8 *buf, int blen, unsigned int *len)
 {
-	int cnt = 0;
+	unsigned int cnt = 0;
 	char *endptr;
 
 	if (strlen(str) % 2)
@@ -879,12 +924,17 @@ __u8* hexstring_a2n(const char *str, __u8 *buf, int blen)
 
 		strncpy(tmpstr, str, 2);
 		tmpstr[2] = '\0';
+		errno = 0;
 		tmp = strtoul(tmpstr, &endptr, 16);
 		if (errno != 0 || tmp > 0xFF || *endptr != '\0')
 			return NULL;
 		buf[cnt++] = tmp;
 		str += 2;
 	}
+
+	if (len)
+		*len = cnt;
+
 	return buf;
 }
 
@@ -1070,4 +1120,48 @@ char *int_to_str(int val, char *buf)
 {
 	sprintf(buf, "%d", val);
 	return buf;
+}
+
+int get_guid(__u64 *guid, const char *arg)
+{
+	unsigned long int tmp;
+	char *endptr;
+	int i;
+
+#define GUID_STR_LEN 23
+	/* Verify strict format: format string must be
+	 * xx:xx:xx:xx:xx:xx:xx:xx where xx can be an arbitrary
+	 * hex digit
+	 */
+
+	if (strlen(arg) != GUID_STR_LEN)
+		return -1;
+
+	/* make sure columns are in place */
+	for (i = 0; i < 7; i++)
+		if (arg[2 + i * 3] != ':')
+			return -1;
+
+	*guid = 0;
+	for (i = 0; i < 8; i++) {
+		tmp = strtoul(arg + i * 3, &endptr, 16);
+		if (endptr != arg + i * 3 + 2)
+			return -1;
+
+		if (tmp > 255)
+			return -1;
+
+		 *guid |= tmp << (56 - 8 * i);
+	}
+
+	return 0;
+}
+
+/* This is a necessary workaround for multicast route dumps */
+int get_real_family(int rtm_type, int rtm_family)
+{
+	if (rtm_type != RTN_MULTICAST)
+		return rtm_family;
+
+	return rtm_family == RTNL_FAMILY_IPMR ? AF_INET : AF_INET6;
 }

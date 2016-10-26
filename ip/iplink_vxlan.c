@@ -31,7 +31,7 @@ static void print_explain(FILE *f)
 	fprintf(f, "                 [ ageing SECONDS ] [ maxaddress NUMBER ]\n");
 	fprintf(f, "                 [ [no]udpcsum ] [ [no]udp6zerocsumtx ] [ [no]udp6zerocsumrx ]\n");
 	fprintf(f, "                 [ [no]remcsumtx ] [ [no]remcsumrx ]\n");
-	fprintf(f, "                 [ [no]external ] [ gbp ]\n");
+	fprintf(f, "                 [ [no]external ] [ gbp ] [ gpe ]\n");
 	fprintf(f, "\n");
 	fprintf(f, "Where: VNI   := 0-16777215\n");
 	fprintf(f, "       ADDR  := { IP_ADDRESS | any }\n");
@@ -79,6 +79,7 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 	__u8 remcsumrx = 0;
 	__u8 metadata = 0;
 	__u8 gbp = 0;
+	__u8 gpe = 0;
 	int dst_port_set = 0;
 	struct ifla_vxlan_port_range range = { 0, 0 };
 
@@ -171,16 +172,12 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 				invarg("max addresses", *argv);
 		} else if (!matches(*argv, "port") ||
 			   !matches(*argv, "srcport")) {
-			__u16 minport, maxport;
-
 			NEXT_ARG();
-			if (get_u16(&minport, *argv, 0))
+			if (get_be16(&range.low, *argv, 0))
 				invarg("min port", *argv);
 			NEXT_ARG();
-			if (get_u16(&maxport, *argv, 0))
+			if (get_be16(&range.high, *argv, 0))
 				invarg("max port", *argv);
-			range.low = htons(minport);
-			range.high = htons(maxport);
 		} else if (!matches(*argv, "dstport")) {
 			NEXT_ARG();
 			if (get_u16(&dstport, *argv, 0))
@@ -234,10 +231,13 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 			remcsumrx = 0;
 		} else if (!matches(*argv, "external")) {
 			metadata = 1;
+			learning = 0;
 		} else if (!matches(*argv, "noexternal")) {
 			metadata = 0;
 		} else if (!matches(*argv, "gbp")) {
 			gbp = 1;
+		} else if (!matches(*argv, "gpe")) {
+			gpe = 1;
 		} else if (matches(*argv, "help") == 0) {
 			explain();
 			return -1;
@@ -260,13 +260,20 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 	}
 
 	if ((gaddr && daddr) ||
-		(memcmp(&gaddr6, &in6addr_any, sizeof(gaddr6)) &&
-		 memcmp(&daddr6, &in6addr_any, sizeof(daddr6)))) {
+	    (!IN6_IS_ADDR_UNSPECIFIED(&gaddr6) &&
+	     !IN6_IS_ADDR_UNSPECIFIED(&daddr6))) {
 		fprintf(stderr, "vxlan: both group and remote cannot be specified\n");
 		return -1;
 	}
 
-	if (!dst_port_set) {
+	if ((gaddr || !IN6_IS_ADDR_UNSPECIFIED(&gaddr6)) && !link) {
+		fprintf(stderr, "vxlan: 'group' requires 'dev' to be specified\n");
+		return -1;
+	}
+
+	if (!dst_port_set && gpe) {
+		dstport = 4790;
+	} else if (!dst_port_set) {
 		fprintf(stderr, "vxlan: destination port not specified\n"
 			"Will use Linux kernel default (non-standard value)\n");
 		fprintf(stderr,
@@ -279,14 +286,14 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 		addattr_l(n, 1024, IFLA_VXLAN_GROUP, &gaddr, 4);
 	else if (daddr)
 		addattr_l(n, 1024, IFLA_VXLAN_GROUP, &daddr, 4);
-	if (memcmp(&gaddr6, &in6addr_any, sizeof(gaddr6)) != 0)
+	if (!IN6_IS_ADDR_UNSPECIFIED(&gaddr6))
 		addattr_l(n, 1024, IFLA_VXLAN_GROUP6, &gaddr6, sizeof(struct in6_addr));
-	else if (memcmp(&daddr6, &in6addr_any, sizeof(daddr6)) != 0)
+	else if (!IN6_IS_ADDR_UNSPECIFIED(&daddr6))
 		addattr_l(n, 1024, IFLA_VXLAN_GROUP6, &daddr6, sizeof(struct in6_addr));
 
 	if (saddr)
 		addattr_l(n, 1024, IFLA_VXLAN_LOCAL, &saddr, 4);
-	else if (memcmp(&saddr6, &in6addr_any, sizeof(saddr6)) != 0)
+	else if (!IN6_IS_ADDR_UNSPECIFIED(&saddr6))
 		addattr_l(n, 1024, IFLA_VXLAN_LOCAL6, &saddr6, sizeof(struct in6_addr));
 
 	if (link)
@@ -323,6 +330,8 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 
 	if (gbp)
 		addattr_l(n, 1024, IFLA_VXLAN_GBP, NULL, 0);
+	if (gpe)
+		addattr_l(n, 1024, IFLA_VXLAN_GPE, NULL, 0);
 
 
 	return 0;
@@ -361,7 +370,7 @@ static void vxlan_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 		struct in6_addr addr;
 
 		memcpy(&addr, RTA_DATA(tb[IFLA_VXLAN_GROUP6]), sizeof(struct in6_addr));
-		if (memcmp(&addr, &in6addr_any, sizeof(addr)) != 0) {
+		if (!IN6_IS_ADDR_UNSPECIFIED(&addr)) {
 			if (IN6_IS_ADDR_MULTICAST(&addr))
 				fprintf(f, "group %s ",
 					format_host(AF_INET6, sizeof(struct in6_addr), &addr));
@@ -381,7 +390,7 @@ static void vxlan_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 		struct in6_addr addr;
 
 		memcpy(&addr, RTA_DATA(tb[IFLA_VXLAN_LOCAL6]), sizeof(struct in6_addr));
-		if (memcmp(&addr, &in6addr_any, sizeof(addr)) != 0)
+		if (!IN6_IS_ADDR_UNSPECIFIED(&addr))
 			fprintf(f, "local %s ",
 				format_host(AF_INET6, sizeof(struct in6_addr), &addr));
 	}
@@ -489,6 +498,8 @@ static void vxlan_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 	if (tb[IFLA_VXLAN_GBP])
 		fputs("gbp ", f);
+	if (tb[IFLA_VXLAN_GPE])
+		fputs("gpe ", f);
 }
 
 static void vxlan_print_help(struct link_util *lu, int argc, char **argv,

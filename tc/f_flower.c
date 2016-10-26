@@ -25,6 +25,7 @@
 static void explain(void)
 {
 	fprintf(stderr, "Usage: ... flower [ MATCH-LIST ]\n");
+	fprintf(stderr, "                  [ skip_sw | skip_hw ]\n");
 	fprintf(stderr, "                  [ action ACTION-SPEC ] [ classid CLASSID ]\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Where: MATCH-LIST := [ MATCH-LIST ] MATCH\n");
@@ -150,11 +151,11 @@ static int flower_parse_port(char *str, __u8 ip_port,
 		return -1;
 	}
 
-	ret = get_u16(&port, str, 10);
+	ret = get_be16(&port, str, 10);
 	if (ret)
 		return -1;
 
-	addattr16(n, MAX_MSG, type, htons(port));
+	addattr16(n, MAX_MSG, type, port);
 
 	return 0;
 }
@@ -167,6 +168,7 @@ static int flower_parse_opt(struct filter_util *qu, char *handle,
 	struct rtattr *tail;
 	__be16 eth_type = TC_H_MIN(t->tcm_info);
 	__u8 ip_proto = 0xff;
+	__u32 flags = 0;
 
 	if (handle) {
 		ret = get_u32(&t->tcm_handle, handle, 0);
@@ -196,11 +198,14 @@ static int flower_parse_opt(struct filter_util *qu, char *handle,
 				return -1;
 			}
 			addattr_l(n, MAX_MSG, TCA_FLOWER_CLASSID, &handle, 4);
+		} else if (matches(*argv, "skip_hw") == 0) {
+			flags |= TCA_CLS_FLAGS_SKIP_HW;
+		} else if (matches(*argv, "skip_sw") == 0) {
+			flags |= TCA_CLS_FLAGS_SKIP_SW;
 		} else if (matches(*argv, "indev") == 0) {
-			char ifname[IFNAMSIZ];
+			char ifname[IFNAMSIZ] = {};
 
 			NEXT_ARG();
-			memset(ifname, 0, sizeof(ifname));
 			strncpy(ifname, *argv, sizeof(ifname) - 1);
 			addattrstrz(n, MAX_MSG, TCA_FLOWER_INDEV, ifname);
 		} else if (matches(*argv, "dst_mac") == 0) {
@@ -294,6 +299,8 @@ static int flower_parse_opt(struct filter_util *qu, char *handle,
 	}
 
 parse_done:
+	addattr32(n, MAX_MSG, TCA_FLOWER_FLAGS, flags);
+
 	ret = addattr16(n, MAX_MSG, TCA_FLOWER_KEY_ETH_TYPE, eth_type);
 	if (ret) {
 		fprintf(stderr, "Illegal \"eth_type\"(0x%x)\n",
@@ -497,6 +504,15 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 	flower_print_port(f, "src_port", ip_proto,
 			  tb[TCA_FLOWER_KEY_TCP_SRC],
 			  tb[TCA_FLOWER_KEY_UDP_SRC]);
+
+	if (tb[TCA_FLOWER_FLAGS])  {
+		__u32 flags = rta_getattr_u32(tb[TCA_FLOWER_FLAGS]);
+
+		if (flags & TCA_CLS_FLAGS_SKIP_HW)
+			fprintf(f, "\n  skip_hw");
+		if (flags & TCA_CLS_FLAGS_SKIP_SW)
+			fprintf(f, "\n  skip_sw");
+	}
 
 	if (tb[TCA_FLOWER_ACT]) {
 		tc_print_action(f, tb[TCA_FLOWER_ACT]);

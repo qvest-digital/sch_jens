@@ -30,6 +30,7 @@
 
 #include <json_writer.h>
 #include <SNAPSHOT.h>
+#include "utils.h"
 
 int dump_zeros;
 int reset_history;
@@ -75,6 +76,11 @@ static int net_snmp6_open(void)
 	return generic_proc_open("PROC_NET_SNMP6", "net/snmp6");
 }
 
+static int net_sctp_snmp_open(void)
+{
+	return generic_proc_open("PROC_NET_SCTP_SNMP", "net/sctp/snmp");
+}
+
 struct nstat_ent {
 	struct nstat_ent *next;
 	char		 *id;
@@ -95,7 +101,7 @@ static int useless_number(const char *id)
 {
 	int i;
 
-	for (i = 0; i < sizeof(useless_numbers)/sizeof(*useless_numbers); i++)
+	for (i = 0; i < ARRAY_SIZE(useless_numbers); i++)
 		if (strcmp(id, useless_numbers[i]) == 0)
 			return 1;
 	return 0;
@@ -246,6 +252,16 @@ static void load_ugly_table(FILE *fp)
 	}
 }
 
+static void load_sctp_snmp(void)
+{
+	FILE *fp = fdopen(net_sctp_snmp_open(), "r");
+
+	if (fp) {
+		load_good_table(fp);
+		fclose(fp);
+	}
+}
+
 static void load_snmp(void)
 {
 	FILE *fp = fdopen(net_snmp_open(), "r");
@@ -284,6 +300,7 @@ static void dump_kern_db(FILE *fp, int to_hist)
 
 	h = hist_db;
 	if (jw) {
+		jsonw_start_object(jw);
 		jsonw_pretty(jw, pretty);
 		jsonw_name(jw, info_source);
 		jsonw_start_object(jw);
@@ -317,6 +334,8 @@ static void dump_kern_db(FILE *fp, int to_hist)
 
 	if (jw) {
 		jsonw_end_object(jw);
+
+		jsonw_end_object(jw);
 		jsonw_destroy(&jw);
 	}
 }
@@ -328,6 +347,7 @@ static void dump_incr_db(FILE *fp)
 
 	h = hist_db;
 	if (jw) {
+		jsonw_start_object(jw);
 		jsonw_pretty(jw, pretty);
 		jsonw_name(jw, info_source);
 		jsonw_start_object(jw);
@@ -364,6 +384,8 @@ static void dump_incr_db(FILE *fp)
 
 	if (jw) {
 		jsonw_end_object(jw);
+
+		jsonw_end_object(jw);
 		jsonw_destroy(&jw);
 	}
 }
@@ -384,6 +406,7 @@ static void update_db(int interval)
 	load_netstat();
 	load_snmp6();
 	load_snmp();
+	load_sctp_snmp();
 
 	h = kern_db;
 	kern_db = n;
@@ -443,6 +466,7 @@ static void server_loop(int fd)
 	load_netstat();
 	load_snmp6();
 	load_snmp();
+	load_sctp_snmp();
 
 	for (;;) {
 		int status;
@@ -699,6 +723,7 @@ int main(int argc, char *argv[])
 		load_netstat();
 		load_snmp6();
 		load_snmp();
+		load_sctp_snmp();
 		if (info_source[0] == 0)
 			strcpy(info_source, "kernel");
 	}

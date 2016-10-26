@@ -84,14 +84,12 @@ bad_val:
 static int
 parse_nat(struct action_util *a, int *argc_p, char ***argv_p, int tca_id, struct nlmsghdr *n)
 {
-	struct tc_nat sel;
+	struct tc_nat sel = {};
 
 	int argc = *argc_p;
 	char **argv = *argv_p;
 	int ok = 0;
 	struct rtattr *tail;
-
-	memset(&sel, 0, sizeof(sel));
 
 	while (argc > 0) {
 		if (matches(*argv, "nat") == 0) {
@@ -117,31 +115,8 @@ parse_nat(struct action_util *a, int *argc_p, char ***argv_p, int tca_id, struct
 		return -1;
 	}
 
-	if (argc) {
-		if (matches(*argv, "reclassify") == 0) {
-			sel.action = TC_ACT_RECLASSIFY;
-			argc--;
-			argv++;
-		} else if (matches(*argv, "pipe") == 0) {
-			sel.action = TC_ACT_PIPE;
-			argc--;
-			argv++;
-		} else if (matches(*argv, "drop") == 0 ||
-			matches(*argv, "shot") == 0) {
-			sel.action = TC_ACT_SHOT;
-			argc--;
-			argv++;
-		} else if (matches(*argv, "continue") == 0) {
-			sel.action = TC_ACT_UNSPEC;
-			argc--;
-			argv++;
-		} else if (matches(*argv, "pass") == 0 ||
-			   matches(*argv, "ok") == 0) {
-			sel.action = TC_ACT_OK;
-			argc--;
-			argv++;
-		}
-	}
+	if (argc && !action_a2n(*argv, &sel.action, false))
+		NEXT_ARG_FWD();
 
 	if (argc) {
 		if (matches(*argv, "index") == 0) {
@@ -173,7 +148,6 @@ print_nat(struct action_util *au, FILE * f, struct rtattr *arg)
 	char buf1[256];
 	char buf2[256];
 
-	SPRINT_BUF(buf3);
 	int len;
 
 	if (arg == NULL)
@@ -195,7 +169,7 @@ print_nat(struct action_util *au, FILE * f, struct rtattr *arg)
 		format_host_r(AF_INET, 4, &sel->old_addr, buf1, sizeof(buf1)),
 		len,
 		format_host_r(AF_INET, 4, &sel->new_addr, buf2, sizeof(buf2)),
-		action_n2a(sel->action, buf3, sizeof(buf3)));
+		action_n2a(sel->action));
 
 	if (show_stats) {
 		if (tb[TCA_NAT_TM]) {

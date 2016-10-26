@@ -99,6 +99,7 @@ int get_prefix(inet_prefix *dst, char *arg, int family);
 int mask2bits(__u32 netmask);
 int get_addr_ila(__u64 *val, const char *arg);
 
+int get_hex(char c);
 int get_integer(int *val, const char *arg, int base);
 int get_unsigned(unsigned *val, const char *arg, int base);
 int get_time_rtt(unsigned *val, const char *arg, int *raw);
@@ -112,10 +113,13 @@ int get_u16(__u16 *val, const char *arg, int base);
 int get_s16(__s16 *val, const char *arg, int base);
 int get_u8(__u8 *val, const char *arg, int base);
 int get_s8(__s8 *val, const char *arg, int base);
+int get_be64(__be64 *val, const char *arg, int base);
+int get_be32(__be32 *val, const char *arg, int base);
+int get_be16(__be16 *val, const char *arg, int base);
 int get_addr64(__u64 *ap, const char *cp);
 
-char* hexstring_n2a(const __u8 *str, int len, char *buf, int blen);
-__u8* hexstring_a2n(const char *str, __u8 *buf, int blen);
+char *hexstring_n2a(const __u8 *str, int len, char *buf, int blen);
+__u8 *hexstring_a2n(const char *str, __u8 *buf, int blen, unsigned int *len);
 #define ADDR64_BUF_SIZE sizeof("xxxx:xxxx:xxxx:xxxx")
 int addr64_n2a(__u64 addr, char *buff, size_t len);
 
@@ -244,5 +248,7 @@ int do_each_netns(int (*func)(char *nsname, void *arg), void *arg,
 		bool show_label);
 
 char *int_to_str(int val, char *buf);
+int get_guid(__u64 *guid, const char *arg);
+int get_real_family(int rtm_type, int rtm_family);
 
 #endif /* __UTILS_H__ */

@@ -221,8 +221,10 @@ value to match.
 
 .TP
 .BI priority " PREFERENCE"
-the priority of this rule. Each rule should have an explicitly
-set
+the priority of this rule.
+.I PREFERENCE
+is an unsigned integer value, higher number means lower priority.  Each rule
+should have an explicitly set
 .I unique
 priority value.
 The options preference and order are synonyms with priority.

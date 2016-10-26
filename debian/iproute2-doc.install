@@ -1,1 +1,2 @@
 debian/doc/htb/* /usr/share/doc/iproute2-doc/htb
+usr/share/doc/iproute2/* /usr/share/doc/iproute2-doc

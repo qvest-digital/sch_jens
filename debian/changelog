@@ -1,3 +1,9 @@
+iproute2 (4.6.0-5) UNRELEASED; urgency=medium
+
+  * Fix debian/gbp.conf to import upstream tag on import-orig
+
+ -- Andreas Henriksson <andreas@fatal.se>  Wed, 26 Oct 2016 15:27:46 +0200
+
 iproute2 (4.6.0-4) unstable; urgency=medium
 
   * Fix conflict resolution, really remove ifstat binary (Closes: #832573)

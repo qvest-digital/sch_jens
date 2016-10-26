@@ -40,7 +40,6 @@ static void stab_help(void)
 		"   linklayer : adapting to a linklayer e.g. atm\n"
 		"Example: ... stab overhead 20 linklayer atm\n");
 
-	return;
 }
 
 int check_size_table_opts(struct tc_sizespec *s)
@@ -53,9 +52,7 @@ int parse_size_table(int *argcp, char ***argvp, struct tc_sizespec *sp)
 {
 	char **argv = *argvp;
 	int argc = *argcp;
-	struct tc_sizespec s;
-
-	memset(&s, 0, sizeof(s));
+	struct tc_sizespec s = {};
 
 	NEXT_ARG();
 	if (matches(*argv, "help") == 0) {

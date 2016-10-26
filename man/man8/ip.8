@@ -21,7 +21,8 @@ ip \- show / manipulate routing, devices, policy routing and tunnels
 .IR OBJECT " := { "
 .BR link " | " address " | " addrlabel " | " route " | " rule " | " neigh " | "\
  ntable " | " tunnel " | " tuntap " | " maddress " | "  mroute " | " mrule " | "\
- monitor " | " xfrm " | " netns " | "  l2tp " | "  tcp_metrics " | " token " }"
+ monitor " | " xfrm " | " netns " | "  l2tp " | "  tcp_metrics " | " token " | "\
+ macsec " }"
 .sp
 
 .ti -8
@@ -200,6 +201,10 @@ but use shorter format.
 .TP
 .BR "\-rc" , " \-rcvbuf" <SIZE>
 Set the netlink socket receive buffer size, defaults to 1MB.
+
+.TP
+.BR "\-iec"
+print human readable rates in IEC units (e.g. 1Ki = 1024).
 
 .SH IP - COMMAND SYNTAX
 

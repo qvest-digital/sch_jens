@@ -1,3 +1,7 @@
+ifndef VERBOSE
+MAKEFLAGS += --no-print-directory
+endif
+
 PREFIX?=/usr
 LIBDIR?=$(PREFIX)/lib
 SBINDIR?=/sbin
@@ -30,8 +34,8 @@ ADDLIB+=ipx_ntop.o ipx_pton.o
 #options for mpls
 ADDLIB+=mpls_ntop.o mpls_pton.o
 
-CC = gcc
-HOSTCC = gcc
+CC := gcc
+HOSTCC ?= $(CC)
 DEFINES += -D_GNU_SOURCE
 # Turn on transparent support for LFS
 DEFINES += -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE
@@ -50,7 +54,7 @@ LDLIBS += $(LIBNETLINK)
 all: Config
 	@set -e; \
 	for i in $(SUBDIRS); \
-	do $(MAKE) $(MFLAGS) -C $$i; done
+	do echo; echo $$i; $(MAKE) $(MFLAGS) -C $$i; done
 
 Config:
 	sh configure $(KERNEL_INCLUDE)

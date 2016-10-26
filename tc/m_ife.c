@@ -56,7 +56,7 @@ static int parse_ife(struct action_util *a, int *argc_p, char ***argv_p,
 	int argc = *argc_p;
 	char **argv = *argv_p;
 	int ok = 0;
-	struct tc_ife p;
+	struct tc_ife p = { .action = TC_ACT_PIPE };	/* good default */
 	struct rtattr *tail;
 	struct rtattr *tail2;
 	char dbuf[ETH_ALEN];
@@ -68,9 +68,6 @@ static int parse_ife(struct action_util *a, int *argc_p, char ***argv_p,
 	__u32 ife_mark_v = 0;
 	char *daddr = NULL;
 	char *saddr = NULL;
-
-	memset(&p, 0, sizeof(p));
-	p.action = TC_ACT_PIPE;	/* good default */
 
 	if (argc <= 0)
 		return -1;
@@ -149,31 +146,8 @@ static int parse_ife(struct action_util *a, int *argc_p, char ***argv_p,
 		argv++;
 	}
 
-	if (argc) {
-		if (matches(*argv, "reclassify") == 0) {
-			p.action = TC_ACT_RECLASSIFY;
-			argc--;
-			argv++;
-		} else if (matches(*argv, "pipe") == 0) {
-			p.action = TC_ACT_PIPE;
-			argc--;
-			argv++;
-		} else if (matches(*argv, "drop") == 0 ||
-			   matches(*argv, "shot") == 0) {
-			p.action = TC_ACT_SHOT;
-			argc--;
-			argv++;
-		} else if (matches(*argv, "continue") == 0) {
-			p.action = TC_ACT_UNSPEC;
-			argc--;
-			argv++;
-		} else if (matches(*argv, "pass") == 0 ||
-			   matches(*argv, "ok") == 0) {
-			p.action = TC_ACT_OK;
-			argc--;
-			argv++;
-		}
-	}
+	if (argc && !action_a2n(*argv, &p.action, false))
+		NEXT_ARG_FWD();
 
 	if (argc) {
 		if (matches(*argv, "index") == 0) {
@@ -182,6 +156,7 @@ static int parse_ife(struct action_util *a, int *argc_p, char ***argv_p,
 				fprintf(stderr, "ife: Illegal \"index\"\n");
 				return -1;
 			}
+			ok++;
 			argc--;
 			argv++;
 		}
@@ -240,7 +215,6 @@ static int print_ife(struct action_util *au, FILE *f, struct rtattr *arg)
 	__u32 mhash = 0;
 	__u32 mprio = 0;
 	int has_optional = 0;
-	SPRINT_BUF(b1);
 	SPRINT_BUF(b2);
 
 	if (arg == NULL)
@@ -256,7 +230,7 @@ static int print_ife(struct action_util *au, FILE *f, struct rtattr *arg)
 
 	fprintf(f, "ife %s action %s ",
 		(p->flags & IFE_ENCODE) ? "encode" : "decode",
-		action_n2a(p->action, b1, sizeof(b1)));
+		action_n2a(p->action));
 
 	if (tb[TCA_IFE_TYPE]) {
 		ife_type = rta_getattr_u16(tb[TCA_IFE_TYPE]);

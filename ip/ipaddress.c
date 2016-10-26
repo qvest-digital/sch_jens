@@ -19,6 +19,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/param.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -60,6 +61,7 @@ static struct
 	int group;
 	int master;
 	char *kind;
+	char *slave_kind;
 } filter;
 
 static int do_link;
@@ -74,8 +76,11 @@ static void usage(void)
 	fprintf(stderr, "Usage: ip address {add|change|replace} IFADDR dev IFNAME [ LIFETIME ]\n");
 	fprintf(stderr, "                                                      [ CONFFLAG-LIST ]\n");
 	fprintf(stderr, "       ip address del IFADDR dev IFNAME [mngtmpaddr]\n");
-	fprintf(stderr, "       ip address {show|save|flush} [ dev IFNAME ] [ scope SCOPE-ID ]\n");
+	fprintf(stderr, "       ip address {save|flush} [ dev IFNAME ] [ scope SCOPE-ID ]\n");
 	fprintf(stderr, "                            [ to PREFIX ] [ FLAG-LIST ] [ label LABEL ] [up]\n");
+	fprintf(stderr, "       ip address [ show [ dev IFNAME ] [ scope SCOPE-ID ] [ master DEVICE ]\n");
+	fprintf(stderr, "                         [ type TYPE ] [ to PREFIX ] [ FLAG-LIST ]\n");
+	fprintf(stderr, "                         [ label LABEL ] [up] [ vrf NAME ] ]\n");
 	fprintf(stderr, "       ip address {showdump|restore}\n");
 	fprintf(stderr, "IFADDR := PREFIX | ADDR peer PREFIX\n");
 	fprintf(stderr, "          [ broadcast ADDR ] [ anycast ADDR ]\n");
@@ -89,6 +94,10 @@ static void usage(void)
 	fprintf(stderr, "CONFFLAG  := [ home | nodad | mngtmpaddr | noprefixroute | autojoin ]\n");
 	fprintf(stderr, "LIFETIME := [ valid_lft LFT ] [ preferred_lft LFT ]\n");
 	fprintf(stderr, "LFT := forever | SECONDS\n");
+	fprintf(stderr, "TYPE := { vlan | veth | vcan | dummy | ifb | macvlan | macvtap |\n");
+	fprintf(stderr, "          bridge | bond | ipoib | ip6tnl | ipip | sit | vxlan | lowpan |\n");
+	fprintf(stderr, "          gre | gretap | ip6gre | ip6gretap | vti | nlmon | can |\n");
+	fprintf(stderr, "          bond_slave | ipvlan | geneve | bridge_slave | vrf | hsr | macsec }\n");
 
 	exit(-1);
 }
@@ -164,13 +173,12 @@ static void print_queuelen(FILE *f, struct rtattr *tb[IFLA_MAX + 1])
 	if (tb[IFLA_TXQLEN])
 		qlen = *(int *)RTA_DATA(tb[IFLA_TXQLEN]);
 	else {
-		struct ifreq ifr;
+		struct ifreq ifr = {};
 		int s = socket(AF_INET, SOCK_STREAM, 0);
 
 		if (s < 0)
 			return;
 
-		memset(&ifr, 0, sizeof(ifr));
 		strcpy(ifr.ifr_name, rta_getattr_str(tb[IFLA_IFNAME]));
 		if (ioctl(s, SIOCGIFTXQLEN, &ifr) < 0) {
 			fprintf(f, "ioctl(SIOCGIFTXQLEN) failed: %s\n", strerror(errno));
@@ -198,16 +206,25 @@ static void print_linkmode(FILE *f, struct rtattr *tb)
 		fprintf(f, "mode %s ", link_modes[mode]);
 }
 
-static char *parse_link_kind(struct rtattr *tb)
+static char *parse_link_kind(struct rtattr *tb, bool slave)
 {
 	struct rtattr *linkinfo[IFLA_INFO_MAX+1];
+	int attr = slave ? IFLA_INFO_SLAVE_KIND : IFLA_INFO_KIND;
 
 	parse_rtattr_nested(linkinfo, IFLA_INFO_MAX, tb);
 
-	if (linkinfo[IFLA_INFO_KIND])
-		return RTA_DATA(linkinfo[IFLA_INFO_KIND]);
+	if (linkinfo[attr])
+		return RTA_DATA(linkinfo[attr]);
 
 	return "";
+}
+
+static int match_link_kind(struct rtattr **tb, const char *kind, bool slave)
+{
+	if (!tb[IFLA_LINKINFO])
+		return -1;
+
+	return strcmp(parse_link_kind(tb[IFLA_LINKINFO], slave), kind);
 }
 
 static void print_linktype(FILE *fp, struct rtattr *tb)
@@ -215,6 +232,7 @@ static void print_linktype(FILE *fp, struct rtattr *tb)
 	struct rtattr *linkinfo[IFLA_INFO_MAX+1];
 	struct link_util *lu;
 	struct link_util *slave_lu;
+	char slave[32];
 	char *kind;
 	char *slave_kind;
 
@@ -248,8 +266,9 @@ static void print_linktype(FILE *fp, struct rtattr *tb)
 
 		fprintf(fp, "%s", _SL_);
 		fprintf(fp, "    %s_slave ", slave_kind);
+		snprintf(slave, sizeof(slave), "%s_slave", slave_kind);
 
-		slave_lu = get_link_slave_kind(slave_kind);
+		slave_lu = get_link_kind(slave);
 		if (slave_lu && slave_lu->print_opt) {
 			struct rtattr *attr[slave_lu->maxattr+1], **data = NULL;
 
@@ -432,7 +451,7 @@ static void print_num(FILE *fp, unsigned int width, uint64_t count)
 
 static void print_vf_stats64(FILE *fp, struct rtattr *vfstats)
 {
-	struct rtattr *vf[IFLA_VF_STATS_MAX + 1] = {};
+	struct rtattr *vf[IFLA_VF_STATS_MAX + 1];
 
 	if (vfstats->rta_type != IFLA_VF_STATS) {
 		fprintf(stderr, "BUG: rta type is %d\n", vfstats->rta_type);
@@ -672,16 +691,11 @@ int print_linkinfo_brief(const struct sockaddr_nl *who,
 	} else if (filter.master > 0)
 		return -1;
 
-	if (filter.kind) {
-		if (tb[IFLA_LINKINFO]) {
-			char *kind = parse_link_kind(tb[IFLA_LINKINFO]);
+	if (filter.kind && match_link_kind(tb, filter.kind, 0))
+		return -1;
 
-			if (strcmp(kind, filter.kind))
-				return -1;
-		} else {
-			return -1;
-		}
-	}
+	if (filter.slave_kind && match_link_kind(tb, filter.slave_kind, 1))
+		return -1;
 
 	if (n->nlmsg_type == RTM_DELLINK)
 		fprintf(fp, "Deleted ");
@@ -773,16 +787,11 @@ int print_linkinfo(const struct sockaddr_nl *who,
 	} else if (filter.master > 0)
 		return -1;
 
-	if (filter.kind) {
-		if (tb[IFLA_LINKINFO]) {
-			char *kind = parse_link_kind(tb[IFLA_LINKINFO]);
+	if (filter.kind && match_link_kind(tb, filter.kind, 0))
+		return -1;
 
-			if (strcmp(kind, filter.kind))
-				return -1;
-		} else {
-			return -1;
-		}
-	}
+	if (filter.slave_kind && match_link_kind(tb, filter.slave_kind, 1))
+		return -1;
 
 	if (n->nlmsg_type == RTM_DELLINK)
 		fprintf(fp, "Deleted ");
@@ -893,6 +902,14 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		if (tb[IFLA_NUM_RX_QUEUES])
 			fprintf(fp, "numrxqueues %u ",
 				rta_getattr_u32(tb[IFLA_NUM_RX_QUEUES]));
+
+		if (tb[IFLA_GSO_MAX_SIZE])
+			fprintf(fp, "gso_max_size %u ",
+				rta_getattr_u32(tb[IFLA_GSO_MAX_SIZE]));
+
+		if (tb[IFLA_GSO_MAX_SEGS])
+			fprintf(fp, "gso_max_segs %u ",
+				rta_getattr_u32(tb[IFLA_GSO_MAX_SEGS]));
 
 		if (tb[IFLA_PHYS_PORT_NAME])
 			fprintf(fp, "portname %s ",
@@ -1029,10 +1046,8 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	}
 	if (filter.pfx.family) {
 		if (rta_tb[IFA_LOCAL]) {
-			inet_prefix dst;
+			inet_prefix dst = { .family = ifa->ifa_family };
 
-			memset(&dst, 0, sizeof(dst));
-			dst.family = ifa->ifa_family;
 			memcpy(&dst.data, RTA_DATA(rta_tb[IFA_LOCAL]), RTA_PAYLOAD(rta_tb[IFA_LOCAL]));
 			if (inet_addr_match(&dst, &filter.pfx, filter.pfx.bitlen))
 				return 0;
@@ -1203,7 +1218,7 @@ static int print_selected_addrinfo(struct ifinfomsg *ifi,
 		if (n->nlmsg_type != RTM_NEWADDR)
 			continue;
 
-		if (n->nlmsg_len < NLMSG_LENGTH(sizeof(ifa)))
+		if (n->nlmsg_len < NLMSG_LENGTH(sizeof(*ifa)))
 			return -1;
 
 		if (ifa->ifa_index != ifi->ifi_index ||
@@ -1388,10 +1403,10 @@ static void ipaddr_filter(struct nlmsg_chain *linfo, struct nlmsg_chain *ainfo)
 					tb[IFA_LOCAL] = tb[IFA_ADDRESS];
 
 				if (filter.pfx.family && tb[IFA_LOCAL]) {
-					inet_prefix dst;
+					inet_prefix dst = {
+						.family = ifa->ifa_family
+					};
 
-					memset(&dst, 0, sizeof(dst));
-					dst.family = ifa->ifa_family;
 					memcpy(&dst.data, RTA_DATA(tb[IFA_LOCAL]), RTA_PAYLOAD(tb[IFA_LOCAL]));
 					if (inet_addr_match(&dst, &filter.pfx, filter.pfx.bitlen))
 						continue;
@@ -1612,9 +1627,27 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 			if (!ifindex)
 				invarg("Device does not exist\n", *argv);
 			filter.master = ifindex;
-		} else if (do_link && strcmp(*argv, "type") == 0) {
+		} else if (strcmp(*argv, "vrf") == 0) {
+			int ifindex;
+
 			NEXT_ARG();
-			filter.kind = *argv;
+			ifindex = ll_name_to_index(*argv);
+			if (!ifindex)
+				invarg("Not a valid VRF name\n", *argv);
+			if (!name_is_vrf(*argv))
+				invarg("Not a valid VRF name\n", *argv);
+			filter.master = ifindex;
+		} else if (strcmp(*argv, "type") == 0) {
+			int soff;
+
+			NEXT_ARG();
+			soff = strlen(*argv) - strlen("_slave");
+			if (!strcmp(*argv + soff, "_slave")) {
+				(*argv)[soff] = '\0';
+				filter.slave_kind = *argv;
+			} else {
+				filter.kind = *argv;
+			}
 		} else {
 			if (strcmp(*argv, "dev") == 0) {
 				NEXT_ARG();
@@ -1819,7 +1852,12 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 		struct nlmsghdr	n;
 		struct ifaddrmsg	ifa;
 		char			buf[256];
-	} req;
+	} req = {
+		.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg)),
+		.n.nlmsg_flags = NLM_F_REQUEST | flags,
+		.n.nlmsg_type = cmd,
+		.ifa.ifa_family = preferred_family,
+	};
 	char  *d = NULL;
 	char  *l = NULL;
 	char  *lcl_arg = NULL;
@@ -1834,15 +1872,7 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 	int scoped = 0;
 	__u32 preferred_lft = INFINITY_LIFE_TIME;
 	__u32 valid_lft = INFINITY_LIFE_TIME;
-	struct ifa_cacheinfo cinfo;
 	unsigned int ifa_flags = 0;
-
-	memset(&req, 0, sizeof(req));
-
-	req.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg));
-	req.n.nlmsg_flags = NLM_F_REQUEST | flags;
-	req.n.nlmsg_type = cmd;
-	req.ifa.ifa_family = preferred_family;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "peer") == 0 ||
@@ -2000,6 +2030,8 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 	}
 
 	if (valid_lftp || preferred_lftp) {
+		struct ifa_cacheinfo cinfo = {};
+
 		if (!valid_lft) {
 			fprintf(stderr, "valid_lft is zero\n");
 			return -1;
@@ -2009,7 +2041,6 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 			return -1;
 		}
 
-		memset(&cinfo, 0, sizeof(cinfo));
 		cinfo.ifa_prefered = preferred_lft;
 		cinfo.ifa_valid = valid_lft;
 		addattr_l(&req.n, sizeof(req), IFA_CACHEINFO, &cinfo,

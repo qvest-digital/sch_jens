@@ -135,9 +135,7 @@ static void print_tunnel(struct ip6_tnl_parm2 *p)
 static int parse_args(int argc, char **argv, int cmd, struct ip6_tnl_parm2 *p)
 {
 	int count = 0;
-	char medium[IFNAMSIZ];
-
-	memset(medium, 0, sizeof(medium));
+	char medium[IFNAMSIZ] = {};
 
 	while (argc > 0) {
 		if (strcmp(*argv, "mode") == 0) {
@@ -276,9 +274,8 @@ static int parse_args(int argc, char **argv, int cmd, struct ip6_tnl_parm2 *p)
 				duparg2("name", *argv);
 			strncpy(p->name, *argv, IFNAMSIZ - 1);
 			if (cmd == SIOCCHGTUNNEL && count == 0) {
-				struct ip6_tnl_parm2 old_p;
+				struct ip6_tnl_parm2 old_p = {};
 
-				memset(&old_p, 0, sizeof(old_p));
 				if (tnl_get_ioctl(*argv, &old_p))
 					return -1;
 				*p = old_p;
@@ -316,10 +313,10 @@ static int ip6_tnl_parm_match(const struct ip6_tnl_parm2 *p1,
 {
 	return ((!p1->link || p1->link == p2->link) &&
 		(!p1->name[0] || strcmp(p1->name, p2->name) == 0) &&
-		(memcmp(&p1->laddr, &in6addr_any, sizeof(p1->laddr)) == 0 ||
-		 memcmp(&p1->laddr, &p2->laddr, sizeof(p1->laddr)) == 0) &&
-		(memcmp(&p1->raddr, &in6addr_any, sizeof(p1->raddr)) == 0 ||
-		 memcmp(&p1->raddr, &p2->raddr, sizeof(p1->raddr)) == 0) &&
+		(IN6_IS_ADDR_UNSPECIFIED(&p1->laddr) ||
+		 IN6_ARE_ADDR_EQUAL(&p1->laddr, &p2->laddr)) &&
+		(IN6_IS_ADDR_UNSPECIFIED(&p1->raddr) ||
+		 IN6_ARE_ADDR_EQUAL(&p1->raddr, &p2->raddr)) &&
 		(!p1->proto || !p2->proto || p1->proto == p2->proto) &&
 		(!p1->encap_limit || p1->encap_limit == p2->encap_limit) &&
 		(!p1->hop_limit || p1->hop_limit == p2->hop_limit) &&
@@ -351,7 +348,7 @@ static int do_tunnels_list(struct ip6_tnl_parm2 *p)
 	while (fgets(buf, sizeof(buf), fp) != NULL) {
 		char name[IFNAMSIZ];
 		int index, type;
-		struct ip6_tnl_parm2 p1;
+		struct ip6_tnl_parm2 p1 = {};
 		char *ptr;
 
 		buf[sizeof(buf) - 1] = '\0';
@@ -372,7 +369,6 @@ static int do_tunnels_list(struct ip6_tnl_parm2 *p)
 		}
 		if (type != ARPHRD_TUNNEL6 && type != ARPHRD_IP6GRE)
 			continue;
-		memset(&p1, 0, sizeof(p1));
 		ip6_tnl_parm_init(&p1, 0);
 		if (type == ARPHRD_IP6GRE)
 			p1.proto = IPPROTO_GRE;

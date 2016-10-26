@@ -867,9 +867,7 @@ void xfrm_xfrma_print(struct rtattr *tb[], __u16 family,
 
 static int xfrm_selector_iszero(struct xfrm_selector *s)
 {
-	struct xfrm_selector s0;
-
-	memset(&s0, 0, sizeof(s0));
+	struct xfrm_selector s0 = {};
 
 	return (memcmp(&s0, s, sizeof(s0)) == 0);
 }
@@ -878,10 +876,8 @@ void xfrm_state_info_print(struct xfrm_usersa_info *xsinfo,
 			    struct rtattr *tb[], FILE *fp, const char *prefix,
 			    const char *title)
 {
-	char buf[STRBUF_SIZE];
+	char buf[STRBUF_SIZE] = {};
 	int force_spi = xfrm_xfrmproto_is_ipsec(xsinfo->id.proto);
-
-	memset(buf, '\0', sizeof(buf));
 
 	xfrm_id_info_print(&xsinfo->saddr, &xsinfo->id, xsinfo->mode,
 			   xsinfo->reqid, xsinfo->family, force_spi, fp,
@@ -959,9 +955,7 @@ void xfrm_policy_info_print(struct xfrm_userpolicy_info *xpinfo,
 			    struct rtattr *tb[], FILE *fp, const char *prefix,
 			    const char *title)
 {
-	char buf[STRBUF_SIZE];
-
-	memset(buf, '\0', sizeof(buf));
+	char buf[STRBUF_SIZE] = {};
 
 	xfrm_selector_print(&xpinfo->sel, preferred_family, fp, title);
 
@@ -1062,11 +1056,8 @@ int xfrm_id_parse(xfrm_address_t *saddr, struct xfrm_id *id, __u16 *family,
 {
 	int argc = *argcp;
 	char **argv = *argvp;
-	inet_prefix dst;
-	inet_prefix src;
-
-	memset(&dst, 0, sizeof(dst));
-	memset(&src, 0, sizeof(src));
+	inet_prefix dst = {};
+	inet_prefix src = {};
 
 	while (1) {
 		if (strcmp(*argv, "src") == 0) {
@@ -1109,14 +1100,9 @@ int xfrm_id_parse(xfrm_address_t *saddr, struct xfrm_id *id, __u16 *family,
 			filter.id_proto_mask = XFRM_FILTER_MASK_FULL;
 
 		} else if (strcmp(*argv, "spi") == 0) {
-			__u32 spi;
-
 			NEXT_ARG();
-			if (get_u32(&spi, *argv, 0))
+			if (get_be32(&id->spi, *argv, 0))
 				invarg("SPI value is invalid", *argv);
-
-			spi = htonl(spi);
-			id->spi = spi;
 
 			filter.id_spi_mask = XFRM_FILTER_MASK_FULL;
 
@@ -1252,9 +1238,8 @@ static int xfrm_selector_upspec_parse(struct xfrm_selector *sel,
 
 			NEXT_ARG();
 
-			if (get_u16(&sel->sport, *argv, 0))
+			if (get_be16(&sel->sport, *argv, 0))
 				invarg("value after \"sport\" is invalid", *argv);
-			sel->sport = htons(sel->sport);
 			if (sel->sport)
 				sel->sport_mask = ~((__u16)0);
 
@@ -1265,9 +1250,8 @@ static int xfrm_selector_upspec_parse(struct xfrm_selector *sel,
 
 			NEXT_ARG();
 
-			if (get_u16(&sel->dport, *argv, 0))
+			if (get_be16(&sel->dport, *argv, 0))
 				invarg("value after \"dport\" is invalid", *argv);
-			sel->dport = htons(sel->dport);
 			if (sel->dport)
 				sel->dport_mask = ~((__u16)0);
 
@@ -1378,12 +1362,9 @@ int xfrm_selector_parse(struct xfrm_selector *sel, int *argcp, char ***argvp)
 {
 	int argc = *argcp;
 	char **argv = *argvp;
-	inet_prefix dst;
-	inet_prefix src;
+	inet_prefix dst = {};
+	inet_prefix src = {};
 	char *upspecp = NULL;
-
-	memset(&dst, 0, sizeof(dst));
-	memset(&src, 0, sizeof(src));
 
 	while (1) {
 		if (strcmp(*argv, "src") == 0) {

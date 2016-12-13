@@ -14,6 +14,7 @@
 #include <string.h>
 #include <netdb.h>
 #include <errno.h>
+#include <arpa/inet.h>
 
 #include <linux/tipc_netlink.h>
 #include <linux/tipc.h>
@@ -26,6 +27,15 @@
 #include "msg.h"
 #include "bearer.h"
 
+#define UDP_PROP_IP 1
+#define UDP_PROP_PORT 2
+
+struct cb_data {
+	int attr;
+	int prop;
+	struct nlmsghdr *nlh;
+};
+
 static void _print_bearer_opts(void)
 {
 	fprintf(stderr,
@@ -35,7 +45,7 @@ static void _print_bearer_opts(void)
 		" window                - Bearer link window\n");
 }
 
-static void _print_bearer_media(void)
+void print_bearer_media(void)
 {
 	fprintf(stderr,
 		"\nMEDIA\n"
@@ -57,14 +67,17 @@ static void cmd_bearer_enable_l2_help(struct cmdl *cmdl, char *media)
 static void cmd_bearer_enable_udp_help(struct cmdl *cmdl, char *media)
 {
 	fprintf(stderr,
-		"Usage: %s bearer enable media %s name NAME localip IP [OPTIONS]\n"
-		"\nOPTIONS\n"
+		"Usage: %s bearer enable [OPTIONS] media %s name NAME localip IP [UDP OPTIONS]\n\n",
+		cmdl->argv[0], media);
+	fprintf(stderr,
+		"OPTIONS\n"
 		" domain DOMAIN         - Discovery domain\n"
-		" priority PRIORITY     - Bearer priority\n"
+		" priority PRIORITY     - Bearer priority\n\n");
+	fprintf(stderr,
+		"UDP OPTIONS\n"
 		" localport PORT        - Local UDP port (default 6118)\n"
 		" remoteip IP           - Remote IP address\n"
-		" remoteport IP         - Remote UDP port (default 6118)\n",
-		cmdl->argv[0], media);
+		" remoteport PORT       - Remote UDP port (default 6118)\n");
 }
 
 static int get_netid_cb(const struct nlmsghdr *nlh, void *data)
@@ -179,14 +192,28 @@ static int nl_add_udp_enable_opts(struct nlmsghdr *nlh, struct opt *opts,
 }
 
 static int nl_add_bearer_name(struct nlmsghdr *nlh, const struct cmd *cmd,
-			   struct cmdl *cmdl, struct opt *opts,
-			   struct tipc_sup_media sup_media[])
+			      struct cmdl *cmdl, struct opt *opts,
+			      const struct tipc_sup_media *sup_media)
 {
-	char id[TIPC_MAX_BEARER_NAME];
+	char bname[TIPC_MAX_BEARER_NAME];
+	int err;
+
+	if ((err = cmd_get_unique_bearer_name(cmd, cmdl, opts, bname, sup_media)))
+		return err;
+
+	mnl_attr_put_strz(nlh, TIPC_NLA_BEARER_NAME, bname);
+	return 0;
+}
+
+int cmd_get_unique_bearer_name(const struct cmd *cmd, struct cmdl *cmdl,
+			       struct opt *opts, char *bname,
+			       const struct tipc_sup_media *sup_media)
+{
 	char *media;
 	char *identifier;
 	struct opt *opt;
-	struct tipc_sup_media *entry;
+	const struct tipc_sup_media *entry;
+
 
 	if (!(opt = get_opt(opts, "media"))) {
 		if (help_flag)
@@ -206,13 +233,12 @@ static int nl_add_bearer_name(struct nlmsghdr *nlh, const struct cmd *cmd,
 				(entry->help)(cmdl, media);
 			else
 				fprintf(stderr, "error, missing bearer %s\n",
-						entry->identifier);
+					entry->identifier);
 			return -EINVAL;
 		}
 
 		identifier = opt->val;
-		snprintf(id, sizeof(id), "%s:%s", media, identifier);
-		mnl_attr_put_strz(nlh, TIPC_NLA_BEARER_NAME, id);
+		snprintf(bname, TIPC_MAX_BEARER_NAME, "%s:%s", media, identifier);
 
 		return 0;
 	}
@@ -220,6 +246,129 @@ static int nl_add_bearer_name(struct nlmsghdr *nlh, const struct cmd *cmd,
 	fprintf(stderr, "error, invalid media type %s\n", media);
 
 	return -EINVAL;
+}
+
+static void cmd_bearer_add_udp_help(struct cmdl *cmdl, char *media)
+{
+	fprintf(stderr, "Usage: %s bearer add media %s name NAME remoteip REMOTEIP\n\n",
+		cmdl->argv[0], media);
+}
+
+static void cmd_bearer_add_help(struct cmdl *cmdl)
+{
+	fprintf(stderr, "Usage: %s bearer add media udp name NAME remoteip REMOTEIP\n",
+		cmdl->argv[0]);
+}
+
+static int udp_bearer_add(struct nlmsghdr *nlh, struct opt *opts,
+			  struct cmdl *cmdl)
+{
+	int err;
+	struct opt *opt;
+	struct nlattr *opts_nest;
+	char *remport = "6118";
+
+	opts_nest = mnl_attr_nest_start(nlh, TIPC_NLA_BEARER_UDP_OPTS);
+
+	if ((opt = get_opt(opts, "remoteport")))
+		remport = opt->val;
+
+	if ((opt = get_opt(opts, "remoteip"))) {
+		char *ip = opt->val;
+		struct addrinfo *addr = NULL;
+		struct addrinfo hints = {
+			.ai_family = AF_UNSPEC,
+			.ai_socktype = SOCK_DGRAM
+		};
+
+		if ((err = getaddrinfo(ip, remport, &hints, &addr))) {
+			fprintf(stderr, "UDP address error: %s\n",
+				gai_strerror(err));
+			freeaddrinfo(addr);
+			return err;
+		}
+
+		mnl_attr_put(nlh, TIPC_NLA_UDP_REMOTE, addr->ai_addrlen,
+			     addr->ai_addr);
+		freeaddrinfo(addr);
+	} else {
+		fprintf(stderr, "error, missing remoteip\n");
+		return -EINVAL;
+	}
+	mnl_attr_nest_end(nlh, opts_nest);
+
+	return 0;
+}
+
+static int cmd_bearer_add_media(struct nlmsghdr *nlh, const struct cmd *cmd,
+				struct cmdl *cmdl, void *data)
+{
+	int err;
+	char *media;
+	char buf[MNL_SOCKET_BUFFER_SIZE];
+	struct opt *opt;
+	struct nlattr *attrs;
+	struct opt opts[] = {
+		{ "remoteip",		OPT_KEYVAL,	NULL },
+		{ "remoteport",		OPT_KEYVAL,	NULL },
+		{ "name",		OPT_KEYVAL,	NULL },
+		{ "media",		OPT_KEYVAL,	NULL },
+		{ NULL }
+	};
+	const struct tipc_sup_media sup_media[] = {
+		{ "udp",	"name",		cmd_bearer_add_udp_help},
+		{ NULL, },
+	};
+
+	/* Rewind optind to include media in the option list */
+	cmdl->optind--;
+	if (parse_opts(opts, cmdl) < 0)
+		return -EINVAL;
+
+	if (!(opt = get_opt(opts, "media"))) {
+		fprintf(stderr, "error, missing media value\n");
+		return -EINVAL;
+	}
+	media = opt->val;
+
+	if (strcmp(media, "udp") != 0) {
+		fprintf(stderr, "error, no \"%s\" media specific options available\n",
+			media);
+		return -EINVAL;
+	}
+	if (!(opt = get_opt(opts, "name"))) {
+		fprintf(stderr, "error, missing media name\n");
+		return -EINVAL;
+	}
+
+	if (!(nlh = msg_init(buf, TIPC_NL_BEARER_ADD))) {
+		fprintf(stderr, "error, message initialisation failed\n");
+		return -1;
+	}
+
+	attrs = mnl_attr_nest_start(nlh, TIPC_NLA_BEARER);
+	err = nl_add_bearer_name(nlh, cmd, cmdl, opts, sup_media);
+	if (err)
+		return err;
+
+	err = udp_bearer_add(nlh, opts, cmdl);
+	if (err)
+		return err;
+
+	mnl_attr_nest_end(nlh, attrs);
+
+	return msg_doit(nlh, NULL, NULL);
+}
+
+static int cmd_bearer_add(struct nlmsghdr *nlh, const struct cmd *cmd,
+			  struct cmdl *cmdl, void *data)
+{
+	const struct cmd cmds[] = {
+		{ "media",	cmd_bearer_add_media,	cmd_bearer_add_help },
+		{ NULL }
+	};
+
+	return run_cmd(nlh, cmd, cmds, cmdl, NULL);
 }
 
 static void cmd_bearer_enable_help(struct cmdl *cmdl)
@@ -230,7 +379,7 @@ static void cmd_bearer_enable_help(struct cmdl *cmdl)
 		" domain DOMAIN         - Discovery domain\n"
 		" priority PRIORITY     - Bearer priority\n",
 		cmdl->argv[0]);
-	_print_bearer_media();
+	print_bearer_media();
 }
 
 static int cmd_bearer_enable(struct nlmsghdr *nlh, const struct cmd *cmd,
@@ -241,21 +390,21 @@ static int cmd_bearer_enable(struct nlmsghdr *nlh, const struct cmd *cmd,
 	struct nlattr *nest;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct opt opts[] = {
-		{ "device",		NULL },
-		{ "domain",		NULL },
-		{ "localip",		NULL },
-		{ "localport",		NULL },
-		{ "media",		NULL },
-		{ "name",		NULL },
-		{ "priority",		NULL },
-		{ "remoteip",		NULL },
-		{ "remoteport",		NULL },
+		{ "device",		OPT_KEYVAL,	NULL },
+		{ "domain",		OPT_KEYVAL,	NULL },
+		{ "localip",		OPT_KEYVAL,	NULL },
+		{ "localport",		OPT_KEYVAL,	NULL },
+		{ "media",		OPT_KEYVAL,	NULL },
+		{ "name",		OPT_KEYVAL,	NULL },
+		{ "priority",		OPT_KEYVAL,	NULL },
+		{ "remoteip",		OPT_KEYVAL,	NULL },
+		{ "remoteport",		OPT_KEYVAL,	NULL },
 		{ NULL }
 	};
 	struct tipc_sup_media sup_media[] = {
-		{ "udp",	"name",		cmd_bearer_enable_udp_help},
-		{ "eth",	"device",	cmd_bearer_enable_l2_help },
-		{ "ib",		"device",	cmd_bearer_enable_l2_help },
+		{ "udp",        "name",         cmd_bearer_enable_udp_help},
+		{ "eth",        "device",       cmd_bearer_enable_l2_help },
+		{ "ib",         "device",       cmd_bearer_enable_l2_help },
 		{ NULL, },
 	};
 
@@ -313,7 +462,7 @@ static void cmd_bearer_disable_help(struct cmdl *cmdl)
 {
 	fprintf(stderr, "Usage: %s bearer disable media MEDIA ARGS...\n",
 		cmdl->argv[0]);
-	_print_bearer_media();
+	print_bearer_media();
 }
 
 static int cmd_bearer_disable(struct nlmsghdr *nlh, const struct cmd *cmd,
@@ -323,15 +472,15 @@ static int cmd_bearer_disable(struct nlmsghdr *nlh, const struct cmd *cmd,
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlattr *nest;
 	struct opt opts[] = {
-		{ "device",		NULL },
-		{ "name",		NULL },
-		{ "media",		NULL },
+		{ "device",		OPT_KEYVAL,	NULL },
+		{ "name",		OPT_KEYVAL,	NULL },
+		{ "media",		OPT_KEYVAL,	NULL },
 		{ NULL }
 	};
 	struct tipc_sup_media sup_media[] = {
-		{ "udp",	"name",		cmd_bearer_disable_udp_help},
-		{ "eth",	"device",	cmd_bearer_disable_l2_help },
-		{ "ib",		"device",	cmd_bearer_disable_l2_help },
+		{ "udp",        "name",         cmd_bearer_disable_udp_help},
+		{ "eth",        "device",       cmd_bearer_disable_l2_help },
+		{ "ib",         "device",       cmd_bearer_disable_l2_help },
 		{ NULL, },
 	};
 
@@ -361,7 +510,7 @@ static void cmd_bearer_set_help(struct cmdl *cmdl)
 	fprintf(stderr, "Usage: %s bearer set OPTION media MEDIA ARGS...\n",
 		cmdl->argv[0]);
 	_print_bearer_opts();
-	_print_bearer_media();
+	print_bearer_media();
 }
 
 static void cmd_bearer_set_udp_help(struct cmdl *cmdl, char *media)
@@ -380,7 +529,7 @@ static void cmd_bearer_set_l2_help(struct cmdl *cmdl, char *media)
 }
 
 static int cmd_bearer_set_prop(struct nlmsghdr *nlh, const struct cmd *cmd,
-			 struct cmdl *cmdl, void *data)
+			       struct cmdl *cmdl, void *data)
 {
 	int err;
 	int val;
@@ -389,15 +538,15 @@ static int cmd_bearer_set_prop(struct nlmsghdr *nlh, const struct cmd *cmd,
 	struct nlattr *props;
 	struct nlattr *attrs;
 	struct opt opts[] = {
-		{ "device",		NULL },
-		{ "media",		NULL },
-		{ "name",		NULL },
+		{ "device",		OPT_KEYVAL,	NULL },
+		{ "media",		OPT_KEYVAL,	NULL },
+		{ "name",		OPT_KEYVAL,	NULL },
 		{ NULL }
 	};
 	struct tipc_sup_media sup_media[] = {
-		{ "udp",	"name",		cmd_bearer_set_udp_help},
-		{ "eth",	"device",	cmd_bearer_set_l2_help },
-		{ "ib",		"device",	cmd_bearer_set_l2_help },
+		{ "udp",        "name",         cmd_bearer_set_udp_help},
+		{ "eth",        "device",       cmd_bearer_set_l2_help },
+		{ "ib",         "device",       cmd_bearer_set_l2_help },
 		{ NULL, },
 	};
 
@@ -453,16 +602,22 @@ static int cmd_bearer_set(struct nlmsghdr *nlh, const struct cmd *cmd,
 
 static void cmd_bearer_get_help(struct cmdl *cmdl)
 {
-	fprintf(stderr, "Usage: %s bearer get OPTION media MEDIA ARGS...\n",
+	fprintf(stderr, "Usage: %s bearer get [OPTION] media MEDIA ARGS...\n",
 		cmdl->argv[0]);
 	_print_bearer_opts();
-	_print_bearer_media();
+	print_bearer_media();
 }
 
 static void cmd_bearer_get_udp_help(struct cmdl *cmdl, char *media)
 {
-	fprintf(stderr, "Usage: %s bearer get OPTION media %s name NAME\n\n",
+	fprintf(stderr, "Usage: %s bearer get [OPTION] media %s name NAME [UDP OPTIONS]\n\n",
 		cmdl->argv[0], media);
+	fprintf(stderr,
+		"UDP OPTIONS\n"
+		" remoteip              - Remote ip address\n"
+		" remoteport            - Remote port\n"
+		" localip               - Local ip address\n"
+		" localport             - Local port\n\n");
 	_print_bearer_opts();
 }
 
@@ -472,6 +627,115 @@ static void cmd_bearer_get_l2_help(struct cmdl *cmdl, char *media)
 		"Usage: %s bearer get OPTION media %s device DEVICE\n",
 		cmdl->argv[0], media);
 	_print_bearer_opts();
+}
+
+
+static int bearer_dump_udp_cb(const struct nlmsghdr *nlh, void *data)
+{
+	struct sockaddr_storage *addr;
+	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+	struct nlattr *info[TIPC_NLA_UDP_MAX + 1] = {};
+
+	mnl_attr_parse(nlh, sizeof(*genl), parse_attrs, info);
+
+	if (!info[TIPC_NLA_UDP_REMOTE])
+		return MNL_CB_ERROR;
+
+	addr = mnl_attr_get_payload(info[TIPC_NLA_UDP_REMOTE]);
+
+	if (addr->ss_family == AF_INET) {
+		struct sockaddr_in *ipv4 = (struct sockaddr_in *) addr;
+
+		printf("%s\n", inet_ntoa(ipv4->sin_addr));
+	} else if (addr->ss_family == AF_INET6) {
+		char straddr[INET6_ADDRSTRLEN];
+		struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *) addr;
+
+		if (!inet_ntop(AF_INET6, &ipv6->sin6_addr, straddr,
+			       sizeof(straddr))) {
+			fprintf(stderr, "error, parsing IPv6 addr\n");
+			return MNL_CB_ERROR;
+		}
+		printf("%s\n", straddr);
+
+	} else {
+		return MNL_CB_ERROR;
+	}
+
+	return MNL_CB_OK;
+}
+
+static int bearer_get_udp_cb(const struct nlmsghdr *nlh, void *data)
+{
+	struct cb_data *cb_data = (struct cb_data *) data;
+	struct sockaddr_storage *addr;
+	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+	struct nlattr *info[TIPC_NLA_MAX + 1] = {};
+	struct nlattr *attrs[TIPC_NLA_BEARER_MAX + 1] = {};
+	struct nlattr *opts[TIPC_NLA_UDP_MAX + 1] = {};
+
+	mnl_attr_parse(nlh, sizeof(*genl), parse_attrs, info);
+	if (!info[TIPC_NLA_BEARER])
+		return MNL_CB_ERROR;
+
+	mnl_attr_parse_nested(info[TIPC_NLA_BEARER], parse_attrs, attrs);
+	if (!attrs[TIPC_NLA_BEARER_UDP_OPTS])
+		return MNL_CB_ERROR;
+
+	mnl_attr_parse_nested(attrs[TIPC_NLA_BEARER_UDP_OPTS], parse_attrs, opts);
+	if (!opts[TIPC_NLA_UDP_LOCAL])
+		return MNL_CB_ERROR;
+
+	if ((cb_data->attr == TIPC_NLA_UDP_REMOTE) &&
+	    (cb_data->prop == UDP_PROP_IP) &&
+	    opts[TIPC_NLA_UDP_MULTI_REMOTEIP]) {
+		struct genlmsghdr *genl = mnl_nlmsg_get_payload(cb_data->nlh);
+
+		genl->cmd = TIPC_NL_UDP_GET_REMOTEIP;
+		return msg_dumpit(cb_data->nlh, bearer_dump_udp_cb, NULL);
+	}
+
+	addr = mnl_attr_get_payload(opts[cb_data->attr]);
+
+	if (addr->ss_family == AF_INET) {
+		struct sockaddr_in *ipv4 = (struct sockaddr_in *) addr;
+
+		switch (cb_data->prop) {
+		case UDP_PROP_IP:
+			printf("%s\n", inet_ntoa(ipv4->sin_addr));
+			break;
+		case UDP_PROP_PORT:
+			printf("%u\n", ntohs(ipv4->sin_port));
+			break;
+		default:
+			return MNL_CB_ERROR;
+		}
+
+	} else if (addr->ss_family == AF_INET6) {
+		char straddr[INET6_ADDRSTRLEN];
+		struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *) addr;
+
+		switch (cb_data->prop) {
+		case UDP_PROP_IP:
+			if (!inet_ntop(AF_INET6, &ipv6->sin6_addr, straddr,
+				       sizeof(straddr))) {
+				fprintf(stderr, "error, parsing IPv6 addr\n");
+				return MNL_CB_ERROR;
+			}
+			printf("%s\n", straddr);
+			break;
+		case UDP_PROP_PORT:
+			printf("%u\n", ntohs(ipv6->sin6_port));
+			break;
+		default:
+			return MNL_CB_ERROR;
+		}
+
+	} else {
+		return MNL_CB_ERROR;
+	}
+
+	return MNL_CB_OK;
 }
 
 static int bearer_get_cb(const struct nlmsghdr *nlh, void *data)
@@ -499,6 +763,86 @@ static int bearer_get_cb(const struct nlmsghdr *nlh, void *data)
 	return MNL_CB_OK;
 }
 
+static int cmd_bearer_get_media(struct nlmsghdr *nlh, const struct cmd *cmd,
+				struct cmdl *cmdl, void *data)
+{
+	int err;
+	char *media;
+	char buf[MNL_SOCKET_BUFFER_SIZE];
+	struct opt *opt;
+	struct cb_data cb_data = {0};
+	struct nlattr *attrs;
+	struct opt opts[] = {
+		{ "localip",		OPT_KEY,	NULL },
+		{ "localport",		OPT_KEY,	NULL },
+		{ "remoteip",		OPT_KEY,	NULL },
+		{ "remoteport",		OPT_KEY,	NULL },
+		{ "name",		OPT_KEYVAL,	NULL },
+		{ "media",		OPT_KEYVAL,	NULL },
+		{ NULL }
+	};
+	struct tipc_sup_media sup_media[] = {
+		{ "udp",        "name",         cmd_bearer_get_udp_help},
+		{ NULL, },
+	};
+
+	/* Rewind optind to include media in the option list */
+	cmdl->optind--;
+	if (parse_opts(opts, cmdl) < 0)
+		return -EINVAL;
+
+	if (!(opt = get_opt(opts, "media"))) {
+		fprintf(stderr, "error, missing media value\n");
+		return -EINVAL;
+	}
+	media = opt->val;
+
+	if (help_flag) {
+		cmd_bearer_get_udp_help(cmdl, media);
+		return -EINVAL;
+	}
+	if (strcmp(media, "udp") != 0) {
+		fprintf(stderr, "error, no \"%s\" media specific options\n", media);
+		return -EINVAL;
+	}
+	if (!(opt = get_opt(opts, "name"))) {
+		fprintf(stderr, "error, missing media name\n");
+		return -EINVAL;
+	}
+
+	if (!(nlh = msg_init(buf, TIPC_NL_BEARER_GET))) {
+		fprintf(stderr, "error, message initialisation failed\n");
+		return -1;
+	}
+
+	attrs = mnl_attr_nest_start(nlh, TIPC_NLA_BEARER);
+	err = nl_add_bearer_name(nlh, cmd, cmdl, opts, sup_media);
+	if (err)
+		return err;
+	mnl_attr_nest_end(nlh, attrs);
+	cb_data.nlh = nlh;
+
+	if (has_opt(opts, "localip")) {
+		cb_data.attr = TIPC_NLA_UDP_LOCAL;
+		cb_data.prop = UDP_PROP_IP;
+		return msg_doit(nlh, bearer_get_udp_cb, &cb_data);
+	} else if (has_opt(opts, "localport")) {
+		cb_data.attr = TIPC_NLA_UDP_LOCAL;
+		cb_data.prop = UDP_PROP_PORT;
+		return msg_doit(nlh, bearer_get_udp_cb, &cb_data);
+	} else if (has_opt(opts, "remoteip")) {
+		cb_data.attr = TIPC_NLA_UDP_REMOTE;
+		cb_data.prop = UDP_PROP_IP;
+		return msg_doit(nlh, bearer_get_udp_cb, &cb_data);
+	} else if (has_opt(opts, "remoteport")) {
+		cb_data.attr = TIPC_NLA_UDP_REMOTE;
+		cb_data.prop = UDP_PROP_PORT;
+		return msg_doit(nlh, bearer_get_udp_cb, &cb_data);
+	}
+	fprintf(stderr, "error, missing UDP option\n");
+	return -EINVAL;
+}
+
 static int cmd_bearer_get_prop(struct nlmsghdr *nlh, const struct cmd *cmd,
 			       struct cmdl *cmdl, void *data)
 {
@@ -507,17 +851,22 @@ static int cmd_bearer_get_prop(struct nlmsghdr *nlh, const struct cmd *cmd,
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlattr *attrs;
 	struct opt opts[] = {
-		{ "device",		NULL },
-		{ "media",		NULL },
-		{ "name",		NULL },
+		{ "device",		OPT_KEYVAL,	NULL },
+		{ "media",		OPT_KEYVAL,	NULL },
+		{ "name",		OPT_KEYVAL,	NULL },
 		{ NULL }
 	};
 	struct tipc_sup_media sup_media[] = {
-		{ "udp",	"name",		cmd_bearer_get_udp_help},
-		{ "eth",	"device",	cmd_bearer_get_l2_help },
-		{ "ib",		"device",	cmd_bearer_get_l2_help },
+		{ "udp",        "name",         cmd_bearer_get_udp_help},
+		{ "eth",        "device",       cmd_bearer_get_l2_help },
+		{ "ib",         "device",       cmd_bearer_get_l2_help },
 		{ NULL, },
 	};
+
+	if (help_flag) {
+		(cmd->help)(cmdl);
+		return -EINVAL;
+	}
 
 	if (strcmp(cmd->cmd, "priority") == 0)
 		prop = TIPC_NLA_PROP_PRIO;
@@ -552,6 +901,7 @@ static int cmd_bearer_get(struct nlmsghdr *nlh, const struct cmd *cmd,
 		{ "priority",	cmd_bearer_get_prop,	cmd_bearer_get_help },
 		{ "tolerance",	cmd_bearer_get_prop,	cmd_bearer_get_help },
 		{ "window",	cmd_bearer_get_prop,	cmd_bearer_get_help },
+		{ "media",	cmd_bearer_get_media,	cmd_bearer_get_help },
 		{ NULL }
 	};
 
@@ -605,6 +955,7 @@ void cmd_bearer_help(struct cmdl *cmdl)
 		"Usage: %s bearer COMMAND [ARGS] ...\n"
 		"\n"
 		"COMMANDS\n"
+		" add			- Add data to existing bearer\n"
 		" enable                - Enable a bearer\n"
 		" disable               - Disable a bearer\n"
 		" set                   - Set various bearer properties\n"
@@ -616,6 +967,7 @@ int cmd_bearer(struct nlmsghdr *nlh, const struct cmd *cmd, struct cmdl *cmdl,
 	       void *data)
 {
 	const struct cmd cmds[] = {
+		{ "add",	cmd_bearer_add,		cmd_bearer_add_help },
 		{ "disable",	cmd_bearer_disable,	cmd_bearer_disable_help },
 		{ "enable",	cmd_bearer_enable,	cmd_bearer_enable_help },
 		{ "get",	cmd_bearer_get,		cmd_bearer_get_help },

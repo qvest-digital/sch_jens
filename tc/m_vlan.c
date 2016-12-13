@@ -19,10 +19,17 @@
 #include "tc_util.h"
 #include <linux/tc_act/tc_vlan.h>
 
+static const char * const action_names[] = {
+	[TCA_VLAN_ACT_POP] = "pop",
+	[TCA_VLAN_ACT_PUSH] = "push",
+	[TCA_VLAN_ACT_MODIFY] = "modify",
+};
+
 static void explain(void)
 {
 	fprintf(stderr, "Usage: vlan pop\n");
-	fprintf(stderr, "       vlan push [ protocol VLANPROTO ] id VLANID [CONTROL]\n");
+	fprintf(stderr, "       vlan push [ protocol VLANPROTO ] id VLANID [ priority VLANPRIO ] [CONTROL]\n");
+	fprintf(stderr, "       vlan modify [ protocol VLANPROTO ] id VLANID [ priority VLANPRIO ] [CONTROL]\n");
 	fprintf(stderr, "       VLANPROTO is one of 802.1Q or 802.1AD\n");
 	fprintf(stderr, "            with default: 802.1Q\n");
 	fprintf(stderr, "       CONTROL := reclassify | pipe | drop | continue | pass\n");
@@ -32,6 +39,11 @@ static void usage(void)
 {
 	explain();
 	exit(-1);
+}
+
+static bool has_push_attribs(int action)
+{
+	return action == TCA_VLAN_ACT_PUSH || action == TCA_VLAN_ACT_MODIFY;
 }
 
 static int parse_vlan(struct action_util *a, int *argc_p, char ***argv_p,
@@ -45,6 +57,8 @@ static int parse_vlan(struct action_util *a, int *argc_p, char ***argv_p,
 	int id_set = 0;
 	__u16 proto;
 	int proto_set = 0;
+	__u8 prio;
+	int prio_set = 0;
 	struct tc_vlan parm = { 0 };
 
 	if (matches(*argv, "vlan") != 0)
@@ -69,9 +83,17 @@ static int parse_vlan(struct action_util *a, int *argc_p, char ***argv_p,
 				return -1;
 			}
 			action = TCA_VLAN_ACT_PUSH;
+		} else if (matches(*argv, "modify") == 0) {
+			if (action) {
+				fprintf(stderr, "unexpected \"%s\" - action already specified\n",
+					*argv);
+				explain();
+				return -1;
+			}
+			action = TCA_VLAN_ACT_MODIFY;
 		} else if (matches(*argv, "id") == 0) {
-			if (action != TCA_VLAN_ACT_PUSH) {
-				fprintf(stderr, "\"%s\" is only valid for push\n",
+			if (!has_push_attribs(action)) {
+				fprintf(stderr, "\"%s\" is only valid for push/modify\n",
 					*argv);
 				explain();
 				return -1;
@@ -81,8 +103,8 @@ static int parse_vlan(struct action_util *a, int *argc_p, char ***argv_p,
 				invarg("id is invalid", *argv);
 			id_set = 1;
 		} else if (matches(*argv, "protocol") == 0) {
-			if (action != TCA_VLAN_ACT_PUSH) {
-				fprintf(stderr, "\"%s\" is only valid for push\n",
+			if (!has_push_attribs(action)) {
+				fprintf(stderr, "\"%s\" is only valid for push/modify\n",
 					*argv);
 				explain();
 				return -1;
@@ -91,6 +113,17 @@ static int parse_vlan(struct action_util *a, int *argc_p, char ***argv_p,
 			if (ll_proto_a2n(&proto, *argv))
 				invarg("protocol is invalid", *argv);
 			proto_set = 1;
+		} else if (matches(*argv, "priority") == 0) {
+			if (!has_push_attribs(action)) {
+				fprintf(stderr, "\"%s\" is only valid for push/modify\n",
+					*argv);
+				explain();
+				return -1;
+			}
+			NEXT_ARG();
+			if (get_u8(&prio, *argv, 0) || (prio & ~0x7))
+				invarg("prio is invalid", *argv);
+			prio_set = 1;
 		} else if (matches(*argv, "help") == 0) {
 			usage();
 		} else {
@@ -116,8 +149,9 @@ static int parse_vlan(struct action_util *a, int *argc_p, char ***argv_p,
 		}
 	}
 
-	if (action == TCA_VLAN_ACT_PUSH && !id_set) {
-		fprintf(stderr, "id needs to be set for push\n");
+	if (has_push_attribs(action) && !id_set) {
+		fprintf(stderr, "id needs to be set for %s\n",
+			action_names[action]);
 		explain();
 		return -1;
 	}
@@ -138,6 +172,9 @@ static int parse_vlan(struct action_util *a, int *argc_p, char ***argv_p,
 
 		addattr_l(n, MAX_MSG, TCA_VLAN_PUSH_VLAN_PROTOCOL, &proto, 2);
 	}
+	if (prio_set)
+		addattr8(n, MAX_MSG, TCA_VLAN_PUSH_VLAN_PRIORITY, prio);
+
 	tail->rta_len = (char *)NLMSG_TAIL(n) - (char *)tail;
 
 	*argc_p = argc;
@@ -170,7 +207,8 @@ static int print_vlan(struct action_util *au, FILE *f, struct rtattr *arg)
 		fprintf(f, " pop");
 		break;
 	case TCA_VLAN_ACT_PUSH:
-		fprintf(f, " push");
+	case TCA_VLAN_ACT_MODIFY:
+		fprintf(f, " %s", action_names[parm->v_action]);
 		if (tb[TCA_VLAN_PUSH_VLAN_ID]) {
 			val = rta_getattr_u16(tb[TCA_VLAN_PUSH_VLAN_ID]);
 			fprintf(f, " id %u", val);
@@ -179,6 +217,10 @@ static int print_vlan(struct action_util *au, FILE *f, struct rtattr *arg)
 			fprintf(f, " protocol %s",
 				ll_proto_n2a(rta_getattr_u16(tb[TCA_VLAN_PUSH_VLAN_PROTOCOL]),
 					     b1, sizeof(b1)));
+		}
+		if (tb[TCA_VLAN_PUSH_VLAN_PRIORITY]) {
+			val = rta_getattr_u8(tb[TCA_VLAN_PUSH_VLAN_PRIORITY]);
+			fprintf(f, " priority %u", val);
 		}
 		break;
 	}

@@ -43,7 +43,8 @@ bridge \- show / manipulate bridge addresses and devices
 .BR learning_sync " { " on " | " off " } ] [ "
 .BR flood " { " on " | " off " } ] [ "
 .BR hwmode " { " vepa " | " veb " } ] [ "
-.BR self " ] [ " master " ] "
+.BR mcast_flood " { " on " | " off " } ] [ "
+.BR self " ] [ " master " ]"
 
 .ti -8
 .BR "bridge link" " [ " show " ] [ "
@@ -310,6 +311,10 @@ switch.
 - bridging happens in hardware.
 
 .TP
+.BR "mcast_flood on " or " mcast_flood off "
+Controls whether a given port will be flooded with multicast traffic for which there is no MDB entry. By default this flag is on.
+
+.TP
 .BI self
 link setting is configured on specified physical device
 
@@ -569,6 +574,11 @@ flags are ignored.
 .SS bridge vlan show - list vlan configuration.
 
 This command displays the current VLAN filter table.
+
+.PP
+With the
+.B -statistics
+option, the command displays per-vlan traffic statistics.
 
 .SH bridge monitor - state monitoring
 

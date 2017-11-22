@@ -1,4 +1,4 @@
-iproute2 (4.9.0-2.1) UNRELEASED; urgency=medium
+iproute2 (4.9.0-2.1) unstable; urgency=high
 
   * Non-maintainer upload.
   * Backport upstream commit 97a02cabef to fix segfault with iptables 1.6;
@@ -8,7 +8,7 @@ iproute2 (4.9.0-2.1) UNRELEASED; urgency=medium
     used when accessing structure members defined in libxtables. One could
     get “Extension does not know id …” otherwise. (See also: #868059)
 
- -- Cyril Brulebois <cyril@debamax.com>  Wed, 22 Nov 2017 17:51:26 +0100
+ -- Cyril Brulebois <cyril@debamax.com>  Wed, 22 Nov 2017 17:43:04 +0000
 
 iproute2 (4.9.0-2) unstable; urgency=medium
 

@@ -1,0 +1,36 @@
+From 97a02cabefb2e2dcfe27f89943709afa84be5525 Mon Sep 17 00:00:00 2001
+From: Phil Sutter <phil@nwl.cc>
+Date: Thu, 12 Jan 2017 15:22:49 +0100
+Subject: [PATCH] tc: m_xt: Fix segfault with iptables-1.6.0
+
+Said iptables version introduced struct xtables_globals field
+'compat_rev', a function pointer. Initializing it is mandatory as
+libxtables calls it without existence check.
+
+Without this, tc segfaults when using the xt action like so:
+
+| tc filter add dev d0 parent ffff: u32 match u32 0 0 \
+|	action xt -j MARK --set-mark 20
+
+Signed-off-by: Phil Sutter <phil@nwl.cc>
+---
+ tc/m_xt.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/tc/m_xt.c b/tc/m_xt.c
+index dbb54981..57ed40d7 100644
+--- a/tc/m_xt.c
++++ b/tc/m_xt.c
+@@ -77,6 +77,9 @@ static struct xtables_globals tcipt_globals = {
+ 	.orig_opts = original_opts,
+ 	.opts = original_opts,
+ 	.exit_err = NULL,
++#if (XTABLES_VERSION_CODE >= 11)
++	.compat_rev = xtables_compatible_revision,
++#endif
+ };
+ 
+ /*
+-- 
+2.11.0
+

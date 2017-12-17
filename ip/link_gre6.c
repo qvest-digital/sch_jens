@@ -32,25 +32,36 @@
 
 static void print_usage(FILE *f)
 {
-	fprintf(f, "Usage: ip link { add | set | change | replace | del } NAME\n");
-	fprintf(f, "          type { ip6gre | ip6gretap } [ remote ADDR ] [ local ADDR ]\n");
-	fprintf(f, "          [ [i|o]seq ] [ [i|o]key KEY ] [ [i|o]csum ]\n");
-	fprintf(f, "          [ hoplimit TTL ] [ encaplimit ELIM ]\n");
-	fprintf(f, "          [ tclass TCLASS ] [ flowlabel FLOWLABEL ]\n");
-	fprintf(f, "          [ dscp inherit ] [ dev PHYS_DEV ]\n");
-	fprintf(f, "          [ noencap ] [ encap { fou | gue | none } ]\n");
-	fprintf(f, "          [ encap-sport PORT ] [ encap-dport PORT ]\n");
-	fprintf(f, "          [ [no]encap-csum ] [ [no]encap-csum6 ] [ [no]encap-remcsum ]\n");
-	fprintf(f, "\n");
-	fprintf(f, "Where: NAME      := STRING\n");
-	fprintf(f, "       ADDR      := IPV6_ADDRESS\n");
-	fprintf(f, "       TTL       := { 0..255 } (default=%d)\n",
-		DEFAULT_TNL_HOP_LIMIT);
-	fprintf(f, "       KEY       := { DOTTED_QUAD | NUMBER }\n");
-	fprintf(f, "       ELIM      := { none | 0..255 }(default=%d)\n",
-		IPV6_DEFAULT_TNL_ENCAP_LIMIT);
-	fprintf(f, "       TCLASS    := { 0x0..0xff | inherit }\n");
-	fprintf(f, "       FLOWLABEL := { 0x0..0xfffff | inherit }\n");
+	fprintf(f,
+		"Usage: ... { ip6gre | ip6gretap } [ remote ADDR ]\n"
+		"                                  [ local ADDR ]\n"
+		"                                  [ [i|o]seq ]\n"
+		"                                  [ [i|o]key KEY ]\n"
+		"                                  [ [i|o]csum ]\n"
+		"                                  [ hoplimit TTL ]\n"
+		"                                  [ encaplimit ELIM ]\n"
+		"                                  [ tclass TCLASS ]\n"
+		"                                  [ flowlabel FLOWLABEL ]\n"
+		"                                  [ dscp inherit ]\n"
+		"                                  [ fwmark MARK ]\n"
+		"                                  [ dev PHYS_DEV ]\n"
+		"                                  [ noencap ]\n"
+		"                                  [ encap { fou | gue | none } ]\n"
+		"                                  [ encap-sport PORT ]\n"
+		"                                  [ encap-dport PORT ]\n"
+		"                                  [ [no]encap-csum ]\n"
+		"                                  [ [no]encap-csum6 ]\n"
+		"                                  [ [no]encap-remcsum ]\n"
+		"\n"
+		"Where: ADDR      := IPV6_ADDRESS\n"
+		"       TTL       := { 0..255 } (default=%d)\n"
+		"       KEY       := { DOTTED_QUAD | NUMBER }\n"
+		"       ELIM      := { none | 0..255 }(default=%d)\n"
+		"       TCLASS    := { 0x0..0xff | inherit }\n"
+		"       FLOWLABEL := { 0x0..0xfffff | inherit }\n"
+		"       MARK      := { 0x0..0xffffffff | inherit }\n",
+		DEFAULT_TNL_HOP_LIMIT, IPV6_DEFAULT_TNL_ENCAP_LIMIT
+	);
 }
 
 static void usage(void) __attribute__((noreturn));
@@ -94,6 +105,7 @@ static int gre_parse_opt(struct link_util *lu, int argc, char **argv,
 	__u16 encapsport = 0;
 	__u16 encapdport = 0;
 	int len;
+	__u32 fwmark = 0;
 
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
 		if (rtnl_talk(&rth, &req.n, &req.n, sizeof(req)) < 0) {
@@ -165,6 +177,9 @@ get_failed:
 
 		if (greinfo[IFLA_GRE_ENCAP_DPORT])
 			encapdport = rta_getattr_u16(greinfo[IFLA_GRE_ENCAP_DPORT]);
+
+		if (greinfo[IFLA_GRE_FWMARK])
+			fwmark = rta_getattr_u32(greinfo[IFLA_GRE_FWMARK]);
 	}
 
 	while (argc > 0) {
@@ -273,6 +288,7 @@ get_failed:
 			else {
 				if (get_u8(&uval, *argv, 16))
 					invarg("invalid TClass", *argv);
+				flowinfo &= ~IP6_FLOWINFO_TCLASS;
 				flowinfo |= htonl((__u32)uval << 20) & IP6_FLOWINFO_TCLASS;
 				flags &= ~IP6_TNL_F_USE_ORIG_TCLASS;
 			}
@@ -288,6 +304,7 @@ get_failed:
 					invarg("invalid Flowlabel", *argv);
 				if (uval > 0xFFFFF)
 					invarg("invalid Flowlabel", *argv);
+				flowinfo &= ~IP6_FLOWINFO_FLOWLABEL;
 				flowinfo |= htonl(uval) & IP6_FLOWINFO_FLOWLABEL;
 				flags &= ~IP6_TNL_F_USE_ORIG_FLOWLABEL;
 			}
@@ -330,6 +347,28 @@ get_failed:
 			encapflags |= TUNNEL_ENCAP_FLAG_REMCSUM;
 		} else if (strcmp(*argv, "noencap-remcsum") == 0) {
 			encapflags &= ~TUNNEL_ENCAP_FLAG_REMCSUM;
+		} else if (strcmp(*argv, "fwmark") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "inherit") == 0) {
+				flags |= IP6_TNL_F_USE_ORIG_FWMARK;
+				fwmark = 0;
+			} else {
+				if (get_u32(&fwmark, *argv, 0))
+					invarg("invalid fwmark\n", *argv);
+				flags &= ~IP6_TNL_F_USE_ORIG_FWMARK;
+			}
+		} else if (strcmp(*argv, "encaplimit") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "none") == 0) {
+				flags |= IP6_TNL_F_IGN_ENCAP_LIMIT;
+			} else {
+				__u8 uval;
+
+				if (get_u8(&uval, *argv, 0) < -1)
+					invarg("invalid ELIM", *argv);
+				encap_limit = uval;
+				flags &= ~IP6_TNL_F_IGN_ENCAP_LIMIT;
+			}
 		} else
 			usage();
 		argc--; argv++;
@@ -346,7 +385,8 @@ get_failed:
 	addattr_l(n, 1024, IFLA_GRE_TTL, &hop_limit, 1);
 	addattr_l(n, 1024, IFLA_GRE_ENCAP_LIMIT, &encap_limit, 1);
 	addattr_l(n, 1024, IFLA_GRE_FLOWINFO, &flowinfo, 4);
-	addattr_l(n, 1024, IFLA_GRE_FLAGS, &flowinfo, 4);
+	addattr32(n, 1024, IFLA_GRE_FLAGS, flags);
+	addattr32(n, 1024, IFLA_GRE_FWMARK, fwmark);
 
 	addattr16(n, 1024, IFLA_GRE_ENCAP_TYPE, encaptype);
 	addattr16(n, 1024, IFLA_GRE_ENCAP_FLAGS, encapflags);
@@ -374,7 +414,7 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 		flags = rta_getattr_u32(tb[IFLA_GRE_FLAGS]);
 
 	if (tb[IFLA_GRE_FLOWINFO])
-		flags = rta_getattr_u32(tb[IFLA_GRE_FLOWINFO]);
+		flowinfo = rta_getattr_u32(tb[IFLA_GRE_FLOWINFO]);
 
 	if (tb[IFLA_GRE_REMOTE]) {
 		struct in6_addr addr;
@@ -422,7 +462,14 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 	if (flags & IP6_TNL_F_USE_ORIG_FLOWLABEL)
 		fprintf(f, "flowlabel inherit ");
 	else
-		fprintf(f, "flowlabel 0x%05x ", ntohl(flowinfo & IP6_FLOWINFO_FLOWLABEL));
+		fprintf(f, "flowlabel 0x%05x ",
+			ntohl(flowinfo & IP6_FLOWINFO_FLOWLABEL));
+
+	if (flags & IP6_TNL_F_USE_ORIG_TCLASS)
+		fprintf(f, "tclass inherit ");
+	else
+		fprintf(f, "tclass 0x%02x ",
+			ntohl(flowinfo & IP6_FLOWINFO_TCLASS) >> 20);
 
 	if (flags & IP6_TNL_F_RCV_DSCP_COPY)
 		fprintf(f, "dscp inherit ");
@@ -451,6 +498,11 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 		fputs("icsum ", f);
 	if (oflags & GRE_CSUM)
 		fputs("ocsum ", f);
+
+	if (flags & IP6_TNL_F_USE_ORIG_FWMARK)
+		fprintf(f, "fwmark inherit ");
+	else if (tb[IFLA_GRE_FWMARK] && rta_getattr_u32(tb[IFLA_GRE_FWMARK]))
+		fprintf(f, "fwmark 0x%x ", rta_getattr_u32(tb[IFLA_GRE_FWMARK]));
 
 	if (tb[IFLA_GRE_ENCAP_TYPE] &&
 	    rta_getattr_u16(tb[IFLA_GRE_ENCAP_TYPE]) != TUNNEL_ENCAP_NONE) {

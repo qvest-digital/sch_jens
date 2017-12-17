@@ -34,7 +34,7 @@ static void explain(void)
 		"Usage: ... u32 [ match SELECTOR ... ] [ link HTID ] [ classid CLASSID ]\n"
 		"               [ action ACTION_SPEC ] [ offset OFFSET_SPEC ]\n"
 		"               [ ht HTID ] [ hashkey HASHKEY_SPEC ]\n"
-		"               [ sample SAMPLE ] [skip-hw | skip-sw]\n"
+		"               [ sample SAMPLE ] [skip_hw | skip_sw]\n"
 		"or         u32 divisor DIVISOR\n"
 		"\n"
 		"Where: SELECTOR := SAMPLE SAMPLE ...\n"
@@ -1264,6 +1264,11 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 			fprintf(f, "skip_hw ");
 		if (flags & TCA_CLS_FLAGS_SKIP_SW)
 			fprintf(f, "skip_sw ");
+
+		if (flags & TCA_CLS_FLAGS_IN_HW)
+			fprintf(f, "in_hw ");
+		else if (flags & TCA_CLS_FLAGS_NOT_IN_HW)
+			fprintf(f, "not_in_hw ");
 	}
 
 	if (tb[TCA_U32_PCNT]) {

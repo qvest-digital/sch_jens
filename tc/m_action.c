@@ -150,18 +150,19 @@ new_cmd(char **argv)
 
 }
 
-int
-parse_action(int *argc_p, char ***argv_p, int tca_id, struct nlmsghdr *n)
+int parse_action(int *argc_p, char ***argv_p, int tca_id, struct nlmsghdr *n)
 {
 	int argc = *argc_p;
 	char **argv = *argv_p;
 	struct rtattr *tail, *tail2;
 	char k[16];
+	int act_ck_len = 0;
 	int ok = 0;
 	int eap = 0; /* expect action parameters */
 
 	int ret = 0;
 	int prio = 0;
+	unsigned char act_ck[TC_COOKIE_MAX_SIZE];
 
 	if (argc <= 0)
 		return -1;
@@ -215,16 +216,44 @@ done0:
 			addattr_l(n, MAX_MSG, ++prio, NULL, 0);
 			addattr_l(n, MAX_MSG, TCA_ACT_KIND, k, strlen(k) + 1);
 
-			ret = a->parse_aopt(a, &argc, &argv, TCA_ACT_OPTIONS, n);
+			ret = a->parse_aopt(a, &argc, &argv, TCA_ACT_OPTIONS,
+					    n);
 
 			if (ret < 0) {
 				fprintf(stderr, "bad action parsing\n");
 				goto bad_val;
 			}
+
+			if (*argv && strcmp(*argv, "cookie") == 0) {
+				size_t slen;
+
+				NEXT_ARG();
+				slen = strlen(*argv);
+				if (slen > TC_COOKIE_MAX_SIZE * 2) {
+					char cookie_err_m[128];
+
+					snprintf(cookie_err_m, 128,
+						 "%zd Max allowed size %d",
+						 slen, TC_COOKIE_MAX_SIZE*2);
+					invarg(cookie_err_m, *argv);
+				}
+
+				if (hex2mem(*argv, act_ck, slen / 2) < 0)
+					invarg("cookie must be a hex string\n",
+					       *argv);
+
+				act_ck_len = slen / 2;
+				argc--;
+				argv++;
+			}
+
+			if (act_ck_len)
+				addattr_l(n, MAX_MSG, TCA_ACT_COOKIE,
+					  &act_ck, act_ck_len);
+
 			tail->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail;
 			ok++;
 		}
-
 	}
 
 	if (eap > 0) {
@@ -245,8 +274,7 @@ bad_val:
 	return -1;
 }
 
-static int
-tc_print_one_action(FILE *f, struct rtattr *arg)
+static int tc_print_one_action(FILE *f, struct rtattr *arg)
 {
 
 	struct rtattr *tb[TCA_ACT_MAX + 1];
@@ -274,8 +302,17 @@ tc_print_one_action(FILE *f, struct rtattr *arg)
 		return err;
 
 	if (show_stats && tb[TCA_ACT_STATS]) {
+
 		fprintf(f, "\tAction statistics:\n");
 		print_tcstats2_attr(f, tb[TCA_ACT_STATS], "\t", NULL);
+		if (tb[TCA_ACT_COOKIE]) {
+			int strsz = RTA_PAYLOAD(tb[TCA_ACT_COOKIE]);
+			char b1[strsz * 2 + 1];
+
+			fprintf(f, "\n\tcookie len %d %s ", strsz,
+				hexstring_n2a(RTA_DATA(tb[TCA_ACT_COOKIE]),
+					      strsz, b1, sizeof(b1)));
+		}
 		fprintf(f, "\n");
 	}
 
@@ -365,12 +402,18 @@ int print_action(const struct sockaddr_nl *who,
 			fprintf(fp, "Flushed table ");
 			tab_flush = 1;
 		} else {
-			fprintf(fp, "deleted action ");
+			fprintf(fp, "Deleted action ");
 		}
 	}
 
-	if (n->nlmsg_type == RTM_NEWACTION)
-		fprintf(fp, "Added action ");
+	if (n->nlmsg_type == RTM_NEWACTION) {
+		if ((n->nlmsg_flags & NLM_F_CREATE) &&
+		    !(n->nlmsg_flags & NLM_F_REPLACE)) {
+			fprintf(fp, "Added action ");
+		} else if (n->nlmsg_flags & NLM_F_REPLACE) {
+			fprintf(fp, "Replaced action ");
+		}
+	}
 	tc_print_action(fp, tb[TCA_ACT_TAB]);
 
 	return 0;

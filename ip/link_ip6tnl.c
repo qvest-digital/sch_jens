@@ -31,25 +31,34 @@
 
 static void print_usage(FILE *f)
 {
-	fprintf(f, "Usage: ip link { add | set | change | replace | del } NAME\n");
-	fprintf(f, "          [ mode { ip6ip6 | ipip6 | any } ]\n");
-	fprintf(f, "          type ip6tnl [ remote ADDR ] [ local ADDR ]\n");
-	fprintf(f, "          [ dev PHYS_DEV ] [ encaplimit ELIM ]\n");
-	fprintf(f, "          [ hoplimit HLIM ] [ tclass TCLASS ] [ flowlabel FLOWLABEL ]\n");
-	fprintf(f, "          [ dscp inherit ] [ fwmark inherit ]\n");
-	fprintf(f, "          [ noencap ] [ encap { fou | gue | none } ]\n");
-	fprintf(f, "          [ encap-sport PORT ] [ encap-dport PORT ]\n");
-	fprintf(f, "          [ [no]encap-csum ] [ [no]encap-csum6 ] [ [no]encap-remcsum ]\n");
-	fprintf(f, "          [ external ]\n");
-	fprintf(f, "\n");
-	fprintf(f, "Where: NAME      := STRING\n");
-	fprintf(f, "       ADDR      := IPV6_ADDRESS\n");
-	fprintf(f, "       ELIM      := { none | 0..255 }(default=%d)\n",
-		IPV6_DEFAULT_TNL_ENCAP_LIMIT);
-	fprintf(f, "       HLIM      := 0..255 (default=%d)\n",
-		DEFAULT_TNL_HOP_LIMIT);
-	fprintf(f, "       TCLASS    := { 0x0..0xff | inherit }\n");
-	fprintf(f, "       FLOWLABEL := { 0x0..0xfffff | inherit }\n");
+	fprintf(f,
+		"Usage: ... ip6tnl [ mode { ip6ip6 | ipip6 | any } ]\n"
+		"                  [ remote ADDR ]\n"
+		"                  [ local ADDR ]\n"
+		"                  [ dev PHYS_DEV ]\n"
+		"                  [ encaplimit ELIM ]\n"
+		"                  [ hoplimit HLIM ]\n"
+		"                  [ tclass TCLASS ]\n"
+		"                  [ flowlabel FLOWLABEL ]\n"
+		"                  [ dscp inherit ]\n"
+		"                  [ fwmark MARK ]\n"
+		"                  [ noencap ]\n"
+		"                  [ encap { fou | gue | none } ]\n"
+		"                  [ encap-sport PORT ]\n"
+		"                  [ encap-dport PORT ]\n"
+		"                  [ [no]encap-csum ]\n"
+		"                  [ [no]encap-csum6 ]\n"
+		"                  [ [no]encap-remcsum ]\n"
+		"                  [ external ]\n"
+		"\n"
+		"Where: ADDR      := IPV6_ADDRESS\n"
+		"       ELIM      := { none | 0..255 }(default=%d)\n"
+		"       HLIM      := 0..255 (default=%d)\n"
+		"       TCLASS    := { 0x0..0xff | inherit }\n"
+		"       FLOWLABEL := { 0x0..0xfffff | inherit }\n"
+		"       MARK      := { 0x0..0xffffffff | inherit }\n",
+		IPV6_DEFAULT_TNL_ENCAP_LIMIT, DEFAULT_TNL_HOP_LIMIT
+	);
 }
 
 static void usage(void) __attribute__((noreturn));
@@ -91,6 +100,7 @@ static int ip6tunnel_parse_opt(struct link_util *lu, int argc, char **argv,
 	__u16 encapsport = 0;
 	__u16 encapdport = 0;
 	__u8 metadata = 0;
+	__u32 fwmark = 0;
 
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
 		if (rtnl_talk(&rth, &req.n, &req.n, sizeof(req)) < 0) {
@@ -145,6 +155,9 @@ get_failed:
 			proto = rta_getattr_u8(iptuninfo[IFLA_IPTUN_PROTO]);
 		if (iptuninfo[IFLA_IPTUN_COLLECT_METADATA])
 			metadata = 1;
+
+		if (iptuninfo[IFLA_IPTUN_FWMARK])
+			fwmark = rta_getattr_u32(iptuninfo[IFLA_IPTUN_FWMARK]);
 	}
 
 	while (argc > 0) {
@@ -244,9 +257,14 @@ get_failed:
 			flags |= IP6_TNL_F_RCV_DSCP_COPY;
 		} else if (strcmp(*argv, "fwmark") == 0) {
 			NEXT_ARG();
-			if (strcmp(*argv, "inherit") != 0)
-				invarg("not inherit", *argv);
-			flags |= IP6_TNL_F_USE_ORIG_FWMARK;
+			if (strcmp(*argv, "inherit") == 0) {
+				flags |= IP6_TNL_F_USE_ORIG_FWMARK;
+				fwmark = 0;
+			} else {
+				if (get_u32(&fwmark, *argv, 0))
+					invarg("invalid fwmark\n", *argv);
+				flags &= ~IP6_TNL_F_USE_ORIG_FWMARK;
+			}
 		} else if (strcmp(*argv, "noencap") == 0) {
 			encaptype = TUNNEL_ENCAP_NONE;
 		} else if (strcmp(*argv, "encap") == 0) {
@@ -300,6 +318,7 @@ get_failed:
 	addattr32(n, 1024, IFLA_IPTUN_FLOWINFO, flowinfo);
 	addattr32(n, 1024, IFLA_IPTUN_FLAGS, flags);
 	addattr32(n, 1024, IFLA_IPTUN_LINK, link);
+	addattr32(n, 1024, IFLA_IPTUN_FWMARK, fwmark);
 
 	addattr16(n, 1024, IFLA_IPTUN_ENCAP_TYPE, encaptype);
 	addattr16(n, 1024, IFLA_IPTUN_ENCAP_FLAGS, encapflags);
@@ -390,6 +409,8 @@ static void ip6tunnel_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb
 
 	if (flags & IP6_TNL_F_USE_ORIG_FWMARK)
 		fprintf(f, "fwmark inherit ");
+	else if (tb[IFLA_IPTUN_FWMARK] && rta_getattr_u32(tb[IFLA_IPTUN_FWMARK]))
+		fprintf(f, "fwmark 0x%x ", rta_getattr_u32(tb[IFLA_IPTUN_FWMARK]));
 
 	if (tb[IFLA_IPTUN_ENCAP_TYPE] &&
 	    rta_getattr_u16(tb[IFLA_IPTUN_ENCAP_TYPE]) !=

@@ -1,14 +1,14 @@
 /*
- * tc_bpf.c	BPF common code
+ * bpf.c	BPF common code
  *
  *		This program is free software; you can distribute it and/or
  *		modify it under the terms of the GNU General Public License
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
  *
- * Authors:	Daniel Borkmann <dborkman@redhat.com>
+ * Authors:	Daniel Borkmann <daniel@iogearbox.net>
  *		Jiri Pirko <jiri@resnulli.us>
- *		Alexei Starovoitov <ast@plumgrid.com>
+ *		Alexei Starovoitov <ast@kernel.org>
  */
 
 #include <stdio.h>
@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <limits.h>
+#include <assert.h>
 
 #ifdef HAVE_ELF
 #include <libelf.h>
@@ -36,27 +37,78 @@
 #include <sys/sendfile.h>
 #include <sys/resource.h>
 
-#include <linux/bpf.h>
-#include <linux/filter.h>
-#include <linux/if_alg.h>
-
 #include <arpa/inet.h>
 
 #include "utils.h"
 
+#include "bpf_util.h"
 #include "bpf_elf.h"
 #include "bpf_scm.h"
 
-#include "tc_util.h"
-#include "tc_bpf.h"
+struct bpf_prog_meta {
+	const char *type;
+	const char *subdir;
+	const char *section;
+	bool may_uds_export;
+};
 
-#ifndef AF_ALG
-#define AF_ALG 38
-#endif
+static const enum bpf_prog_type __bpf_types[] = {
+	BPF_PROG_TYPE_SCHED_CLS,
+	BPF_PROG_TYPE_SCHED_ACT,
+	BPF_PROG_TYPE_XDP,
+	BPF_PROG_TYPE_LWT_IN,
+	BPF_PROG_TYPE_LWT_OUT,
+	BPF_PROG_TYPE_LWT_XMIT,
+};
 
-#ifndef EM_BPF
-#define EM_BPF 247
-#endif
+static const struct bpf_prog_meta __bpf_prog_meta[] = {
+	[BPF_PROG_TYPE_SCHED_CLS] = {
+		.type		= "cls",
+		.subdir		= "tc",
+		.section	= ELF_SECTION_CLASSIFIER,
+		.may_uds_export	= true,
+	},
+	[BPF_PROG_TYPE_SCHED_ACT] = {
+		.type		= "act",
+		.subdir		= "tc",
+		.section	= ELF_SECTION_ACTION,
+		.may_uds_export	= true,
+	},
+	[BPF_PROG_TYPE_XDP] = {
+		.type		= "xdp",
+		.subdir		= "xdp",
+		.section	= ELF_SECTION_PROG,
+	},
+	[BPF_PROG_TYPE_LWT_IN] = {
+		.type		= "lwt_in",
+		.subdir		= "ip",
+		.section	= ELF_SECTION_PROG,
+	},
+	[BPF_PROG_TYPE_LWT_OUT] = {
+		.type		= "lwt_out",
+		.subdir		= "ip",
+		.section	= ELF_SECTION_PROG,
+	},
+	[BPF_PROG_TYPE_LWT_XMIT] = {
+		.type		= "lwt_xmit",
+		.subdir		= "ip",
+		.section	= ELF_SECTION_PROG,
+	},
+};
+
+static const char *bpf_prog_to_subdir(enum bpf_prog_type type)
+{
+	assert(type < ARRAY_SIZE(__bpf_prog_meta) &&
+	       __bpf_prog_meta[type].subdir);
+	return __bpf_prog_meta[type].subdir;
+}
+
+const char *bpf_prog_to_default_section(enum bpf_prog_type type)
+{
+	assert(type < ARRAY_SIZE(__bpf_prog_meta) &&
+	       __bpf_prog_meta[type].section);
+	return __bpf_prog_meta[type].section;
+}
 
 #ifdef HAVE_ELF
 static int bpf_obj_open(const char *path, enum bpf_prog_type type,
@@ -100,6 +152,60 @@ static int bpf_map_update(int fd, const void *key, const void *value,
 	return bpf(BPF_MAP_UPDATE_ELEM, &attr, sizeof(attr));
 }
 
+static int bpf_prog_fd_by_id(uint32_t id)
+{
+	union bpf_attr attr = {};
+
+	attr.prog_id = id;
+
+	return bpf(BPF_PROG_GET_FD_BY_ID, &attr, sizeof(attr));
+}
+
+static int bpf_prog_info_by_fd(int fd, struct bpf_prog_info *info,
+			       uint32_t *info_len)
+{
+	union bpf_attr attr = {};
+	int ret;
+
+	attr.info.bpf_fd = fd;
+	attr.info.info = bpf_ptr_to_u64(info);
+	attr.info.info_len = *info_len;
+
+	*info_len = 0;
+	ret = bpf(BPF_OBJ_GET_INFO_BY_FD, &attr, sizeof(attr));
+	if (!ret)
+		*info_len = attr.info.info_len;
+
+	return ret;
+}
+
+int bpf_dump_prog_info(FILE *f, uint32_t id)
+{
+	struct bpf_prog_info info = {};
+	uint32_t len = sizeof(info);
+	int fd, ret, dump_ok = 0;
+	SPRINT_BUF(tmp);
+
+	fprintf(f, "id %u ", id);
+
+	fd = bpf_prog_fd_by_id(id);
+	if (fd < 0)
+		return dump_ok;
+
+	ret = bpf_prog_info_by_fd(fd, &info, &len);
+	if (!ret && len) {
+		fprintf(f, "tag %s ",
+			hexstring_n2a(info.tag, sizeof(info.tag),
+				      tmp, sizeof(tmp)));
+		if (info.jited_prog_len)
+			fprintf(f, "jited ");
+		dump_ok = 1;
+	}
+
+	close(fd);
+	return dump_ok;
+}
+
 static int bpf_parse_string(char *arg, bool from_file, __u16 *bpf_len,
 			    char **bpf_string, bool *need_release,
 			    const char separator)
@@ -108,11 +214,12 @@ static int bpf_parse_string(char *arg, bool from_file, __u16 *bpf_len,
 
 	if (from_file) {
 		size_t tmp_len, op_len = sizeof("65535 255 255 4294967295,");
-		char *tmp_string;
+		char *tmp_string, *pos, c_prev = ' ';
 		FILE *fp;
+		int c;
 
 		tmp_len = sizeof("4096,") + BPF_MAXINSNS * op_len;
-		tmp_string = calloc(1, tmp_len);
+		tmp_string = pos = calloc(1, tmp_len);
 		if (tmp_string == NULL)
 			return -ENOMEM;
 
@@ -123,13 +230,35 @@ static int bpf_parse_string(char *arg, bool from_file, __u16 *bpf_len,
 			return -ENOENT;
 		}
 
-		if (!fgets(tmp_string, tmp_len, fp)) {
+		while ((c = fgetc(fp)) != EOF) {
+			switch (c) {
+			case '\n':
+				if (c_prev != ',')
+					*(pos++) = ',';
+				c_prev = ',';
+				break;
+			case ' ':
+			case '\t':
+				if (c_prev != ' ')
+					*(pos++) = c;
+				c_prev = ' ';
+				break;
+			default:
+				*(pos++) = c;
+				c_prev = c;
+			}
+			if (pos - tmp_string == tmp_len)
+				break;
+		}
+
+		if (!feof(fp)) {
 			free(tmp_string);
 			fclose(fp);
-			return -EIO;
+			return -E2BIG;
 		}
 
 		fclose(fp);
+		*pos = 0;
 
 		*need_release = true;
 		*bpf_string = tmp_string;
@@ -200,7 +329,7 @@ out:
 
 void bpf_print_ops(FILE *f, struct rtattr *bpf_ops, __u16 len)
 {
-	struct sock_filter *ops = (struct sock_filter *) RTA_DATA(bpf_ops);
+	struct sock_filter *ops = RTA_DATA(bpf_ops);
 	int i;
 
 	if (len == 0)
@@ -240,15 +369,24 @@ static void bpf_map_pin_report(const struct bpf_elf_map *pin,
 	fprintf(stderr, "\n");
 }
 
-static int bpf_map_selfcheck_pinned(int fd, const struct bpf_elf_map *map,
-				    int length)
+struct bpf_prog_data {
+	unsigned int type;
+	unsigned int jited;
+};
+
+struct bpf_map_ext {
+	struct bpf_prog_data owner;
+};
+
+static int bpf_derive_elf_map_from_fdinfo(int fd, struct bpf_elf_map *map,
+					  struct bpf_map_ext *ext)
 {
+	unsigned int val, owner_type = 0, owner_jited = 0;
 	char file[PATH_MAX], buff[4096];
-	struct bpf_elf_map tmp = {}, zero = {};
-	unsigned int val;
 	FILE *fp;
 
 	snprintf(file, sizeof(file), "/proc/%d/fdinfo/%d", getpid(), fd);
+	memset(map, 0, sizeof(*map));
 
 	fp = fopen(file, "r");
 	if (!fp) {
@@ -258,18 +396,48 @@ static int bpf_map_selfcheck_pinned(int fd, const struct bpf_elf_map *map,
 
 	while (fgets(buff, sizeof(buff), fp)) {
 		if (sscanf(buff, "map_type:\t%u", &val) == 1)
-			tmp.type = val;
+			map->type = val;
 		else if (sscanf(buff, "key_size:\t%u", &val) == 1)
-			tmp.size_key = val;
+			map->size_key = val;
 		else if (sscanf(buff, "value_size:\t%u", &val) == 1)
-			tmp.size_value = val;
+			map->size_value = val;
 		else if (sscanf(buff, "max_entries:\t%u", &val) == 1)
-			tmp.max_elem = val;
+			map->max_elem = val;
 		else if (sscanf(buff, "map_flags:\t%i", &val) == 1)
-			tmp.flags = val;
+			map->flags = val;
+		else if (sscanf(buff, "owner_prog_type:\t%i", &val) == 1)
+			owner_type = val;
+		else if (sscanf(buff, "owner_jited:\t%i", &val) == 1)
+			owner_jited = val;
 	}
 
 	fclose(fp);
+	if (ext) {
+		memset(ext, 0, sizeof(*ext));
+		ext->owner.type  = owner_type;
+		ext->owner.jited = owner_jited;
+	}
+
+	return 0;
+}
+
+static int bpf_map_selfcheck_pinned(int fd, const struct bpf_elf_map *map,
+				    struct bpf_map_ext *ext, int length,
+				    enum bpf_prog_type type)
+{
+	struct bpf_elf_map tmp, zero = {};
+	int ret;
+
+	ret = bpf_derive_elf_map_from_fdinfo(fd, &tmp, ext);
+	if (ret < 0)
+		return ret;
+
+	/* The decision to reject this is on kernel side eventually, but
+	 * at least give the user a chance to know what's wrong.
+	 */
+	if (ext->owner.type && ext->owner.type != type)
+		fprintf(stderr, "Program array map owner types differ: %u (obj) != %u (pin)\n",
+			type, ext->owner.type);
 
 	if (!memcmp(&tmp, map, length)) {
 		return 0;
@@ -307,10 +475,28 @@ static int bpf_mnt_fs(const char *target)
 		bind_done = true;
 	}
 
-	if (mount("bpf", target, "bpf", 0, NULL)) {
+	if (mount("bpf", target, "bpf", 0, "mode=0700")) {
 		fprintf(stderr, "mount -t bpf bpf %s failed: %s\n",
 			target,	strerror(errno));
 		return -1;
+	}
+
+	return 0;
+}
+
+static int bpf_mnt_check_target(const char *target)
+{
+	struct stat sb = {};
+	int ret;
+
+	ret = stat(target, &sb);
+	if (ret) {
+		ret = mkdir(target, S_IRWXU);
+		if (ret) {
+			fprintf(stderr, "mkdir %s failed: %s\n", target,
+				strerror(errno));
+			return ret;
+		}
 	}
 
 	return 0;
@@ -328,6 +514,20 @@ static int bpf_valid_mntpt(const char *mnt, unsigned long magic)
 	return 0;
 }
 
+static const char *bpf_find_mntpt_single(unsigned long magic, char *mnt,
+					 int len, const char *mntpt)
+{
+	int ret;
+
+	ret = bpf_valid_mntpt(mntpt, magic);
+	if (!ret) {
+		strlcpy(mnt, mntpt, len);
+		return mnt;
+	}
+
+	return NULL;
+}
+
 static const char *bpf_find_mntpt(const char *fstype, unsigned long magic,
 				  char *mnt, int len,
 				  const char * const *known_mnts)
@@ -339,17 +539,17 @@ static const char *bpf_find_mntpt(const char *fstype, unsigned long magic,
 	if (known_mnts) {
 		ptr = known_mnts;
 		while (*ptr) {
-			if (bpf_valid_mntpt(*ptr, magic) == 0) {
-				strncpy(mnt, *ptr, len - 1);
-				mnt[len - 1] = 0;
+			if (bpf_find_mntpt_single(magic, mnt, len, *ptr))
 				return mnt;
-			}
 			ptr++;
 		}
 	}
 
+	if (len != PATH_MAX)
+		return NULL;
+
 	fp = fopen("/proc/mounts", "r");
-	if (fp == NULL || len != PATH_MAX)
+	if (fp == NULL)
 		return NULL;
 
 	while (fscanf(fp, "%*s %" textify(PATH_MAX) "s %99s %*s %*d %*d\n",
@@ -375,9 +575,9 @@ int bpf_trace_pipe(void)
 		"/trace",
 		0,
 	};
+	int fd_in, fd_out = STDERR_FILENO;
 	char tpipe[PATH_MAX];
 	const char *mnt;
-	int fd;
 
 	mnt = bpf_find_mntpt("tracefs", TRACEFS_MAGIC, tracefs_mnt,
 			     sizeof(tracefs_mnt), tracefs_known_mnts);
@@ -388,8 +588,8 @@ int bpf_trace_pipe(void)
 
 	snprintf(tpipe, sizeof(tpipe), "%s/trace_pipe", mnt);
 
-	fd = open(tpipe, O_RDONLY);
-	if (fd < 0)
+	fd_in = open(tpipe, O_RDONLY);
+	if (fd_in < 0)
 		return -1;
 
 	fprintf(stderr, "Running! Hang up with ^C!\n\n");
@@ -397,80 +597,189 @@ int bpf_trace_pipe(void)
 		static char buff[4096];
 		ssize_t ret;
 
-		ret = read(fd, buff, sizeof(buff) - 1);
-		if (ret > 0) {
-			write(2, buff, ret);
-			fflush(stderr);
-		}
+		ret = read(fd_in, buff, sizeof(buff));
+		if (ret > 0 && write(fd_out, buff, ret) == ret)
+			continue;
+		break;
+	}
+
+	close(fd_in);
+	return -1;
+}
+
+static int bpf_gen_global(const char *bpf_sub_dir)
+{
+	char bpf_glo_dir[PATH_MAX];
+	int ret;
+
+	snprintf(bpf_glo_dir, sizeof(bpf_glo_dir), "%s/%s/",
+		 bpf_sub_dir, BPF_DIR_GLOBALS);
+
+	ret = mkdir(bpf_glo_dir, S_IRWXU);
+	if (ret && errno != EEXIST) {
+		fprintf(stderr, "mkdir %s failed: %s\n", bpf_glo_dir,
+			strerror(errno));
+		return ret;
 	}
 
 	return 0;
 }
 
-static const char *bpf_get_tc_dir(void)
+static int bpf_gen_master(const char *base, const char *name)
 {
-	static bool bpf_mnt_cached;
-	static char bpf_tc_dir[PATH_MAX];
-	static const char *mnt;
-	static const char * const bpf_known_mnts[] = {
-		BPF_DIR_MNT,
-		0,
-	};
-	char bpf_mnt[PATH_MAX] = BPF_DIR_MNT;
-	char bpf_glo_dir[PATH_MAX];
+	char bpf_sub_dir[PATH_MAX];
 	int ret;
 
-	if (bpf_mnt_cached)
-		goto done;
+	snprintf(bpf_sub_dir, sizeof(bpf_sub_dir), "%s%s/", base, name);
 
-	mnt = bpf_find_mntpt("bpf", BPF_FS_MAGIC, bpf_mnt, sizeof(bpf_mnt),
-			     bpf_known_mnts);
+	ret = mkdir(bpf_sub_dir, S_IRWXU);
+	if (ret && errno != EEXIST) {
+		fprintf(stderr, "mkdir %s failed: %s\n", bpf_sub_dir,
+			strerror(errno));
+		return ret;
+	}
+
+	return bpf_gen_global(bpf_sub_dir);
+}
+
+static int bpf_slave_via_bind_mnt(const char *full_name,
+				  const char *full_link)
+{
+	int ret;
+
+	ret = mkdir(full_name, S_IRWXU);
+	if (ret) {
+		assert(errno != EEXIST);
+		fprintf(stderr, "mkdir %s failed: %s\n", full_name,
+			strerror(errno));
+		return ret;
+	}
+
+	ret = mount(full_link, full_name, "none", MS_BIND, NULL);
+	if (ret) {
+		rmdir(full_name);
+		fprintf(stderr, "mount --bind %s %s failed: %s\n",
+			full_link, full_name, strerror(errno));
+	}
+
+	return ret;
+}
+
+static int bpf_gen_slave(const char *base, const char *name,
+			 const char *link)
+{
+	char bpf_lnk_dir[PATH_MAX];
+	char bpf_sub_dir[PATH_MAX];
+	struct stat sb = {};
+	int ret;
+
+	snprintf(bpf_lnk_dir, sizeof(bpf_lnk_dir), "%s%s/", base, link);
+	snprintf(bpf_sub_dir, sizeof(bpf_sub_dir), "%s%s",  base, name);
+
+	ret = symlink(bpf_lnk_dir, bpf_sub_dir);
+	if (ret) {
+		if (errno != EEXIST) {
+			if (errno != EPERM) {
+				fprintf(stderr, "symlink %s failed: %s\n",
+					bpf_sub_dir, strerror(errno));
+				return ret;
+			}
+
+			return bpf_slave_via_bind_mnt(bpf_sub_dir,
+						      bpf_lnk_dir);
+		}
+
+		ret = lstat(bpf_sub_dir, &sb);
+		if (ret) {
+			fprintf(stderr, "lstat %s failed: %s\n",
+				bpf_sub_dir, strerror(errno));
+			return ret;
+		}
+
+		if ((sb.st_mode & S_IFMT) != S_IFLNK)
+			return bpf_gen_global(bpf_sub_dir);
+	}
+
+	return 0;
+}
+
+static int bpf_gen_hierarchy(const char *base)
+{
+	int ret, i;
+
+	ret = bpf_gen_master(base, bpf_prog_to_subdir(__bpf_types[0]));
+	for (i = 1; i < ARRAY_SIZE(__bpf_types) && !ret; i++)
+		ret = bpf_gen_slave(base,
+				    bpf_prog_to_subdir(__bpf_types[i]),
+				    bpf_prog_to_subdir(__bpf_types[0]));
+	return ret;
+}
+
+static const char *bpf_get_work_dir(enum bpf_prog_type type)
+{
+	static char bpf_tmp[PATH_MAX] = BPF_DIR_MNT;
+	static char bpf_wrk_dir[PATH_MAX];
+	static const char *mnt;
+	static bool bpf_mnt_cached;
+	const char *mnt_env = getenv(BPF_ENV_MNT);
+	static const char * const bpf_known_mnts[] = {
+		BPF_DIR_MNT,
+		"/bpf",
+		0,
+	};
+	int ret;
+
+	if (bpf_mnt_cached) {
+		const char *out = mnt;
+
+		if (out && type) {
+			snprintf(bpf_tmp, sizeof(bpf_tmp), "%s%s/",
+				 out, bpf_prog_to_subdir(type));
+			out = bpf_tmp;
+		}
+		return out;
+	}
+
+	if (mnt_env)
+		mnt = bpf_find_mntpt_single(BPF_FS_MAGIC, bpf_tmp,
+					    sizeof(bpf_tmp), mnt_env);
+	else
+		mnt = bpf_find_mntpt("bpf", BPF_FS_MAGIC, bpf_tmp,
+				     sizeof(bpf_tmp), bpf_known_mnts);
 	if (!mnt) {
-		mnt = getenv(BPF_ENV_MNT);
-		if (!mnt)
-			mnt = BPF_DIR_MNT;
-		ret = bpf_mnt_fs(mnt);
+		mnt = mnt_env ? : BPF_DIR_MNT;
+		ret = bpf_mnt_check_target(mnt);
+		if (!ret)
+			ret = bpf_mnt_fs(mnt);
 		if (ret) {
 			mnt = NULL;
 			goto out;
 		}
 	}
 
-	snprintf(bpf_tc_dir, sizeof(bpf_tc_dir), "%s/%s", mnt, BPF_DIR_TC);
-	ret = mkdir(bpf_tc_dir, S_IRWXU);
-	if (ret && errno != EEXIST) {
-		fprintf(stderr, "mkdir %s failed: %s\n", bpf_tc_dir,
-			strerror(errno));
+	snprintf(bpf_wrk_dir, sizeof(bpf_wrk_dir), "%s/", mnt);
+
+	ret = bpf_gen_hierarchy(bpf_wrk_dir);
+	if (ret) {
 		mnt = NULL;
 		goto out;
 	}
 
-	snprintf(bpf_glo_dir, sizeof(bpf_glo_dir), "%s/%s",
-		 bpf_tc_dir, BPF_DIR_GLOBALS);
-	ret = mkdir(bpf_glo_dir, S_IRWXU);
-	if (ret && errno != EEXIST) {
-		fprintf(stderr, "mkdir %s failed: %s\n", bpf_glo_dir,
-			strerror(errno));
-		mnt = NULL;
-		goto out;
-	}
-
-	mnt = bpf_tc_dir;
+	mnt = bpf_wrk_dir;
 out:
 	bpf_mnt_cached = true;
-done:
 	return mnt;
 }
 
-static int bpf_obj_get(const char *pathname)
+static int bpf_obj_get(const char *pathname, enum bpf_prog_type type)
 {
 	union bpf_attr attr = {};
 	char tmp[PATH_MAX];
 
 	if (strlen(pathname) > 2 && pathname[0] == 'm' &&
-	    pathname[1] == ':' && bpf_get_tc_dir()) {
+	    pathname[1] == ':' && bpf_get_work_dir(type)) {
 		snprintf(tmp, sizeof(tmp), "%s/%s",
-			 bpf_get_tc_dir(), pathname + 2);
+			 bpf_get_work_dir(type), pathname + 2);
 		pathname = tmp;
 	}
 
@@ -479,39 +788,34 @@ static int bpf_obj_get(const char *pathname)
 	return bpf(BPF_OBJ_GET, &attr, sizeof(attr));
 }
 
-const char *bpf_default_section(const enum bpf_prog_type type)
+static int bpf_obj_pinned(const char *pathname, enum bpf_prog_type type)
 {
-	switch (type) {
-	case BPF_PROG_TYPE_SCHED_CLS:
-		return ELF_SECTION_CLASSIFIER;
-	case BPF_PROG_TYPE_SCHED_ACT:
-		return ELF_SECTION_ACTION;
-	default:
-		return NULL;
-	}
+	int prog_fd = bpf_obj_get(pathname, type);
+
+	if (prog_fd < 0)
+		fprintf(stderr, "Couldn\'t retrieve pinned program \'%s\': %s\n",
+			pathname, strerror(errno));
+	return prog_fd;
 }
 
 enum bpf_mode {
-	CBPF_BYTECODE = 0,
+	CBPF_BYTECODE,
 	CBPF_FILE,
 	EBPF_OBJECT,
 	EBPF_PINNED,
-	__BPF_MODE_MAX,
-#define BPF_MODE_MAX	__BPF_MODE_MAX
+	BPF_MODE_MAX,
 };
 
-static int bpf_parse(int *ptr_argc, char ***ptr_argv, const bool *opt_tbl,
-		     enum bpf_prog_type *type, enum bpf_mode *mode,
-		     const char **ptr_object, const char **ptr_section,
-		     const char **ptr_uds_name, struct sock_filter *opcodes)
+static int bpf_parse(enum bpf_prog_type *type, enum bpf_mode *mode,
+		     struct bpf_cfg_in *cfg, const bool *opt_tbl)
 {
 	const char *file, *section, *uds_name;
 	bool verbose = false;
-	int ret, argc;
+	int i, ret, argc;
 	char **argv;
 
-	argv = *ptr_argv;
-	argc = *ptr_argc;
+	argv = cfg->argv;
+	argc = cfg->argc;
 
 	if (opt_tbl[CBPF_BYTECODE] &&
 	    (matches(*argv, "bytecode") == 0 ||
@@ -544,11 +848,18 @@ static int bpf_parse(int *ptr_argc, char ***ptr_argv, const bool *opt_tbl,
 		if (*type == BPF_PROG_TYPE_UNSPEC) {
 			if (argc > 0 && matches(*argv, "type") == 0) {
 				NEXT_ARG();
-				if (matches(*argv, "cls") == 0) {
-					*type = BPF_PROG_TYPE_SCHED_CLS;
-				} else if (matches(*argv, "act") == 0) {
-					*type = BPF_PROG_TYPE_SCHED_ACT;
-				} else {
+				for (i = 0; i < ARRAY_SIZE(__bpf_prog_meta);
+				     i++) {
+					if (!__bpf_prog_meta[i].type)
+						continue;
+					if (!matches(*argv,
+						     __bpf_prog_meta[i].type)) {
+						*type = i;
+						break;
+					}
+				}
+
+				if (*type == BPF_PROG_TYPE_UNSPEC) {
 					fprintf(stderr, "What type is \"%s\"?\n",
 						*argv);
 					return -1;
@@ -559,19 +870,21 @@ static int bpf_parse(int *ptr_argc, char ***ptr_argv, const bool *opt_tbl,
 			}
 		}
 
-		section = bpf_default_section(*type);
+		section = bpf_prog_to_default_section(*type);
 		if (argc > 0 && matches(*argv, "section") == 0) {
 			NEXT_ARG();
 			section = *argv;
 			NEXT_ARG_FWD();
 		}
 
-		uds_name = getenv(BPF_ENV_UDS);
-		if (argc > 0 && !uds_name &&
-		    matches(*argv, "export") == 0) {
-			NEXT_ARG();
-			uds_name = *argv;
-			NEXT_ARG_FWD();
+		if (__bpf_prog_meta[*type].may_uds_export) {
+			uds_name = getenv(BPF_ENV_UDS);
+			if (argc > 0 && !uds_name &&
+			    matches(*argv, "export") == 0) {
+				NEXT_ARG();
+				uds_name = *argv;
+				NEXT_ARG_FWD();
+			}
 		}
 
 		if (argc > 0 && matches(*argv, "verbose") == 0) {
@@ -583,72 +896,72 @@ static int bpf_parse(int *ptr_argc, char ***ptr_argv, const bool *opt_tbl,
 	}
 
 	if (*mode == CBPF_BYTECODE || *mode == CBPF_FILE)
-		ret = bpf_ops_parse(argc, argv, opcodes, *mode == CBPF_FILE);
+		ret = bpf_ops_parse(argc, argv, cfg->ops, *mode == CBPF_FILE);
 	else if (*mode == EBPF_OBJECT)
 		ret = bpf_obj_open(file, *type, section, verbose);
 	else if (*mode == EBPF_PINNED)
-		ret = bpf_obj_get(file);
+		ret = bpf_obj_pinned(file, *type);
 	else
 		return -1;
 
-	if (ptr_object)
-		*ptr_object = file;
-	if (ptr_section)
-		*ptr_section = section;
-	if (ptr_uds_name)
-		*ptr_uds_name = uds_name;
-
-	*ptr_argc = argc;
-	*ptr_argv = argv;
+	cfg->object  = file;
+	cfg->section = section;
+	cfg->uds     = uds_name;
+	cfg->argc    = argc;
+	cfg->argv    = argv;
 
 	return ret;
 }
 
-int bpf_parse_common(int *ptr_argc, char ***ptr_argv, const int *nla_tbl,
-		     enum bpf_prog_type type, const char **ptr_object,
-		     const char **ptr_uds_name, struct nlmsghdr *n)
+static int bpf_parse_opt_tbl(enum bpf_prog_type type, struct bpf_cfg_in *cfg,
+			     const struct bpf_cfg_ops *ops, void *nl,
+			     const bool *opt_tbl)
 {
 	struct sock_filter opcodes[BPF_MAXINSNS];
-	const bool opt_tbl[BPF_MODE_MAX] = {
-		[CBPF_BYTECODE]	= true,
-		[CBPF_FILE]	= true,
-		[EBPF_OBJECT]	= true,
-		[EBPF_PINNED]	= true,
-	};
 	char annotation[256];
-	const char *section;
 	enum bpf_mode mode;
 	int ret;
 
-	ret = bpf_parse(ptr_argc, ptr_argv, opt_tbl, &type, &mode,
-			ptr_object, &section, ptr_uds_name, opcodes);
+	cfg->ops = opcodes;
+	ret = bpf_parse(&type, &mode, cfg, opt_tbl);
+	cfg->ops = NULL;
 	if (ret < 0)
 		return ret;
 
-	if (mode == CBPF_BYTECODE || mode == CBPF_FILE) {
-		addattr16(n, MAX_MSG, nla_tbl[BPF_NLA_OPS_LEN], ret);
-		addattr_l(n, MAX_MSG, nla_tbl[BPF_NLA_OPS], opcodes,
-			  ret * sizeof(struct sock_filter));
-	}
-
+	if (mode == CBPF_BYTECODE || mode == CBPF_FILE)
+		ops->cbpf_cb(nl, opcodes, ret);
 	if (mode == EBPF_OBJECT || mode == EBPF_PINNED) {
 		snprintf(annotation, sizeof(annotation), "%s:[%s]",
-			 basename(*ptr_object), mode == EBPF_PINNED ?
-			 "*fsobj" : section);
-
-		addattr32(n, MAX_MSG, nla_tbl[BPF_NLA_FD], ret);
-		addattrstrz(n, MAX_MSG, nla_tbl[BPF_NLA_NAME], annotation);
+			 basename(cfg->object), mode == EBPF_PINNED ?
+			 "*fsobj" : cfg->section);
+		ops->ebpf_cb(nl, ret, annotation);
 	}
 
 	return 0;
+}
+
+int bpf_parse_common(enum bpf_prog_type type, struct bpf_cfg_in *cfg,
+		     const struct bpf_cfg_ops *ops, void *nl)
+{
+	bool opt_tbl[BPF_MODE_MAX] = {};
+
+	if (ops->cbpf_cb) {
+		opt_tbl[CBPF_BYTECODE] = true;
+		opt_tbl[CBPF_FILE]     = true;
+	}
+
+	if (ops->ebpf_cb) {
+		opt_tbl[EBPF_OBJECT]   = true;
+		opt_tbl[EBPF_PINNED]   = true;
+	}
+
+	return bpf_parse_opt_tbl(type, cfg, ops, nl, opt_tbl);
 }
 
 int bpf_graft_map(const char *map_path, uint32_t *key, int argc, char **argv)
 {
 	enum bpf_prog_type type = BPF_PROG_TYPE_UNSPEC;
 	const bool opt_tbl[BPF_MODE_MAX] = {
-		[CBPF_BYTECODE]	= false,
-		[CBPF_FILE]	= false,
 		[EBPF_OBJECT]	= true,
 		[EBPF_PINNED]	= true,
 	};
@@ -657,19 +970,22 @@ int bpf_graft_map(const char *map_path, uint32_t *key, int argc, char **argv)
 		.size_key	= sizeof(int),
 		.size_value	= sizeof(int),
 	};
+	struct bpf_cfg_in cfg = {
+		.argc		= argc,
+		.argv		= argv,
+	};
+	struct bpf_map_ext ext = {};
 	int ret, prog_fd, map_fd;
-	const char *section;
 	enum bpf_mode mode;
 	uint32_t map_key;
 
-	prog_fd = bpf_parse(&argc, &argv, opt_tbl, &type, &mode,
-			    NULL, &section, NULL, NULL);
+	prog_fd = bpf_parse(&type, &mode, &cfg, opt_tbl);
 	if (prog_fd < 0)
 		return prog_fd;
 	if (key) {
 		map_key = *key;
 	} else {
-		ret = sscanf(section, "%*i/%i", &map_key);
+		ret = sscanf(cfg.section, "%*i/%i", &map_key);
 		if (ret != 1) {
 			fprintf(stderr, "Couldn\'t infer map key from section name! Please provide \'key\' argument!\n");
 			ret = -EINVAL;
@@ -677,7 +993,7 @@ int bpf_graft_map(const char *map_path, uint32_t *key, int argc, char **argv)
 		}
 	}
 
-	map_fd = bpf_obj_get(map_path);
+	map_fd = bpf_obj_get(map_path, type);
 	if (map_fd < 0) {
 		fprintf(stderr, "Couldn\'t retrieve pinned map \'%s\': %s\n",
 			map_path, strerror(errno));
@@ -685,8 +1001,9 @@ int bpf_graft_map(const char *map_path, uint32_t *key, int argc, char **argv)
 		goto out_prog;
 	}
 
-	ret = bpf_map_selfcheck_pinned(map_fd, &test,
-				       offsetof(struct bpf_elf_map, max_elem));
+	ret = bpf_map_selfcheck_pinned(map_fd, &test, &ext,
+				       offsetof(struct bpf_elf_map, max_elem),
+				       type);
 	if (ret < 0) {
 		fprintf(stderr, "Map \'%s\' self-check failed!\n", map_path);
 		goto out_map;
@@ -700,6 +1017,47 @@ out_map:
 out_prog:
 	close(prog_fd);
 	return ret;
+}
+
+int bpf_prog_attach_fd(int prog_fd, int target_fd, enum bpf_attach_type type)
+{
+	union bpf_attr attr = {};
+
+	attr.target_fd = target_fd;
+	attr.attach_bpf_fd = prog_fd;
+	attr.attach_type = type;
+
+	return bpf(BPF_PROG_ATTACH, &attr, sizeof(attr));
+}
+
+int bpf_prog_detach_fd(int target_fd, enum bpf_attach_type type)
+{
+	union bpf_attr attr = {};
+
+	attr.target_fd = target_fd;
+	attr.attach_type = type;
+
+	return bpf(BPF_PROG_DETACH, &attr, sizeof(attr));
+}
+
+int bpf_prog_load(enum bpf_prog_type type, const struct bpf_insn *insns,
+		  size_t size_insns, const char *license, char *log,
+		  size_t size_log)
+{
+	union bpf_attr attr = {};
+
+	attr.prog_type = type;
+	attr.insns = bpf_ptr_to_u64(insns);
+	attr.insn_cnt = size_insns / sizeof(struct bpf_insn);
+	attr.license = bpf_ptr_to_u64(license);
+
+	if (size_log > 0) {
+		attr.log_buf = bpf_ptr_to_u64(log);
+		attr.log_size = size_log;
+		attr.log_level = 1;
+	}
+
+	return bpf(BPF_PROG_LOAD, &attr, sizeof(attr));
 }
 
 #ifdef HAVE_ELF
@@ -716,7 +1074,12 @@ struct bpf_hash_entry {
 	struct bpf_hash_entry	*next;
 };
 
+struct bpf_config {
+	unsigned int		jit_enabled;
+};
+
 struct bpf_elf_ctx {
+	struct bpf_config	cfg;
 	Elf			*elf_fd;
 	GElf_Ehdr		elf_hdr;
 	Elf_Data		*sym_tab;
@@ -724,8 +1087,10 @@ struct bpf_elf_ctx {
 	int			obj_fd;
 	int			map_fds[ELF_MAX_MAPS];
 	struct bpf_elf_map	maps[ELF_MAX_MAPS];
+	struct bpf_map_ext	maps_ext[ELF_MAX_MAPS];
 	int			sym_num;
 	int			map_num;
+	int			map_len;
 	bool			*sec_done;
 	int			sec_maps;
 	char			license[ELF_MAX_LICENSE_LEN];
@@ -779,15 +1144,18 @@ bpf_dump_error(struct bpf_elf_ctx *ctx, const char *format, ...)
 
 static int bpf_log_realloc(struct bpf_elf_ctx *ctx)
 {
+	const size_t log_max = UINT_MAX >> 8;
 	size_t log_size = ctx->log_size;
 	void *ptr;
 
 	if (!ctx->log) {
 		log_size = 65536;
-	} else {
+	} else if (log_size < log_max) {
 		log_size <<= 1;
-		if (log_size > (UINT_MAX >> 8))
-			return -EINVAL;
+		if (log_size > log_max)
+			log_size = log_max;
+	} else {
+		return -EINVAL;
 	}
 
 	ptr = realloc(ctx->log, log_size);
@@ -802,37 +1170,18 @@ static int bpf_log_realloc(struct bpf_elf_ctx *ctx)
 
 static int bpf_map_create(enum bpf_map_type type, uint32_t size_key,
 			  uint32_t size_value, uint32_t max_elem,
-			  uint32_t flags)
+			  uint32_t flags, int inner_fd)
 {
 	union bpf_attr attr = {};
 
 	attr.map_type = type;
 	attr.key_size = size_key;
-	attr.value_size = size_value;
+	attr.value_size = inner_fd ? sizeof(int) : size_value;
 	attr.max_entries = max_elem;
 	attr.map_flags = flags;
+	attr.inner_map_fd = inner_fd;
 
 	return bpf(BPF_MAP_CREATE, &attr, sizeof(attr));
-}
-
-static int bpf_prog_load(enum bpf_prog_type type, const struct bpf_insn *insns,
-			 size_t size_insns, const char *license, char *log,
-			 size_t size_log)
-{
-	union bpf_attr attr = {};
-
-	attr.prog_type = type;
-	attr.insns = bpf_ptr_to_u64(insns);
-	attr.insn_cnt = size_insns / sizeof(struct bpf_insn);
-	attr.license = bpf_ptr_to_u64(license);
-
-	if (size_log > 0) {
-		attr.log_buf = bpf_ptr_to_u64(log);
-		attr.log_size = size_log;
-		attr.log_level = 1;
-	}
-
-	return bpf(BPF_PROG_LOAD, &attr, sizeof(attr));
 }
 
 static int bpf_obj_pin(int fd, const char *pathname)
@@ -952,7 +1301,7 @@ static int bpf_init_env(const char *pathname)
 	/* Don't bother in case we fail! */
 	setrlimit(RLIMIT_MEMLOCK, &limit);
 
-	if (!bpf_get_tc_dir()) {
+	if (!bpf_get_work_dir(BPF_PROG_TYPE_UNSPEC)) {
 		fprintf(stderr, "Continuing without mounted eBPF fs. Too old kernel?\n");
 		return 0;
 	}
@@ -994,15 +1343,18 @@ static void bpf_make_pathname(char *pathname, size_t len, const char *name,
 {
 	switch (pinning) {
 	case PIN_OBJECT_NS:
-		snprintf(pathname, len, "%s/%s/%s", bpf_get_tc_dir(),
+		snprintf(pathname, len, "%s/%s/%s",
+			 bpf_get_work_dir(ctx->type),
 			 bpf_get_obj_uid(NULL), name);
 		break;
 	case PIN_GLOBAL_NS:
-		snprintf(pathname, len, "%s/%s/%s", bpf_get_tc_dir(),
+		snprintf(pathname, len, "%s/%s/%s",
+			 bpf_get_work_dir(ctx->type),
 			 BPF_DIR_GLOBALS, name);
 		break;
 	default:
-		snprintf(pathname, len, "%s/../%s/%s", bpf_get_tc_dir(),
+		snprintf(pathname, len, "%s/../%s/%s",
+			 bpf_get_work_dir(ctx->type),
 			 bpf_custom_pinning(ctx, pinning), name);
 		break;
 	}
@@ -1013,19 +1365,19 @@ static int bpf_probe_pinned(const char *name, const struct bpf_elf_ctx *ctx,
 {
 	char pathname[PATH_MAX];
 
-	if (bpf_no_pinning(ctx, pinning) || !bpf_get_tc_dir())
+	if (bpf_no_pinning(ctx, pinning) || !bpf_get_work_dir(ctx->type))
 		return 0;
 
 	bpf_make_pathname(pathname, sizeof(pathname), name, ctx, pinning);
-	return bpf_obj_get(pathname);
+	return bpf_obj_get(pathname, ctx->type);
 }
 
-static int bpf_make_obj_path(void)
+static int bpf_make_obj_path(const struct bpf_elf_ctx *ctx)
 {
 	char tmp[PATH_MAX];
 	int ret;
 
-	snprintf(tmp, sizeof(tmp), "%s/%s", bpf_get_tc_dir(),
+	snprintf(tmp, sizeof(tmp), "%s/%s", bpf_get_work_dir(ctx->type),
 		 bpf_get_obj_uid(NULL));
 
 	ret = mkdir(tmp, S_IRWXU);
@@ -1037,12 +1389,13 @@ static int bpf_make_obj_path(void)
 	return 0;
 }
 
-static int bpf_make_custom_path(const char *todo)
+static int bpf_make_custom_path(const struct bpf_elf_ctx *ctx,
+				const char *todo)
 {
 	char tmp[PATH_MAX], rem[PATH_MAX], *sub;
 	int ret;
 
-	snprintf(tmp, sizeof(tmp), "%s/../", bpf_get_tc_dir());
+	snprintf(tmp, sizeof(tmp), "%s/../", bpf_get_work_dir(ctx->type));
 	snprintf(rem, sizeof(rem), "%s/", todo);
 	sub = strtok(rem, "/");
 
@@ -1073,13 +1426,13 @@ static int bpf_place_pinned(int fd, const char *name,
 	const char *tmp;
 	int ret = 0;
 
-	if (bpf_no_pinning(ctx, pinning) || !bpf_get_tc_dir())
+	if (bpf_no_pinning(ctx, pinning) || !bpf_get_work_dir(ctx->type))
 		return 0;
 
 	if (pinning == PIN_OBJECT_NS)
-		ret = bpf_make_obj_path();
+		ret = bpf_make_obj_path(ctx);
 	else if ((tmp = bpf_custom_pinning(ctx, pinning)))
-		ret = bpf_make_custom_path(tmp);
+		ret = bpf_make_custom_path(ctx, tmp);
 	if (ret < 0)
 		return ret;
 
@@ -1122,7 +1475,7 @@ retry:
 		 * log for the user, so enlarge it and re-fail.
 		 */
 		if (fd < 0 && (errno == ENOSPC || !ctx->log_size)) {
-			if (tries++ < 6 && !bpf_log_realloc(ctx))
+			if (tries++ < 10 && !bpf_log_realloc(ctx))
 				goto retry;
 
 			fprintf(stderr, "Log buffer too small to dump verifier log %zu bytes (%d tries)!\n",
@@ -1138,7 +1491,7 @@ retry:
 
 static void bpf_map_report(int fd, const char *name,
 			   const struct bpf_elf_map *map,
-			   struct bpf_elf_ctx *ctx)
+			   struct bpf_elf_ctx *ctx, int inner_fd)
 {
 	fprintf(stderr, "Map object \'%s\' %s%s (%d)!\n", name,
 		fd < 0 ? "rejected: " : "loaded",
@@ -1149,21 +1502,65 @@ static void bpf_map_report(int fd, const char *name,
 	fprintf(stderr, " - Identifier:   %u\n", map->id);
 	fprintf(stderr, " - Pinning:      %u\n", map->pinning);
 	fprintf(stderr, " - Size key:     %u\n", map->size_key);
-	fprintf(stderr, " - Size value:   %u\n", map->size_value);
+	fprintf(stderr, " - Size value:   %u\n",
+		inner_fd ? (int)sizeof(int) : map->size_value);
 	fprintf(stderr, " - Max elems:    %u\n", map->max_elem);
 	fprintf(stderr, " - Flags:        %#x\n\n", map->flags);
 }
 
-static int bpf_map_attach(const char *name, const struct bpf_elf_map *map,
-			  struct bpf_elf_ctx *ctx)
+static int bpf_find_map_id(const struct bpf_elf_ctx *ctx, uint32_t id)
 {
-	int fd, ret;
+	int i;
+
+	for (i = 0; i < ctx->map_num; i++) {
+		if (ctx->maps[i].id != id)
+			continue;
+		if (ctx->map_fds[i] < 0)
+			return -EINVAL;
+
+		return ctx->map_fds[i];
+	}
+
+	return -ENOENT;
+}
+
+static void bpf_report_map_in_map(int outer_fd, uint32_t idx)
+{
+	struct bpf_elf_map outer_map;
+	int ret;
+
+	fprintf(stderr, "Cannot insert map into map! ");
+
+	ret = bpf_derive_elf_map_from_fdinfo(outer_fd, &outer_map, NULL);
+	if (!ret) {
+		if (idx >= outer_map.max_elem &&
+		    outer_map.type == BPF_MAP_TYPE_ARRAY_OF_MAPS) {
+			fprintf(stderr, "Outer map has %u elements, index %u is invalid!\n",
+				outer_map.max_elem, idx);
+			return;
+		}
+	}
+
+	fprintf(stderr, "Different map specs used for outer and inner map?\n");
+}
+
+static bool bpf_is_map_in_map_type(const struct bpf_elf_map *map)
+{
+	return map->type == BPF_MAP_TYPE_ARRAY_OF_MAPS ||
+	       map->type == BPF_MAP_TYPE_HASH_OF_MAPS;
+}
+
+static int bpf_map_attach(const char *name, struct bpf_elf_ctx *ctx,
+			  const struct bpf_elf_map *map, struct bpf_map_ext *ext,
+			  int *have_map_in_map)
+{
+	int fd, ret, map_inner_fd = 0;
 
 	fd = bpf_probe_pinned(name, ctx, map->pinning);
 	if (fd > 0) {
-		ret = bpf_map_selfcheck_pinned(fd, map,
+		ret = bpf_map_selfcheck_pinned(fd, map, ext,
 					       offsetof(struct bpf_elf_map,
-							id));
+							id), ctx->type);
 		if (ret < 0) {
 			close(fd);
 			fprintf(stderr, "Map \'%s\' self-check failed!\n",
@@ -1176,11 +1573,29 @@ static int bpf_map_attach(const char *name, const struct bpf_elf_map *map,
 		return fd;
 	}
 
+	if (have_map_in_map && bpf_is_map_in_map_type(map)) {
+		(*have_map_in_map)++;
+		if (map->inner_id)
+			return 0;
+		fprintf(stderr, "Map \'%s\' cannot be created since no inner map ID defined!\n",
+			name);
+		return -EINVAL;
+	}
+
+	if (!have_map_in_map && bpf_is_map_in_map_type(map)) {
+		map_inner_fd = bpf_find_map_id(ctx, map->inner_id);
+		if (map_inner_fd < 0) {
+			fprintf(stderr, "Map \'%s\' cannot be loaded. Inner map with ID %u not found!\n",
+				name, map->inner_id);
+			return -EINVAL;
+		}
+	}
+
 	errno = 0;
 	fd = bpf_map_create(map->type, map->size_key, map->size_value,
-			    map->max_elem, map->flags);
+			    map->max_elem, map->flags, map_inner_fd);
 	if (fd < 0 || ctx->verbose) {
-		bpf_map_report(fd, name, map, ctx);
+		bpf_map_report(fd, name, map, ctx, map_inner_fd);
 		if (fd < 0)
 			return fd;
 	}
@@ -1214,7 +1629,7 @@ static const char *bpf_map_fetch_name(struct bpf_elf_ctx *ctx, int which)
 		if (GELF_ST_BIND(sym.st_info) != STB_GLOBAL ||
 		    GELF_ST_TYPE(sym.st_info) != STT_NOTYPE ||
 		    sym.st_shndx != ctx->sec_maps ||
-		    sym.st_value / sizeof(struct bpf_elf_map) != which)
+		    sym.st_value / ctx->map_len != which)
 			continue;
 
 		return bpf_str_tab_name(ctx, &sym);
@@ -1225,22 +1640,83 @@ static const char *bpf_map_fetch_name(struct bpf_elf_ctx *ctx, int which)
 
 static int bpf_maps_attach_all(struct bpf_elf_ctx *ctx)
 {
+	int i, j, ret, fd, inner_fd, inner_idx, have_map_in_map = 0;
 	const char *map_name;
-	int i, fd;
 
 	for (i = 0; i < ctx->map_num; i++) {
 		map_name = bpf_map_fetch_name(ctx, i);
 		if (!map_name)
 			return -EIO;
 
-		fd = bpf_map_attach(map_name, &ctx->maps[i], ctx);
+		fd = bpf_map_attach(map_name, ctx, &ctx->maps[i],
+				    &ctx->maps_ext[i], &have_map_in_map);
+		if (fd < 0)
+			return fd;
+
+		ctx->map_fds[i] = !fd ? -1 : fd;
+	}
+
+	for (i = 0; have_map_in_map && i < ctx->map_num; i++) {
+		if (ctx->map_fds[i] >= 0)
+			continue;
+
+		map_name = bpf_map_fetch_name(ctx, i);
+		if (!map_name)
+			return -EIO;
+
+		fd = bpf_map_attach(map_name, ctx, &ctx->maps[i],
+				    &ctx->maps_ext[i], NULL);
 		if (fd < 0)
 			return fd;
 
 		ctx->map_fds[i] = fd;
 	}
 
+	for (i = 0; have_map_in_map && i < ctx->map_num; i++) {
+		if (!ctx->maps[i].id ||
+		    ctx->maps[i].inner_id ||
+		    ctx->maps[i].inner_idx == -1)
+			continue;
+
+		inner_fd  = ctx->map_fds[i];
+		inner_idx = ctx->maps[i].inner_idx;
+
+		for (j = 0; j < ctx->map_num; j++) {
+			if (!bpf_is_map_in_map_type(&ctx->maps[j]))
+				continue;
+			if (ctx->maps[j].inner_id != ctx->maps[i].id)
+				continue;
+
+			ret = bpf_map_update(ctx->map_fds[j], &inner_idx,
+					     &inner_fd, BPF_ANY);
+			if (ret < 0) {
+				bpf_report_map_in_map(ctx->map_fds[j],
+						      inner_idx);
+				return ret;
+			}
+		}
+	}
+
 	return 0;
+}
+
+static int bpf_map_num_sym(struct bpf_elf_ctx *ctx)
+{
+	int i, num = 0;
+	GElf_Sym sym;
+
+	for (i = 0; i < ctx->sym_num; i++) {
+		if (gelf_getsym(ctx->sym_tab, i, &sym) != &sym)
+			continue;
+
+		if (GELF_ST_BIND(sym.st_info) != STB_GLOBAL ||
+		    GELF_ST_TYPE(sym.st_info) != STT_NOTYPE ||
+		    sym.st_shndx != ctx->sec_maps)
+			continue;
+		num++;
+	}
+
+	return num;
 }
 
 static int bpf_fill_section_data(struct bpf_elf_ctx *ctx, int section,
@@ -1275,22 +1751,104 @@ static int bpf_fill_section_data(struct bpf_elf_ctx *ctx, int section,
 	return 0;
 }
 
-static int bpf_fetch_maps(struct bpf_elf_ctx *ctx, int section,
-			  struct bpf_elf_sec_data *data)
-{
-	if (data->sec_data->d_size % sizeof(struct bpf_elf_map) != 0)
-		return -EINVAL;
+struct bpf_elf_map_min {
+	__u32 type;
+	__u32 size_key;
+	__u32 size_value;
+	__u32 max_elem;
+};
 
-	ctx->map_num = data->sec_data->d_size / sizeof(struct bpf_elf_map);
+static int bpf_fetch_maps_begin(struct bpf_elf_ctx *ctx, int section,
+				struct bpf_elf_sec_data *data)
+{
+	ctx->map_num = data->sec_data->d_size;
 	ctx->sec_maps = section;
 	ctx->sec_done[section] = true;
 
-	if (ctx->map_num > ARRAY_SIZE(ctx->map_fds)) {
+	if (ctx->map_num > sizeof(ctx->maps)) {
 		fprintf(stderr, "Too many BPF maps in ELF section!\n");
 		return -ENOMEM;
 	}
 
-	memcpy(ctx->maps, data->sec_data->d_buf, data->sec_data->d_size);
+	memcpy(ctx->maps, data->sec_data->d_buf, ctx->map_num);
+	return 0;
+}
+
+static int bpf_map_verify_all_offs(struct bpf_elf_ctx *ctx, int end)
+{
+	GElf_Sym sym;
+	int off, i;
+
+	for (off = 0; off < end; off += ctx->map_len) {
+		/* Order doesn't need to be linear here, hence we walk
+		 * the table again.
+		 */
+		for (i = 0; i < ctx->sym_num; i++) {
+			if (gelf_getsym(ctx->sym_tab, i, &sym) != &sym)
+				continue;
+			if (GELF_ST_BIND(sym.st_info) != STB_GLOBAL ||
+			    GELF_ST_TYPE(sym.st_info) != STT_NOTYPE ||
+			    sym.st_shndx != ctx->sec_maps)
+				continue;
+			if (sym.st_value == off)
+				break;
+			if (i == ctx->sym_num - 1)
+				return -1;
+		}
+	}
+
+	return off == end ? 0 : -1;
+}
+
+static int bpf_fetch_maps_end(struct bpf_elf_ctx *ctx)
+{
+	struct bpf_elf_map fixup[ARRAY_SIZE(ctx->maps)] = {};
+	int i, sym_num = bpf_map_num_sym(ctx);
+	__u8 *buff;
+
+	if (sym_num == 0 || sym_num > ARRAY_SIZE(ctx->maps)) {
+		fprintf(stderr, "%u maps not supported in current map section!\n",
+			sym_num);
+		return -EINVAL;
+	}
+
+	if (ctx->map_num % sym_num != 0 ||
+	    ctx->map_num % sizeof(__u32) != 0) {
+		fprintf(stderr, "Number BPF map symbols are not multiple of struct bpf_elf_map!\n");
+		return -EINVAL;
+	}
+
+	ctx->map_len = ctx->map_num / sym_num;
+	if (bpf_map_verify_all_offs(ctx, ctx->map_num)) {
+		fprintf(stderr, "Different struct bpf_elf_map in use!\n");
+		return -EINVAL;
+	}
+
+	if (ctx->map_len == sizeof(struct bpf_elf_map)) {
+		ctx->map_num = sym_num;
+		return 0;
+	} else if (ctx->map_len > sizeof(struct bpf_elf_map)) {
+		fprintf(stderr, "struct bpf_elf_map not supported, coming from future version?\n");
+		return -EINVAL;
+	} else if (ctx->map_len < sizeof(struct bpf_elf_map_min)) {
+		fprintf(stderr, "struct bpf_elf_map too small, not supported!\n");
+		return -EINVAL;
+	}
+
+	ctx->map_num = sym_num;
+	for (i = 0, buff = (void *)ctx->maps; i < ctx->map_num;
+	     i++, buff += ctx->map_len) {
+		/* The fixup leaves the rest of the members as zero, which
+		 * is fine currently, but option exist to set some other
+		 * default value as well when needed in future.
+		 */
+		memcpy(&fixup[i], buff, ctx->map_len);
+	}
+
+	memcpy(ctx->maps, fixup, sizeof(fixup));
+
+	printf("Note: %zu bytes struct bpf_elf_map fixup performed due to size mismatch!\n",
+	       sizeof(struct bpf_elf_map) - ctx->map_len);
 	return 0;
 }
 
@@ -1339,7 +1897,7 @@ static int bpf_fetch_ancillary(struct bpf_elf_ctx *ctx)
 
 		if (data.sec_hdr.sh_type == SHT_PROGBITS &&
 		    !strcmp(data.sec_name, ELF_SECTION_MAPS))
-			ret = bpf_fetch_maps(ctx, i, &data);
+			ret = bpf_fetch_maps_begin(ctx, i, &data);
 		else if (data.sec_hdr.sh_type == SHT_PROGBITS &&
 			 !strcmp(data.sec_name, ELF_SECTION_LICENSE))
 			ret = bpf_fetch_license(ctx, i, &data);
@@ -1352,11 +1910,17 @@ static int bpf_fetch_ancillary(struct bpf_elf_ctx *ctx)
 		if (ret < 0) {
 			fprintf(stderr, "Error parsing section %d! Perhaps check with readelf -a?\n",
 				i);
-			break;
+			return ret;
 		}
 	}
 
 	if (bpf_has_map_data(ctx)) {
+		ret = bpf_fetch_maps_end(ctx);
+		if (ret < 0) {
+			fprintf(stderr, "Error fixing up map structure, incompatible struct bpf_elf_map used?\n");
+			return ret;
+		}
+
 		ret = bpf_maps_attach_all(ctx);
 		if (ret < 0) {
 			fprintf(stderr, "Error loading maps into kernel!\n");
@@ -1367,7 +1931,8 @@ static int bpf_fetch_ancillary(struct bpf_elf_ctx *ctx)
 	return ret;
 }
 
-static int bpf_fetch_prog(struct bpf_elf_ctx *ctx, const char *section)
+static int bpf_fetch_prog(struct bpf_elf_ctx *ctx, const char *section,
+			  bool *sseen)
 {
 	struct bpf_elf_sec_data data;
 	struct bpf_elf_prog prog;
@@ -1384,6 +1949,8 @@ static int bpf_fetch_prog(struct bpf_elf_ctx *ctx, const char *section)
 		      !strcmp(data.sec_name, section)))
 			continue;
 
+		*sseen = true;
+
 		memset(&prog, 0, sizeof(prog));
 		prog.type    = ctx->type;
 		prog.insns   = data.sec_data->d_buf;
@@ -1392,7 +1959,7 @@ static int bpf_fetch_prog(struct bpf_elf_ctx *ctx, const char *section)
 
 		fd = bpf_prog_attach(section, &prog, ctx);
 		if (fd < 0)
-			break;
+			return fd;
 
 		ctx->sec_done[i] = true;
 		break;
@@ -1401,9 +1968,15 @@ static int bpf_fetch_prog(struct bpf_elf_ctx *ctx, const char *section)
 	return fd;
 }
 
+struct bpf_tail_call_props {
+	unsigned int total;
+	unsigned int jited;
+};
+
 static int bpf_apply_relo_data(struct bpf_elf_ctx *ctx,
 			       struct bpf_elf_sec_data *data_relo,
-			       struct bpf_elf_sec_data *data_insn)
+			       struct bpf_elf_sec_data *data_insn,
+			       struct bpf_tail_call_props *props)
 {
 	Elf_Data *idata = data_insn->sec_data;
 	GElf_Shdr *rhdr = &data_relo->sec_hdr;
@@ -1438,11 +2011,18 @@ static int bpf_apply_relo_data(struct bpf_elf_ctx *ctx,
 			return -EIO;
 		}
 
-		rmap = sym.st_value / sizeof(struct bpf_elf_map);
+		rmap = sym.st_value / ctx->map_len;
 		if (rmap >= ARRAY_SIZE(ctx->map_fds))
 			return -EINVAL;
 		if (!ctx->map_fds[rmap])
 			return -EINVAL;
+		if (ctx->maps[rmap].type == BPF_MAP_TYPE_PROG_ARRAY) {
+			props->total++;
+			if (ctx->maps_ext[rmap].owner.jited ||
+			    (ctx->maps_ext[rmap].owner.type == 0 &&
+			     ctx->cfg.jit_enabled))
+				props->jited++;
+		}
 
 		if (ctx->verbose)
 			fprintf(stderr, "Map \'%s\' (%d) injected into prog section \'%s\' at offset %u!\n",
@@ -1457,18 +2037,21 @@ static int bpf_apply_relo_data(struct bpf_elf_ctx *ctx,
 }
 
 static int bpf_fetch_prog_relo(struct bpf_elf_ctx *ctx, const char *section,
-			       bool *lderr)
+			       bool *lderr, bool *sseen)
 {
 	struct bpf_elf_sec_data data_relo, data_insn;
 	struct bpf_elf_prog prog;
 	int ret, idx, i, fd = -1;
 
 	for (i = 1; i < ctx->elf_hdr.e_shnum; i++) {
+		struct bpf_tail_call_props props = {};
+
 		ret = bpf_fill_section_data(ctx, i, &data_relo);
 		if (ret < 0 || data_relo.sec_hdr.sh_type != SHT_REL)
 			continue;
 
 		idx = data_relo.sec_hdr.sh_info;
+
 		ret = bpf_fill_section_data(ctx, idx, &data_insn);
 		if (ret < 0 ||
 		    !(data_insn.sec_hdr.sh_type == SHT_PROGBITS &&
@@ -1476,9 +2059,13 @@ static int bpf_fetch_prog_relo(struct bpf_elf_ctx *ctx, const char *section,
 		      !strcmp(data_insn.sec_name, section)))
 			continue;
 
-		ret = bpf_apply_relo_data(ctx, &data_relo, &data_insn);
-		if (ret < 0)
-			continue;
+		*sseen = true;
+
+		ret = bpf_apply_relo_data(ctx, &data_relo, &data_insn, &props);
+		if (ret < 0) {
+			*lderr = true;
+			return ret;
+		}
 
 		memset(&prog, 0, sizeof(prog));
 		prog.type    = ctx->type;
@@ -1489,7 +2076,17 @@ static int bpf_fetch_prog_relo(struct bpf_elf_ctx *ctx, const char *section,
 		fd = bpf_prog_attach(section, &prog, ctx);
 		if (fd < 0) {
 			*lderr = true;
-			break;
+			if (props.total) {
+				if (ctx->cfg.jit_enabled &&
+				    props.total != props.jited)
+					fprintf(stderr, "JIT enabled, but only %u/%u tail call maps in the program have JITed owner!\n",
+						props.jited, props.total);
+				if (!ctx->cfg.jit_enabled &&
+				    props.jited)
+					fprintf(stderr, "JIT disabled, but %u/%u tail call maps in the program have JITed owner!\n",
+						props.jited, props.total);
+			}
+			return fd;
 		}
 
 		ctx->sec_done[i]   = true;
@@ -1502,14 +2099,16 @@ static int bpf_fetch_prog_relo(struct bpf_elf_ctx *ctx, const char *section,
 
 static int bpf_fetch_prog_sec(struct bpf_elf_ctx *ctx, const char *section)
 {
-	bool lderr = false;
+	bool lderr = false, sseen = false;
 	int ret = -1;
 
 	if (bpf_has_map_data(ctx))
-		ret = bpf_fetch_prog_relo(ctx, section, &lderr);
+		ret = bpf_fetch_prog_relo(ctx, section, &lderr, &sseen);
 	if (ret < 0 && !lderr)
-		ret = bpf_fetch_prog(ctx, section);
-
+		ret = bpf_fetch_prog(ctx, section, &sseen);
+	if (ret < 0 && !sseen)
+		fprintf(stderr, "Program section \'%s\' not found in ELF file!\n",
+			section);
 	return ret;
 }
 
@@ -1522,6 +2121,51 @@ static int bpf_find_map_by_id(struct bpf_elf_ctx *ctx, uint32_t id)
 		    ctx->maps[i].type == BPF_MAP_TYPE_PROG_ARRAY)
 			return i;
 	return -1;
+}
+
+struct bpf_jited_aux {
+	int prog_fd;
+	int map_fd;
+	struct bpf_prog_data prog;
+	struct bpf_map_ext map;
+};
+
+static int bpf_derive_prog_from_fdinfo(int fd, struct bpf_prog_data *prog)
+{
+	char file[PATH_MAX], buff[4096];
+	unsigned int val;
+	FILE *fp;
+
+	snprintf(file, sizeof(file), "/proc/%d/fdinfo/%d", getpid(), fd);
+	memset(prog, 0, sizeof(*prog));
+
+	fp = fopen(file, "r");
+	if (!fp) {
+		fprintf(stderr, "No procfs support?!\n");
+		return -EIO;
+	}
+
+	while (fgets(buff, sizeof(buff), fp)) {
+		if (sscanf(buff, "prog_type:\t%u", &val) == 1)
+			prog->type = val;
+		else if (sscanf(buff, "prog_jited:\t%u", &val) == 1)
+			prog->jited = val;
+	}
+
+	fclose(fp);
+	return 0;
+}
+
+static int bpf_tail_call_get_aux(struct bpf_jited_aux *aux)
+{
+	struct bpf_elf_map tmp;
+	int ret;
+
+	ret = bpf_derive_elf_map_from_fdinfo(aux->map_fd, &tmp, &aux->map);
+	if (!ret)
+		ret = bpf_derive_prog_from_fdinfo(aux->prog_fd, &aux->prog);
+
+	return ret;
 }
 
 static int bpf_fill_prog_arrays(struct bpf_elf_ctx *ctx)
@@ -1553,10 +2197,31 @@ static int bpf_fill_prog_arrays(struct bpf_elf_ctx *ctx)
 		ret = bpf_map_update(ctx->map_fds[idx], &key_id,
 				     &fd, BPF_ANY);
 		if (ret < 0) {
-			if (errno == E2BIG)
+			struct bpf_jited_aux aux = {};
+
+			ret = -errno;
+			if (errno == E2BIG) {
 				fprintf(stderr, "Tail call key %u for map %u out of bounds?\n",
 					key_id, map_id);
-			return -errno;
+				return ret;
+			}
+
+			aux.map_fd  = ctx->map_fds[idx];
+			aux.prog_fd = fd;
+
+			if (bpf_tail_call_get_aux(&aux))
+				return ret;
+			if (!aux.map.owner.type)
+				return ret;
+
+			if (aux.prog.type != aux.map.owner.type)
+				fprintf(stderr, "Tail call map owned by prog type %u, but prog type is %u!\n",
+					aux.map.owner.type, aux.prog.type);
+			if (aux.prog.jited != aux.map.owner.jited)
+				fprintf(stderr, "Tail call map %s jited, but prog %s!\n",
+					aux.map.owner.jited ? "is" : "not",
+					aux.prog.jited ? "is" : "not");
+			return ret;
 		}
 
 		ctx->sec_done[i] = true;
@@ -1714,6 +2379,21 @@ static int bpf_elf_check_ehdr(const struct bpf_elf_ctx *ctx)
 	return 0;
 }
 
+static void bpf_get_cfg(struct bpf_elf_ctx *ctx)
+{
+	static const char *path_jit = "/proc/sys/net/core/bpf_jit_enable";
+	int fd;
+
+	fd = open(path_jit, O_RDONLY);
+	if (fd > 0) {
+		char tmp[16] = {};
+
+		if (read(fd, tmp, sizeof(tmp)) > 0)
+			ctx->cfg.jit_enabled = atoi(tmp);
+		close(fd);
+	}
+}
+
 static int bpf_elf_ctx_init(struct bpf_elf_ctx *ctx, const char *pathname,
 			    enum bpf_prog_type type, bool verbose)
 {
@@ -1724,6 +2404,7 @@ static int bpf_elf_ctx_init(struct bpf_elf_ctx *ctx, const char *pathname,
 		return ret;
 
 	memset(ctx, 0, sizeof(*ctx));
+	bpf_get_cfg(ctx);
 	ctx->verbose = verbose;
 	ctx->type    = type;
 

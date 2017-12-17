@@ -22,7 +22,10 @@
 static void print_explain(FILE *f)
 {
 	fprintf(f,
-		"Usage: ... bridge_slave [ state STATE ] [ priority PRIO ] [cost COST ]\n"
+		"Usage: ... bridge_slave [ fdb_flush ]\n"
+		"                        [ state STATE ]\n"
+		"                        [ priority PRIO ]\n"
+		"                        [ cost COST ]\n"
 		"                        [ guard {on | off} ]\n"
 		"                        [ hairpin {on | off} ]\n"
 		"                        [ fastleave {on | off} ]\n"
@@ -217,7 +220,9 @@ static int bridge_slave_parse_opt(struct link_util *lu, int argc, char **argv,
 	__u32 cost;
 
 	while (argc > 0) {
-		if (matches(*argv, "state") == 0) {
+		if (matches(*argv, "fdb_flush") == 0) {
+			addattr(n, 1024, IFLA_BRPORT_FLUSH);
+		} else if (matches(*argv, "state") == 0) {
 			NEXT_ARG();
 			if (get_u8(&state, *argv, 0))
 				invarg("state is invalid", *argv);
@@ -307,4 +312,6 @@ struct link_util bridge_slave_link_util = {
 	.print_opt	= bridge_slave_print_opt,
 	.parse_opt	= bridge_slave_parse_opt,
 	.print_help     = bridge_slave_print_help,
+	.parse_ifla_xstats = bridge_parse_xstats,
+	.print_ifla_xstats = bridge_print_xstats,
 };

@@ -26,12 +26,13 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <linux/sockios.h>
 #include <stdbool.h>
+#include <linux/mpls.h>
 
 #include "rt_names.h"
 #include "utils.h"
 #include "ip_common.h"
+#include "xdp.h"
 #include "namespace.h"
 
 #define IPLINK_IOCTL_COMPAT	1
@@ -54,13 +55,15 @@ void iplink_usage(void)
 			"                   [ numtxqueues QUEUE_COUNT ]\n"
 			"                   [ numrxqueues QUEUE_COUNT ]\n"
 			"                   type TYPE [ ARGS ]\n"
+			"\n"
 			"       ip link delete { DEVICE | dev DEVICE | group DEVGROUP } type TYPE [ ARGS ]\n"
 			"\n"
 			"       ip link set { DEVICE | dev DEVICE | group DEVGROUP }\n"
 			"	                  [ { up | down } ]\n"
 			"	                  [ type TYPE ARGS ]\n");
 	} else
-		fprintf(stderr, "Usage: ip link set DEVICE [ { up | down } ]\n");
+		fprintf(stderr,
+			"Usage: ip link set DEVICE [ { up | down } ]\n");
 
 	fprintf(stderr,
 		"	                  [ arp { on | off } ]\n"
@@ -69,6 +72,7 @@ void iplink_usage(void)
 		"	                  [ allmulticast { on | off } ]\n"
 		"	                  [ promisc { on | off } ]\n"
 		"	                  [ trailers { on | off } ]\n"
+		"	                  [ carrier { on | off } ]\n"
 		"	                  [ txqueuelen PACKETS ]\n"
 		"	                  [ name NEWNAME ]\n"
 		"	                  [ address LLADDR ]\n"
@@ -79,24 +83,33 @@ void iplink_usage(void)
 		"			  [ alias NAME ]\n"
 		"	                  [ vf NUM [ mac LLADDR ]\n"
 		"				   [ vlan VLANID [ qos VLAN-QOS ] [ proto VLAN-PROTO ] ]\n"
-
 		"				   [ rate TXRATE ]\n"
 		"				   [ max_tx_rate TXRATE ]\n"
 		"				   [ min_tx_rate TXRATE ]\n"
-
 		"				   [ spoofchk { on | off} ]\n"
 		"				   [ query_rss { on | off} ]\n"
 		"				   [ state { auto | enable | disable} ] ]\n"
 		"				   [ trust { on | off} ] ]\n"
+		"				   [ node_guid { eui64 } ]\n"
+		"				   [ port_guid { eui64 } ]\n"
+		"			  [ xdp { off |\n"
+		"				  object FILE [ section NAME ] [ verbose ] |\n"
+		"				  pinned FILE } ]\n"
 		"			  [ master DEVICE ][ vrf NAME ]\n"
 		"			  [ nomaster ]\n"
 		"			  [ addrgenmode { eui64 | none | stable_secret | random } ]\n"
 		"	                  [ protodown { on | off } ]\n"
+		"\n"
 		"       ip link show [ DEVICE | group GROUP ] [up] [master DEV] [vrf NAME] [type TYPE]\n");
+
+	fprintf(stderr, "\n       ip link xstats type TYPE [ ARGS ]\n");
+	fprintf(stderr, "\n       ip link afstats [ dev DEVICE ]\n");
 
 	if (iplink_have_newlink()) {
 		fprintf(stderr,
-			"       ip link help [ TYPE ]\n\n"
+			"\n"
+			"       ip link help [ TYPE ]\n"
+			"\n"
 			"TYPE := { vlan | veth | vcan | dummy | ifb | macvlan | macvtap |\n"
 			"          bridge | bond | team | ipoib | ip6tnl | ipip | sit | vxlan |\n"
 			"          gre | gretap | ip6gre | ip6gretap | vti | nlmon | team_slave |\n"
@@ -221,12 +234,6 @@ static int iplink_have_newlink(void)
 }
 #endif /* ! IPLINK_IOCTL_COMPAT */
 
-struct iplink_req {
-	struct nlmsghdr		n;
-	struct ifinfomsg	i;
-	char			buf[1024];
-};
-
 static int nl_get_ll_addr_len(unsigned int dev_index)
 {
 	int len;
@@ -293,7 +300,8 @@ static void iplink_parse_vf_vlan_info(int vf, int *argcp, char ***argvp,
 				SPRINT_BUF(b2);
 				char msg[64 + sizeof(b1) + sizeof(b2)];
 
-				sprintf(msg, "Invalid \"vlan protocol\" value - supported %s, %s\n",
+				sprintf(msg,
+					"Invalid \"vlan protocol\" value - supported %s, %s\n",
 					ll_proto_n2a(htons(ETH_P_8021Q),
 					     b1, sizeof(b1)),
 					ll_proto_n2a(htons(ETH_P_8021AD),
@@ -578,14 +586,16 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			addr_len = ll_addr_a2n(abuf, sizeof(abuf), *argv);
 			if (addr_len < 0)
 				return -1;
-			addattr_l(&req->n, sizeof(*req), IFLA_ADDRESS, abuf, addr_len);
+			addattr_l(&req->n, sizeof(*req),
+				  IFLA_ADDRESS, abuf, addr_len);
 		} else if (matches(*argv, "broadcast") == 0 ||
 			   strcmp(*argv, "brd") == 0) {
 			NEXT_ARG();
 			len = ll_addr_a2n(abuf, sizeof(abuf), *argv);
 			if (len < 0)
 				return -1;
-			addattr_l(&req->n, sizeof(*req), IFLA_BROADCAST, abuf, len);
+			addattr_l(&req->n, sizeof(*req),
+				  IFLA_BROADCAST, abuf, len);
 		} else if (matches(*argv, "txqueuelen") == 0 ||
 			   strcmp(*argv, "qlen") == 0 ||
 			   matches(*argv, "txqlen") == 0) {
@@ -594,7 +604,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 				duparg("txqueuelen", *argv);
 			if (get_integer(&qlen,  *argv, 0))
 				invarg("Invalid \"txqueuelen\" value\n", *argv);
-			addattr_l(&req->n, sizeof(*req), IFLA_TXQLEN, &qlen, 4);
+			addattr_l(&req->n, sizeof(*req),
+				  IFLA_TXQLEN, &qlen, 4);
 		} else if (strcmp(*argv, "mtu") == 0) {
 			NEXT_ARG();
 			if (mtu != -1)
@@ -602,6 +613,18 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			if (get_integer(&mtu, *argv, 0))
 				invarg("Invalid \"mtu\" value\n", *argv);
 			addattr_l(&req->n, sizeof(*req), IFLA_MTU, &mtu, 4);
+		} else if (strcmp(*argv, "xdpgeneric") == 0 ||
+			   strcmp(*argv, "xdpdrv") == 0 ||
+			   strcmp(*argv, "xdpoffload") == 0 ||
+			   strcmp(*argv, "xdp") == 0) {
+			bool generic = strcmp(*argv, "xdpgeneric") == 0;
+			bool drv = strcmp(*argv, "xdpdrv") == 0;
+			bool offload = strcmp(*argv, "xdpoffload") == 0;
+
+			NEXT_ARG();
+			if (xdp_parse(&argc, &argv, req, generic, drv,
+				      offload))
+				exit(-1);
 		} else if (strcmp(*argv, "netns") == 0) {
 			NEXT_ARG();
 			if (netns != -1)
@@ -611,8 +634,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 				addattr_l(&req->n, sizeof(*req), IFLA_NET_NS_FD,
 					  &netns, 4);
 			else if (get_integer(&netns, *argv, 0) == 0)
-				addattr_l(&req->n, sizeof(*req), IFLA_NET_NS_PID,
-					  &netns, 4);
+				addattr_l(&req->n, sizeof(*req),
+					  IFLA_NET_NS_PID, &netns, 4);
 			else
 				invarg("Invalid \"netns\" value\n", *argv);
 		} else if (strcmp(*argv, "multicast") == 0) {
@@ -665,6 +688,18 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 				req->i.ifi_flags |= IFF_NOARP;
 			else
 				return on_off("arp", *argv);
+		} else if (strcmp(*argv, "carrier") == 0) {
+			int carrier;
+
+			NEXT_ARG();
+			if (strcmp(*argv, "on") == 0)
+				carrier = 1;
+			else if (strcmp(*argv, "off") == 0)
+				carrier = 0;
+			else
+				return on_off("carrier", *argv);
+
+			addattr8(&req->n, sizeof(*req), IFLA_CARRIER, carrier);
 		} else if (strcmp(*argv, "vf") == 0) {
 			struct rtattr *vflist;
 
@@ -755,7 +790,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			if (numtxqueues != -1)
 				duparg("numtxqueues", *argv);
 			if (get_integer(&numtxqueues, *argv, 0))
-				invarg("Invalid \"numtxqueues\" value\n", *argv);
+				invarg("Invalid \"numtxqueues\" value\n",
+				       *argv);
 			addattr_l(&req->n, sizeof(*req), IFLA_NUM_TX_QUEUES,
 				  &numtxqueues, 4);
 		} else if (matches(*argv, "numrxqueues") == 0) {
@@ -763,7 +799,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			if (numrxqueues != -1)
 				duparg("numrxqueues", *argv);
 			if (get_integer(&numrxqueues, *argv, 0))
-				invarg("Invalid \"numrxqueues\" value\n", *argv);
+				invarg("Invalid \"numrxqueues\" value\n",
+				       *argv);
 			addattr_l(&req->n, sizeof(*req), IFLA_NUM_RX_QUEUES,
 				  &numrxqueues, 4);
 		} else if (matches(*argv, "addrgenmode") == 0) {
@@ -773,7 +810,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			NEXT_ARG();
 			mode = get_addr_gen_mode(*argv);
 			if (mode < 0)
-				invarg("Invalid address generation mode\n", *argv);
+				invarg("Invalid address generation mode\n",
+				       *argv);
 			afs = addattr_nest(&req->n, sizeof(*req), IFLA_AF_SPEC);
 			afs6 = addattr_nest(&req->n, sizeof(*req), AF_INET6);
 			addattr8(&req->n, sizeof(*req),
@@ -785,7 +823,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			if (link_netnsid != -1)
 				duparg("link-netnsid", *argv);
 			if (get_integer(&link_netnsid, *argv, 0))
-				invarg("Invalid \"link-netnsid\" value\n", *argv);
+				invarg("Invalid \"link-netnsid\" value\n",
+				       *argv);
 			addattr32(&req->n, sizeof(*req), IFLA_LINK_NETNSID,
 				  link_netnsid);
 		} else if (strcmp(*argv, "protodown") == 0) {
@@ -866,7 +905,8 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 				return -1;
 			}
 			if (flags & NLM_F_CREATE) {
-				fprintf(stderr, "group cannot be used when creating devices.\n");
+				fprintf(stderr,
+					"group cannot be used when creating devices.\n");
 				return -1;
 			}
 
@@ -880,11 +920,13 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 	if (!(flags & NLM_F_CREATE)) {
 		if (!dev) {
-			fprintf(stderr, "Not enough information: \"dev\" argument is required.\n");
+			fprintf(stderr,
+				"Not enough information: \"dev\" argument is required.\n");
 			exit(-1);
 		}
 		if (cmd == RTM_NEWLINK && index != -1) {
-			fprintf(stderr, "index can be used only when creating devices.\n");
+			fprintf(stderr,
+				"index can be used only when creating devices.\n");
 			exit(-1);
 		}
 
@@ -941,8 +983,9 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 		else
 			iflatype = IFLA_INFO_DATA;
 		if (lu && argc) {
-			struct rtattr *data = addattr_nest(&req.n,
-							   sizeof(req), iflatype);
+			struct rtattr *data
+				= addattr_nest(&req.n,
+					       sizeof(req), iflatype);
 
 			if (lu->parse_opt &&
 			    lu->parse_opt(lu, argc, argv, &req.n))
@@ -959,7 +1002,8 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 		}
 		addattr_nest_end(&req.n, linkinfo);
 	} else if (flags & NLM_F_CREATE) {
-		fprintf(stderr, "Not enough information: \"type\" argument is required\n");
+		fprintf(stderr,
+			"Not enough information: \"type\" argument is required\n");
 		return -1;
 	}
 
@@ -980,7 +1024,7 @@ int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
 	};
 	struct {
 		struct nlmsghdr n;
-		char buf[16384];
+		char buf[32768];
 	} answer;
 
 	if (name) {
@@ -996,9 +1040,14 @@ int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
 
 	if (rtnl_talk(&rth, &req.n, &answer.n, sizeof(answer)) < 0)
 		return -2;
+	if (answer.n.nlmsg_len > sizeof(answer.buf)) {
+		fprintf(stderr, "Message truncated from %u to %lu\n",
+			answer.n.nlmsg_len, sizeof(answer.buf));
+		return -2;
+	}
 
 	if (brief)
-		print_linkinfo_brief(NULL, &answer.n, stdout);
+		print_linkinfo_brief(NULL, &answer.n, stdout, NULL);
 	else
 		print_linkinfo(NULL, &answer.n, stdout);
 
@@ -1167,7 +1216,8 @@ static int parse_address(const char *dev, int hatype, int halen,
 	if (alen < 0)
 		return -1;
 	if (alen != halen) {
-		fprintf(stderr, "Wrong address (%s) length: expected %d bytes\n",
+		fprintf(stderr,
+			"Wrong address (%s) length: expected %d bytes\n",
 			lla, halen);
 		return -1;
 	}
@@ -1318,18 +1368,21 @@ static int do_set(int argc, char **argv)
 		if (halen < 0)
 			return -1;
 		if (newaddr) {
-			if (parse_address(dev, htype, halen, newaddr, &ifr0) < 0)
+			if (parse_address(dev, htype, halen,
+					  newaddr, &ifr0) < 0)
 				return -1;
 		}
 		if (newbrd) {
-			if (parse_address(dev, htype, halen, newbrd, &ifr1) < 0)
+			if (parse_address(dev, htype, halen,
+					  newbrd, &ifr1) < 0)
 				return -1;
 		}
 	}
 
 	if (newname && strcmp(dev, newname)) {
 		if (strlen(newname) == 0)
-			invarg("\"\" is not a valid device identifier\n", "name");
+			invarg("\"\" is not a valid device identifier\n",
+			       "name");
 		if (do_changename(dev, newname) < 0)
 			return -1;
 		dev = newname;
@@ -1357,6 +1410,150 @@ static int do_set(int argc, char **argv)
 	return 0;
 }
 #endif /* IPLINK_IOCTL_COMPAT */
+
+static void print_mpls_stats(FILE *fp, struct rtattr *attr)
+{
+	struct rtattr *mrtb[MPLS_STATS_MAX+1];
+	struct mpls_link_stats *stats;
+
+	parse_rtattr(mrtb, MPLS_STATS_MAX, RTA_DATA(attr),
+		     RTA_PAYLOAD(attr));
+	if (!mrtb[MPLS_STATS_LINK])
+		return;
+
+	stats = RTA_DATA(mrtb[MPLS_STATS_LINK]);
+
+	fprintf(fp, "    mpls:\n");
+	fprintf(fp, "        RX: bytes  packets  errors  dropped  noroute\n");
+	fprintf(fp, "        ");
+	print_num(fp, 10, stats->rx_bytes);
+	print_num(fp, 8, stats->rx_packets);
+	print_num(fp, 7, stats->rx_errors);
+	print_num(fp, 8, stats->rx_dropped);
+	print_num(fp, 7, stats->rx_noroute);
+	fprintf(fp, "\n");
+	fprintf(fp, "        TX: bytes  packets  errors  dropped\n");
+	fprintf(fp, "        ");
+	print_num(fp, 10, stats->tx_bytes);
+	print_num(fp, 8, stats->tx_packets);
+	print_num(fp, 7, stats->tx_errors);
+	print_num(fp, 7, stats->tx_dropped);
+	fprintf(fp, "\n");
+}
+
+static void print_af_stats_attr(FILE *fp, int ifindex, struct rtattr *attr)
+{
+	bool if_printed = false;
+	struct rtattr *i;
+	int rem;
+
+	rem = RTA_PAYLOAD(attr);
+	for (i = RTA_DATA(attr); RTA_OK(i, rem); i = RTA_NEXT(i, rem)) {
+		if (preferred_family != AF_UNSPEC &&
+		    i->rta_type != preferred_family)
+			continue;
+
+		if (!if_printed) {
+			fprintf(fp, "%u: %s\n", ifindex,
+				ll_index_to_name(ifindex));
+			if_printed = true;
+		}
+
+		switch (i->rta_type) {
+		case AF_MPLS:
+			print_mpls_stats(fp, i);
+			break;
+		default:
+			fprintf(fp, "    unknown af(%d)\n", i->rta_type);
+			break;
+		}
+	}
+}
+
+struct af_stats_ctx {
+	FILE *fp;
+	int ifindex;
+};
+
+static int print_af_stats(const struct sockaddr_nl *who,
+			  struct nlmsghdr *n,
+			  void *arg)
+{
+	struct if_stats_msg *ifsm = NLMSG_DATA(n);
+	struct rtattr *tb[IFLA_STATS_MAX+1];
+	int len = n->nlmsg_len;
+	struct af_stats_ctx *ctx = arg;
+	FILE *fp = ctx->fp;
+
+	len -= NLMSG_LENGTH(sizeof(*ifsm));
+	if (len < 0) {
+		fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
+		return -1;
+	}
+
+	if (ctx->ifindex && ifsm->ifindex != ctx->ifindex)
+		return 0;
+
+	parse_rtattr(tb, IFLA_STATS_MAX, IFLA_STATS_RTA(ifsm), len);
+
+	if (tb[IFLA_STATS_AF_SPEC])
+		print_af_stats_attr(fp, ifsm->ifindex, tb[IFLA_STATS_AF_SPEC]);
+
+	fflush(fp);
+	return 0;
+}
+
+static int iplink_afstats(int argc, char **argv)
+{
+	__u32 filt_mask = IFLA_STATS_FILTER_BIT(IFLA_STATS_AF_SPEC);
+	const char *filter_dev = NULL;
+	struct af_stats_ctx ctx = {
+		.fp = stdout,
+		.ifindex = 0,
+	};
+
+	while (argc > 0) {
+		if (strcmp(*argv, "dev") == 0) {
+			NEXT_ARG();
+			if (filter_dev)
+				duparg2("dev", *argv);
+			filter_dev = *argv;
+		} else if (matches(*argv, "help") == 0) {
+			usage();
+		} else {
+			fprintf(stderr,
+				"Command \"%s\" is unknown, try \"ip link help\".\n",
+				*argv);
+			exit(-1);
+		}
+
+		argv++; argc--;
+	}
+
+	if (filter_dev) {
+		ctx.ifindex = ll_name_to_index(filter_dev);
+		if (ctx.ifindex <= 0) {
+			fprintf(stderr,
+				"Device \"%s\" does not exist.\n",
+				filter_dev);
+			return -1;
+		}
+	}
+
+	if (rtnl_wilddump_stats_req_filter(&rth, AF_UNSPEC,
+					   RTM_GETSTATS,
+					   filt_mask) < 0) {
+		perror("Cannont send dump request");
+		return 1;
+	}
+
+	if (rtnl_dump_filter(&rth, print_af_stats, &ctx) < 0) {
+		fprintf(stderr, "Dump terminated\n");
+		return 1;
+	}
+
+	return 0;
+}
 
 static void do_help(int argc, char **argv)
 {
@@ -1406,6 +1603,14 @@ int do_iplink(int argc, char **argv)
 	    matches(*argv, "lst") == 0 ||
 	    matches(*argv, "list") == 0)
 		return ipaddr_list_link(argc-1, argv+1);
+
+	if (matches(*argv, "xstats") == 0)
+		return iplink_ifla_xstats(argc-1, argv+1);
+
+	if (matches(*argv, "afstats") == 0) {
+		iplink_afstats(argc-1, argv+1);
+		return 0;
+	}
 
 	if (matches(*argv, "help") == 0) {
 		do_help(argc-1, argv+1);

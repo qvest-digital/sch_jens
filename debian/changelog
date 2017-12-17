@@ -1,3 +1,12 @@
+iproute2 (4.13.0-1) unstable; urgency=medium
+
+  * Merge tag 'upstream/4.13.0' (Closes: #879854)
+  * Drop 0003-fix-segfault-with-iptables-1.6.patch, merged upstream.
+  * Refresh 0001-Add-moo-feature.patch to remove fuzz from 4.13.0.
+  * Add myself to Uploaders.
+
+ -- Luca Boccassi <bluca@debian.org>  Sun, 17 Dec 2017 15:25:29 +0000
+
 iproute2 (4.9.0-2.1) unstable; urgency=high
 
   * Non-maintainer upload.

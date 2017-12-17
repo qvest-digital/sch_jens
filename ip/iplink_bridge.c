@@ -12,17 +12,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <linux/if_link.h>
+#include <netinet/in.h>
 #include <netinet/ether.h>
+#include <linux/if_link.h>
+#include <linux/if_bridge.h>
+#include <net/if.h>
 
 #include "rt_names.h"
 #include "utils.h"
 #include "ip_common.h"
 
+static unsigned int xstats_print_attr;
+static int filter_index;
+
 static void print_explain(FILE *f)
 {
 	fprintf(f,
-		"Usage: ... bridge [ forward_delay FORWARD_DELAY ]\n"
+		"Usage: ... bridge [ fdb_flush ]\n"
+		"                  [ forward_delay FORWARD_DELAY ]\n"
 		"                  [ hello_time HELLO_TIME ]\n"
 		"                  [ max_age MAX_AGE ]\n"
 		"                  [ ageing_time AGEING_TIME ]\n"
@@ -33,6 +40,7 @@ static void print_explain(FILE *f)
 		"                  [ vlan_filtering VLAN_FILTERING ]\n"
 		"                  [ vlan_protocol VLAN_PROTOCOL ]\n"
 		"                  [ vlan_default_pvid VLAN_DEFAULT_PVID ]\n"
+		"                  [ vlan_stats_enabled VLAN_STATS_ENABLED ]\n"
 		"                  [ mcast_snooping MULTICAST_SNOOPING ]\n"
 		"                  [ mcast_router MULTICAST_ROUTER ]\n"
 		"                  [ mcast_query_use_ifaddr MCAST_QUERY_USE_IFADDR ]\n"
@@ -47,6 +55,9 @@ static void print_explain(FILE *f)
 		"                  [ mcast_query_interval QUERY_INTERVAL ]\n"
 		"                  [ mcast_query_response_interval QUERY_RESPONSE_INTERVAL ]\n"
 		"                  [ mcast_startup_query_interval STARTUP_QUERY_INTERVAL ]\n"
+		"                  [ mcast_stats_enabled MCAST_STATS_ENABLED ]\n"
+		"                  [ mcast_igmp_version IGMP_VERSION ]\n"
+		"                  [ mcast_mld_version MLD_VERSION ]\n"
 		"                  [ nf_call_iptables NF_CALL_IPTABLES ]\n"
 		"                  [ nf_call_ip6tables NF_CALL_IP6TABLES ]\n"
 		"                  [ nf_call_arptables NF_CALL_ARPTABLES ]\n"
@@ -145,6 +156,8 @@ static int bridge_parse_opt(struct link_util *lu, int argc, char **argv,
 			if (len < 0)
 				return -1;
 			addattr_l(n, 1024, IFLA_BR_GROUP_ADDR, llabuf, len);
+		} else if (matches(*argv, "fdb_flush") == 0) {
+			addattr(n, 1024, IFLA_BR_FDB_FLUSH);
 		} else if (matches(*argv, "vlan_default_pvid") == 0) {
 			__u16 default_pvid;
 
@@ -154,6 +167,14 @@ static int bridge_parse_opt(struct link_util *lu, int argc, char **argv,
 
 			addattr16(n, 1024, IFLA_BR_VLAN_DEFAULT_PVID,
 				  default_pvid);
+		} else if (matches(*argv, "vlan_stats_enabled") == 0) {
+			__u8 vlan_stats_enabled;
+
+			NEXT_ARG();
+			if (get_u8(&vlan_stats_enabled, *argv, 0))
+				invarg("invalid vlan_stats_enabled", *argv);
+			addattr8(n, 1024, IFLA_BR_VLAN_STATS_ENABLED,
+				  vlan_stats_enabled);
 		} else if (matches(*argv, "mcast_router") == 0) {
 			__u8 mcast_router;
 
@@ -287,6 +308,30 @@ static int bridge_parse_opt(struct link_util *lu, int argc, char **argv,
 
 			addattr64(n, 1024, IFLA_BR_MCAST_STARTUP_QUERY_INTVL,
 				  mcast_startup_query_intvl);
+		} else if (matches(*argv, "mcast_stats_enabled") == 0) {
+			__u8 mcast_stats_enabled;
+
+			NEXT_ARG();
+			if (get_u8(&mcast_stats_enabled, *argv, 0))
+				invarg("invalid mcast_stats_enabled", *argv);
+			addattr8(n, 1024, IFLA_BR_MCAST_STATS_ENABLED,
+				  mcast_stats_enabled);
+		} else if (matches(*argv, "mcast_igmp_version") == 0) {
+			__u8 igmp_version;
+
+			NEXT_ARG();
+			if (get_u8(&igmp_version, *argv, 0))
+				invarg("invalid mcast_igmp_version", *argv);
+			addattr8(n, 1024, IFLA_BR_MCAST_IGMP_VERSION,
+				  igmp_version);
+		} else if (matches(*argv, "mcast_mld_version") == 0) {
+			__u8 mld_version;
+
+			NEXT_ARG();
+			if (get_u8(&mld_version, *argv, 0))
+				invarg("invalid mcast_mld_version", *argv);
+			addattr8(n, 1024, IFLA_BR_MCAST_MLD_VERSION,
+				  mld_version);
 		} else if (matches(*argv, "nf_call_iptables") == 0) {
 			__u8 nf_call_ipt;
 
@@ -439,6 +484,10 @@ static void bridge_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 		fprintf(f, "vlan_default_pvid %u ",
 			rta_getattr_u16(tb[IFLA_BR_VLAN_DEFAULT_PVID]));
 
+	if (tb[IFLA_BR_VLAN_STATS_ENABLED])
+		fprintf(f, "vlan_stats_enabled %u ",
+			rta_getattr_u8(tb[IFLA_BR_VLAN_STATS_ENABLED]));
+
 	if (tb[IFLA_BR_GROUP_FWD_MASK])
 		fprintf(f, "group_fwd_mask %#x ",
 			rta_getattr_u16(tb[IFLA_BR_GROUP_FWD_MASK]));
@@ -508,6 +557,18 @@ static void bridge_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 		fprintf(f, "mcast_startup_query_interval %llu ",
 			rta_getattr_u64(tb[IFLA_BR_MCAST_STARTUP_QUERY_INTVL]));
 
+	if (tb[IFLA_BR_MCAST_STATS_ENABLED])
+		fprintf(f, "mcast_stats_enabled %u ",
+			rta_getattr_u8(tb[IFLA_BR_MCAST_STATS_ENABLED]));
+
+	if (tb[IFLA_BR_MCAST_IGMP_VERSION])
+		fprintf(f, "mcast_igmp_version %u ",
+			rta_getattr_u8(tb[IFLA_BR_MCAST_IGMP_VERSION]));
+
+	if (tb[IFLA_BR_MCAST_MLD_VERSION])
+		fprintf(f, "mcast_mld_version %u ",
+			rta_getattr_u8(tb[IFLA_BR_MCAST_MLD_VERSION]));
+
 	if (tb[IFLA_BR_NF_CALL_IPTABLES])
 		fprintf(f, "nf_call_iptables %u ",
 			rta_getattr_u8(tb[IFLA_BR_NF_CALL_IPTABLES]));
@@ -527,10 +588,157 @@ static void bridge_print_help(struct link_util *lu, int argc, char **argv,
 	print_explain(f);
 }
 
+static void bridge_print_xstats_help(struct link_util *lu, FILE *f)
+{
+	fprintf(f, "Usage: ... %s [ igmp ] [ dev DEVICE ]\n", lu->id);
+}
+
+static void bridge_print_stats_attr(FILE *f, struct rtattr *attr, int ifindex)
+{
+	struct rtattr *brtb[LINK_XSTATS_TYPE_MAX+1];
+	struct br_mcast_stats *mstats;
+	struct rtattr *i, *list;
+	const char *ifname = "";
+	int rem;
+
+	parse_rtattr(brtb, LINK_XSTATS_TYPE_MAX, RTA_DATA(attr),
+	RTA_PAYLOAD(attr));
+	if (!brtb[LINK_XSTATS_TYPE_BRIDGE])
+		return;
+
+	list = brtb[LINK_XSTATS_TYPE_BRIDGE];
+	rem = RTA_PAYLOAD(list);
+	for (i = RTA_DATA(list); RTA_OK(i, rem); i = RTA_NEXT(i, rem)) {
+		if (xstats_print_attr && i->rta_type != xstats_print_attr)
+			continue;
+		switch (i->rta_type) {
+		case BRIDGE_XSTATS_MCAST:
+			mstats = RTA_DATA(i);
+			ifname = ll_index_to_name(ifindex);
+			fprintf(f, "%-16s\n", ifname);
+			fprintf(f, "%-16s    IGMP queries:\n", "");
+			fprintf(f, "%-16s      RX: v1 %llu v2 %llu v3 %llu\n",
+				"",
+				mstats->igmp_v1queries[BR_MCAST_DIR_RX],
+				mstats->igmp_v2queries[BR_MCAST_DIR_RX],
+				mstats->igmp_v3queries[BR_MCAST_DIR_RX]);
+			fprintf(f, "%-16s      TX: v1 %llu v2 %llu v3 %llu\n",
+				"",
+				mstats->igmp_v1queries[BR_MCAST_DIR_TX],
+				mstats->igmp_v2queries[BR_MCAST_DIR_TX],
+				mstats->igmp_v3queries[BR_MCAST_DIR_TX]);
+
+			fprintf(f, "%-16s    IGMP reports:\n", "");
+			fprintf(f, "%-16s      RX: v1 %llu v2 %llu v3 %llu\n",
+				"",
+				mstats->igmp_v1reports[BR_MCAST_DIR_RX],
+				mstats->igmp_v2reports[BR_MCAST_DIR_RX],
+				mstats->igmp_v3reports[BR_MCAST_DIR_RX]);
+			fprintf(f, "%-16s      TX: v1 %llu v2 %llu v3 %llu\n",
+				"",
+				mstats->igmp_v1reports[BR_MCAST_DIR_TX],
+				mstats->igmp_v2reports[BR_MCAST_DIR_TX],
+				mstats->igmp_v3reports[BR_MCAST_DIR_TX]);
+
+			fprintf(f, "%-16s    IGMP leaves: RX: %llu TX: %llu\n",
+				"",
+				mstats->igmp_leaves[BR_MCAST_DIR_RX],
+				mstats->igmp_leaves[BR_MCAST_DIR_TX]);
+
+			fprintf(f, "%-16s    IGMP parse errors: %llu\n",
+				"", mstats->igmp_parse_errors);
+
+			fprintf(f, "%-16s    MLD queries:\n", "");
+			fprintf(f, "%-16s      RX: v1 %llu v2 %llu\n",
+				"",
+				mstats->mld_v1queries[BR_MCAST_DIR_RX],
+				mstats->mld_v2queries[BR_MCAST_DIR_RX]);
+			fprintf(f, "%-16s      TX: v1 %llu v2 %llu\n",
+				"",
+				mstats->mld_v1queries[BR_MCAST_DIR_TX],
+				mstats->mld_v2queries[BR_MCAST_DIR_TX]);
+
+			fprintf(f, "%-16s    MLD reports:\n", "");
+			fprintf(f, "%-16s      RX: v1 %llu v2 %llu\n",
+				"",
+				mstats->mld_v1reports[BR_MCAST_DIR_RX],
+				mstats->mld_v2reports[BR_MCAST_DIR_RX]);
+			fprintf(f, "%-16s      TX: v1 %llu v2 %llu\n",
+				"",
+				mstats->mld_v1reports[BR_MCAST_DIR_TX],
+				mstats->mld_v2reports[BR_MCAST_DIR_TX]);
+
+			fprintf(f, "%-16s    MLD leaves: RX: %llu TX: %llu\n",
+				"",
+				mstats->mld_leaves[BR_MCAST_DIR_RX],
+				mstats->mld_leaves[BR_MCAST_DIR_TX]);
+
+			fprintf(f, "%-16s    MLD parse errors: %llu\n",
+				"", mstats->mld_parse_errors);
+			break;
+		}
+	}
+}
+
+int bridge_print_xstats(const struct sockaddr_nl *who,
+			struct nlmsghdr *n, void *arg)
+{
+	struct if_stats_msg *ifsm = NLMSG_DATA(n);
+	struct rtattr *tb[IFLA_STATS_MAX+1];
+	int len = n->nlmsg_len;
+	FILE *fp = arg;
+
+	len -= NLMSG_LENGTH(sizeof(*ifsm));
+	if (len < 0) {
+		fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
+		return -1;
+	}
+	if (filter_index && filter_index != ifsm->ifindex)
+		return 0;
+
+	parse_rtattr(tb, IFLA_STATS_MAX, IFLA_STATS_RTA(ifsm), len);
+	if (tb[IFLA_STATS_LINK_XSTATS])
+		bridge_print_stats_attr(fp, tb[IFLA_STATS_LINK_XSTATS],
+					ifsm->ifindex);
+
+	if (tb[IFLA_STATS_LINK_XSTATS_SLAVE])
+		bridge_print_stats_attr(fp, tb[IFLA_STATS_LINK_XSTATS_SLAVE],
+					ifsm->ifindex);
+
+	return 0;
+}
+
+int bridge_parse_xstats(struct link_util *lu, int argc, char **argv)
+{
+	while (argc > 0) {
+		if (strcmp(*argv, "igmp") == 0 || strcmp(*argv, "mcast") == 0) {
+			xstats_print_attr = BRIDGE_XSTATS_MCAST;
+		} else if (strcmp(*argv, "dev") == 0) {
+			NEXT_ARG();
+			filter_index = if_nametoindex(*argv);
+			if (filter_index == 0) {
+				fprintf(stderr, "Cannot find device \"%s\"\n",
+					*argv);
+				return -1;
+			}
+		} else if (strcmp(*argv, "help") == 0) {
+			bridge_print_xstats_help(lu, stdout);
+			exit(0);
+		} else {
+			invarg("unknown attribute", *argv);
+		}
+		argc--; argv++;
+	}
+
+	return 0;
+}
+
 struct link_util bridge_link_util = {
 	.id		= "bridge",
 	.maxattr	= IFLA_BR_MAX,
 	.parse_opt	= bridge_parse_opt,
 	.print_opt	= bridge_print_opt,
 	.print_help     = bridge_print_help,
+	.parse_ifla_xstats = bridge_parse_xstats,
+	.print_ifla_xstats = bridge_print_xstats,
 };

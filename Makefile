@@ -1,4 +1,6 @@
-ifndef VERBOSE
+# Top level Makefile for iproute2
+
+ifeq ($(VERBOSE),0)
 MAKEFLAGS += --no-print-directory
 endif
 
@@ -7,6 +9,7 @@ LIBDIR?=$(PREFIX)/lib
 SBINDIR?=/sbin
 CONFDIR?=/etc/iproute2
 DATADIR?=$(PREFIX)/share
+HDRDIR?=$(PREFIX)/include/iproute2
 DOCDIR?=$(DATADIR)/doc/iproute2
 MANDIR?=$(DATADIR)/man
 ARPDDIR?=/var/lib/arpd
@@ -46,7 +49,7 @@ WFLAGS += -Wmissing-declarations -Wold-style-definition -Wformat=2
 CFLAGS := $(WFLAGS) $(CCOPTS) -I../include $(DEFINES) $(CFLAGS)
 YACCFLAGS = -d -t -v
 
-SUBDIRS=lib ip tc bridge misc netem genl tipc devlink man
+SUBDIRS=lib ip tc bridge misc netem genl tipc devlink rdma man
 
 LIBNETLINK=../lib/libnetlink.a ../lib/libutil.a
 LDLIBS += $(LIBNETLINK)
@@ -63,6 +66,7 @@ install: all
 	install -m 0755 -d $(DESTDIR)$(SBINDIR)
 	install -m 0755 -d $(DESTDIR)$(CONFDIR)
 	install -m 0755 -d $(DESTDIR)$(ARPDDIR)
+	install -m 0755 -d $(DESTDIR)$(HDRDIR)
 	install -m 0755 -d $(DESTDIR)$(DOCDIR)/examples
 	install -m 0755 -d $(DESTDIR)$(DOCDIR)/examples/diffserv
 	install -m 0644 README.iproute2+tc $(shell find examples -maxdepth 1 -type f) \
@@ -73,6 +77,7 @@ install: all
 	install -m 0644 $(shell find etc/iproute2 -maxdepth 1 -type f) $(DESTDIR)$(CONFDIR)
 	install -m 0755 -d $(DESTDIR)$(BASH_COMPDIR)
 	install -m 0644 bash-completion/tc $(DESTDIR)$(BASH_COMPDIR)
+	install -m 0644 include/bpf_elf.h $(DESTDIR)$(HDRDIR)
 
 snapshot:
 	echo "static const char SNAPSHOT[] = \""`date +%y%m%d`"\";" \

@@ -32,10 +32,12 @@ static void usage(void)
 	fprintf(stderr, "          type { vti6 } [ remote ADDR ] [ local ADDR ]\n");
 	fprintf(stderr, "          [ [i|o]key KEY ]\n");
 	fprintf(stderr, "          [ dev PHYS_DEV ]\n");
+	fprintf(stderr, "          [ fwmark MARK ]\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Where: NAME := STRING\n");
 	fprintf(stderr, "       ADDR := { IPV6_ADDRESS }\n");
 	fprintf(stderr, "       KEY  := { DOTTED_QUAD | NUMBER }\n");
+	fprintf(stderr, "       MARK := { 0x0..0xffffffff }\n");
 	exit(-1);
 }
 
@@ -57,11 +59,12 @@ static int vti6_parse_opt(struct link_util *lu, int argc, char **argv,
 	struct rtattr *tb[IFLA_MAX + 1];
 	struct rtattr *linkinfo[IFLA_INFO_MAX+1];
 	struct rtattr *vtiinfo[IFLA_VTI_MAX + 1];
-	struct in6_addr saddr;
-	struct in6_addr daddr;
+	struct in6_addr saddr = IN6ADDR_ANY_INIT;
+	struct in6_addr daddr = IN6ADDR_ANY_INIT;
 	unsigned int ikey = 0;
 	unsigned int okey = 0;
 	unsigned int link = 0;
+	__u32 fwmark = 0;
 	int len;
 
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
@@ -104,6 +107,9 @@ get_failed:
 
 		if (vtiinfo[IFLA_VTI_LINK])
 			link = rta_getattr_u8(vtiinfo[IFLA_VTI_LINK]);
+
+		if (vtiinfo[IFLA_VTI_FWMARK])
+			fwmark = rta_getattr_u32(vtiinfo[IFLA_VTI_FWMARK]);
 	}
 
 	while (argc > 0) {
@@ -178,6 +184,10 @@ get_failed:
 			link = if_nametoindex(*argv);
 			if (link == 0)
 				exit(-1);
+		} else if (strcmp(*argv, "fwmark") == 0) {
+			NEXT_ARG();
+			if (get_u32(&fwmark, *argv, 0))
+				invarg("invalid fwmark\n", *argv);
 		} else
 			usage();
 		argc--; argv++;
@@ -185,8 +195,12 @@ get_failed:
 
 	addattr32(n, 1024, IFLA_VTI_IKEY, ikey);
 	addattr32(n, 1024, IFLA_VTI_OKEY, okey);
-	addattr_l(n, 1024, IFLA_VTI_LOCAL, &saddr, sizeof(saddr));
-	addattr_l(n, 1024, IFLA_VTI_REMOTE, &daddr, sizeof(daddr));
+
+	if (memcmp(&saddr, &in6addr_any, sizeof(in6addr_any)))
+	    addattr_l(n, 1024, IFLA_VTI_LOCAL, &saddr, sizeof(saddr));
+	if (memcmp(&daddr, &in6addr_any, sizeof(in6addr_any)))
+	    addattr_l(n, 1024, IFLA_VTI_REMOTE, &daddr, sizeof(daddr));
+	addattr32(n, 1024, IFLA_VTI_FWMARK, fwmark);
 	if (link)
 		addattr32(n, 1024, IFLA_VTI_LINK, link);
 
@@ -195,11 +209,12 @@ get_failed:
 
 static void vti6_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 {
-	char s2[64];
 	const char *local = "any";
 	const char *remote = "any";
 	struct in6_addr saddr;
 	struct in6_addr daddr;
+	unsigned int link;
+	char s2[64];
 
 	if (!tb)
 		return;
@@ -220,8 +235,7 @@ static void vti6_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 	fprintf(f, "local %s ", local);
 
-	if (tb[IFLA_VTI_LINK] && *(__u32 *)RTA_DATA(tb[IFLA_VTI_LINK])) {
-		unsigned int link = *(__u32 *)RTA_DATA(tb[IFLA_VTI_LINK]);
+	if (tb[IFLA_VTI_LINK] && (link = rta_getattr_u32(tb[IFLA_VTI_LINK]))) {
 		const char *n = if_indextoname(link, s2);
 
 		if (n)
@@ -238,6 +252,10 @@ static void vti6_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 	if (tb[IFLA_VTI_OKEY]) {
 		inet_ntop(AF_INET, RTA_DATA(tb[IFLA_VTI_OKEY]), s2, sizeof(s2));
 		fprintf(f, "okey %s ", s2);
+	}
+
+	if (tb[IFLA_VTI_FWMARK] && rta_getattr_u32(tb[IFLA_VTI_FWMARK])) {
+		fprintf(f, "fwmark 0x%x ", rta_getattr_u32(tb[IFLA_VTI_FWMARK]));
 	}
 }
 

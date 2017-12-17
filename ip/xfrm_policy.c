@@ -505,7 +505,7 @@ int xfrm_policy_print(const struct sockaddr_nl *who, struct nlmsghdr *n,
 			fprintf(stderr, "too short XFRMA_POLICY_TYPE len\n");
 			return -1;
 		}
-		upt = (struct xfrm_userpolicy_type *)RTA_DATA(tb[XFRMA_POLICY_TYPE]);
+		upt = RTA_DATA(tb[XFRMA_POLICY_TYPE]);
 		ptype = upt->type;
 	}
 
@@ -529,7 +529,7 @@ int xfrm_policy_print(const struct sockaddr_nl *who, struct nlmsghdr *n,
 			fprintf(stderr, "Buggy XFRM_MSG_DELPOLICY: too short XFRMA_POLICY len\n");
 			return -1;
 		}
-		xpinfo = (struct xfrm_userpolicy_info *)RTA_DATA(tb[XFRMA_POLICY]);
+		xpinfo = RTA_DATA(tb[XFRMA_POLICY]);
 	}
 
 	xfrm_policy_info_print(xpinfo, tb, fp, NULL, NULL);
@@ -725,17 +725,15 @@ static int xfrm_policy_keep(const struct sockaddr_nl *who,
 			fprintf(stderr, "too short XFRMA_POLICY_TYPE len\n");
 			return -1;
 		}
-		upt = (struct xfrm_userpolicy_type *)RTA_DATA(tb[XFRMA_POLICY_TYPE]);
+		upt = RTA_DATA(tb[XFRMA_POLICY_TYPE]);
 		ptype = upt->type;
 	}
 
 	if (!xfrm_policy_filter_match(xpinfo, ptype))
 		return 0;
 
-	if (xb->offset > xb->size) {
-		fprintf(stderr, "Policy buffer overflow\n");
-		return -1;
-	}
+	if (xb->offset + NLMSG_LENGTH(sizeof(*xpid)) > xb->size)
+		return 0;
 
 	new_n = (struct nlmsghdr *)(xb->buf + xb->offset);
 	new_n->nlmsg_len = NLMSG_LENGTH(sizeof(*xpid));

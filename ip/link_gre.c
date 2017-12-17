@@ -25,19 +25,32 @@
 
 static void print_usage(FILE *f)
 {
-	fprintf(f, "Usage: ip link { add | set | change | replace | del } NAME\n");
-	fprintf(f, "          type { gre | gretap } [ remote ADDR ] [ local ADDR ]\n");
-	fprintf(f, "          [ [i|o]seq ] [ [i|o]key KEY ] [ [i|o]csum ]\n");
-	fprintf(f, "          [ ttl TTL ] [ tos TOS ] [ [no]pmtudisc ] [ dev PHYS_DEV ]\n");
-	fprintf(f, "          [ noencap ] [ encap { fou | gue | none } ]\n");
-	fprintf(f, "          [ encap-sport PORT ] [ encap-dport PORT ]\n");
-	fprintf(f, "          [ [no]encap-csum ] [ [no]encap-csum6 ] [ [no]encap-remcsum ]\n");
-	fprintf(f, "\n");
-	fprintf(f, "Where: NAME := STRING\n");
-	fprintf(f, "       ADDR := { IP_ADDRESS | any }\n");
-	fprintf(f, "       TOS  := { NUMBER | inherit }\n");
-	fprintf(f, "       TTL  := { 1..255 | inherit }\n");
-	fprintf(f, "       KEY  := { DOTTED_QUAD | NUMBER }\n");
+	fprintf(f,
+		"Usage: ... { gre | gretap } [ remote ADDR ]\n"
+		"                            [ local ADDR ]\n"
+		"                            [ [i|o]seq ]\n"
+		"                            [ [i|o]key KEY ]\n"
+		"                            [ [i|o]csum ]\n"
+		"                            [ ttl TTL ]\n"
+		"                            [ tos TOS ]\n"
+		"                            [ [no]pmtudisc ]\n"
+		"                            [ [no]ignore-df ]\n"
+		"                            [ dev PHYS_DEV ]\n"
+		"                            [ noencap ]\n"
+		"                            [ encap { fou | gue | none } ]\n"
+		"                            [ encap-sport PORT ]\n"
+		"                            [ encap-dport PORT ]\n"
+		"                            [ [no]encap-csum ]\n"
+		"                            [ [no]encap-csum6 ]\n"
+		"                            [ [no]encap-remcsum ]\n"
+		"                            [ fwmark MARK ]\n"
+		"\n"
+		"Where: ADDR := { IP_ADDRESS | any }\n"
+		"       TOS  := { NUMBER | inherit }\n"
+		"       TTL  := { 1..255 | inherit }\n"
+		"       KEY  := { DOTTED_QUAD | NUMBER }\n"
+		"       MARK := { 0x0..0xffffffff }\n"
+	);
 }
 
 static void usage(void) __attribute__((noreturn));
@@ -81,6 +94,8 @@ static int gre_parse_opt(struct link_util *lu, int argc, char **argv,
 	__u16 encapsport = 0;
 	__u16 encapdport = 0;
 	__u8 metadata = 0;
+	__u8 ignore_df = 0;
+	__u32 fwmark = 0;
 
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
 		if (rtnl_talk(&rth, &req.n, &req.n, sizeof(req)) < 0) {
@@ -150,6 +165,13 @@ get_failed:
 
 		if (greinfo[IFLA_GRE_COLLECT_METADATA])
 			metadata = 1;
+
+		if (greinfo[IFLA_GRE_IGNORE_DF])
+			ignore_df =
+				!!rta_getattr_u8(greinfo[IFLA_GRE_IGNORE_DF]);
+
+		if (greinfo[IFLA_GRE_FWMARK])
+			fwmark = rta_getattr_u32(greinfo[IFLA_GRE_FWMARK]);
 	}
 
 	while (argc > 0) {
@@ -295,6 +317,17 @@ get_failed:
 			encapflags |= ~TUNNEL_ENCAP_FLAG_REMCSUM;
 		} else if (strcmp(*argv, "external") == 0) {
 			metadata = 1;
+		} else if (strcmp(*argv, "ignore-df") == 0) {
+			ignore_df = 1;
+		} else if (strcmp(*argv, "noignore-df") == 0) {
+			/*
+			 *only the lsb is significant, use 2 for presence
+			 */
+			ignore_df = 2;
+		} else if (strcmp(*argv, "fwmark") == 0) {
+			NEXT_ARG();
+			if (get_u32(&fwmark, *argv, 0))
+				invarg("invalid fwmark\n", *argv);
 		} else
 			usage();
 		argc--; argv++;
@@ -325,6 +358,7 @@ get_failed:
 			addattr32(n, 1024, IFLA_GRE_LINK, link);
 		addattr_l(n, 1024, IFLA_GRE_TTL, &ttl, 1);
 		addattr_l(n, 1024, IFLA_GRE_TOS, &tos, 1);
+		addattr32(n, 1024, IFLA_GRE_FWMARK, fwmark);
 	} else {
 		addattr_l(n, 1024, IFLA_GRE_COLLECT_METADATA, NULL, 0);
 	}
@@ -333,6 +367,9 @@ get_failed:
 	addattr16(n, 1024, IFLA_GRE_ENCAP_FLAGS, encapflags);
 	addattr16(n, 1024, IFLA_GRE_ENCAP_SPORT, htons(encapsport));
 	addattr16(n, 1024, IFLA_GRE_ENCAP_DPORT, htons(encapdport));
+
+	if (ignore_df)
+		addattr8(n, 1024, IFLA_GRE_IGNORE_DF, ignore_df & 1);
 
 	return 0;
 }
@@ -416,6 +453,11 @@ static void gre_print_direct_opt(FILE *f, struct rtattr *tb[])
 		fputs("icsum ", f);
 	if (oflags & GRE_CSUM)
 		fputs("ocsum ", f);
+
+	if (tb[IFLA_GRE_FWMARK] && rta_getattr_u32(tb[IFLA_GRE_FWMARK])) {
+		fprintf(f, "fwmark 0x%x ",
+			rta_getattr_u32(tb[IFLA_GRE_FWMARK]));
+	}
 }
 
 static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
@@ -427,6 +469,9 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 		gre_print_direct_opt(f, tb);
 	else
 		fputs("external ", f);
+
+	if (tb[IFLA_GRE_IGNORE_DF] && rta_getattr_u8(tb[IFLA_GRE_IGNORE_DF]))
+		fputs("ignore-df ", f);
 
 	if (tb[IFLA_GRE_ENCAP_TYPE] &&
 	    rta_getattr_u16(tb[IFLA_GRE_ENCAP_TYPE]) != TUNNEL_ENCAP_NONE) {

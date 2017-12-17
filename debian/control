@@ -2,6 +2,7 @@ Source: iproute2
 Section: net
 Priority: optional
 Maintainer: Alexander Wirt <formorer@debian.org>
+Uploaders: Luca Boccassi <bluca@debian.org>
 Homepage: https://wiki.linuxfoundation.org/networking/iproute2
 Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/pkg-iproute.git
 Vcs-Git: https://anonscm.debian.org/git/collab-maint/pkg-iproute.git

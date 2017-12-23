@@ -1,3 +1,12 @@
+iproute2 (4.14.1-1) unstable; urgency=medium
+
+  * Merge tag 'upstream/4.14.1'
+  * Drop 0002-txtdocs.patch, not needed anymore.
+  * Remove rules and matches for old iproute doc, removed upstream.
+  * B-D on zlib1g-dev as a workaround for #885071.
+
+ -- Luca Boccassi <bluca@debian.org>  Sat, 23 Dec 2017 14:55:10 +0100
+
 iproute2 (4.13.0-1) unstable; urgency=medium
 
   * Merge tag 'upstream/4.13.0' (Closes: #879854)

@@ -385,8 +385,7 @@ static int parse_ip6_addr(int *argc_p, char ***argv_p,
 
 	plen = addr.bitlen;
 	for (i = 0; i < plen; i += 32) {
-		/* if (((i + 31) & ~0x1F) <= plen) { */
-		if (i + 31 <= plen) {
+		if (i + 31 < plen) {
 			res = pack_key(sel, addr.data[i / 32],
 				       0xFFFFFFFF, off + 4 * (i / 32), offmask);
 			if (res < 0)
@@ -1337,7 +1336,7 @@ static int u32_print_opt(struct filter_util *qu, FILE *f, struct rtattr *opt,
 	}
 
 	if (tb[TCA_U32_ACT])
-		tc_print_action(f, tb[TCA_U32_ACT]);
+		tc_print_action(f, tb[TCA_U32_ACT], 0);
 
 	return 0;
 }

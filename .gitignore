@@ -1,6 +1,7 @@
+# locally generated
+Config
 static-syms.h
 config.*
-Config
 *.o
 *.a
 *.so

@@ -136,17 +136,18 @@ static void read_igmp(struct ma_info **result_p)
 
 	while (fgets(buf, sizeof(buf), fp)) {
 		struct ma_info *ma;
-		size_t len = 0;
 
 		if (buf[0] != '\t') {
+			size_t len;
+
 			sscanf(buf, "%d%s", &m.index, m.name);
 			len = strlen(m.name);
 			if (m.name[len - 1] == ':')
-				len--;
+				m.name[len - 1] = '\0';
 			continue;
 		}
 
-		if (filter.dev && strncmp(filter.dev, m.name, len))
+		if (filter.dev && strcmp(filter.dev, m.name))
 			continue;
 
 		sscanf(buf, "%08x%d", (__u32 *)&m.addr.data, &m.users);
@@ -284,7 +285,8 @@ static int multiaddr_modify(int cmd, int argc, char **argv)
 			NEXT_ARG();
 			if (ifr.ifr_name[0])
 				duparg("dev", *argv);
-			strncpy(ifr.ifr_name, *argv, IFNAMSIZ);
+			if (get_ifname(ifr.ifr_name, *argv))
+				invarg("\"dev\" not a valid ifname", *argv);
 		} else {
 			if (matches(*argv, "address") == 0) {
 				NEXT_ARG();

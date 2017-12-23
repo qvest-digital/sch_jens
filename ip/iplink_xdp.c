@@ -14,6 +14,7 @@
 
 #include <linux/bpf.h>
 
+#include "json_print.h"
 #include "xdp.h"
 #include "bpf_util.h"
 
@@ -81,6 +82,22 @@ int xdp_parse(int *argc, char ***argv, struct iplink_req *req, bool generic,
 	return 0;
 }
 
+static void xdp_dump_json(struct rtattr *tb[IFLA_XDP_MAX + 1])
+{
+	__u32 prog_id = 0;
+	__u8 mode;
+
+	mode = rta_getattr_u8(tb[IFLA_XDP_ATTACHED]);
+	if (tb[IFLA_XDP_PROG_ID])
+		prog_id = rta_getattr_u32(tb[IFLA_XDP_PROG_ID]);
+
+	open_json_object("xdp");
+	print_uint(PRINT_JSON, "mode", NULL, mode);
+	if (prog_id)
+		bpf_dump_prog_info(NULL, prog_id);
+	close_json_object();
+}
+
 void xdp_dump(FILE *fp, struct rtattr *xdp, bool link, bool details)
 {
 	struct rtattr *tb[IFLA_XDP_MAX + 1];
@@ -95,6 +112,8 @@ void xdp_dump(FILE *fp, struct rtattr *xdp, bool link, bool details)
 	mode = rta_getattr_u8(tb[IFLA_XDP_ATTACHED]);
 	if (mode == XDP_ATTACHED_NONE)
 		return;
+	else if (is_json_context())
+		return details ? (void)0 : xdp_dump_json(tb);
 	else if (details && link)
 		fprintf(fp, "%s    prog/xdp", _SL_);
 	else if (mode == XDP_ATTACHED_DRV)

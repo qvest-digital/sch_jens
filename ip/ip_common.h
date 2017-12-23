@@ -1,3 +1,10 @@
+#ifndef _IP_COMMON_H_
+#define _IP_COMMON_H_
+
+#include <stdbool.h>
+
+#include "json_print.h"
+
 struct link_filter {
 	int ifindex;
 	int family;
@@ -101,8 +108,6 @@ static inline int rtm_get_table(struct rtmsg *r, struct rtattr **tb)
 
 extern struct rtnl_handle rth;
 
-#include <stdbool.h>
-
 struct link_util {
 	struct link_util	*next;
 	const char		*id;
@@ -140,3 +145,5 @@ int name_is_vrf(const char *name);
 #endif
 
 void print_num(FILE *fp, unsigned int width, uint64_t count);
+
+#endif /* _IP_COMMON_H_ */

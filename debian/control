@@ -24,7 +24,8 @@ Build-Depends: bison,
                texlive-fonts-recommended,
                texlive-latex-base,
                texlive-latex-extra,
-               texlive-latex-recommended
+               texlive-latex-recommended,
+               zlib1g-dev,
 
 Package: iproute2
 Priority: important

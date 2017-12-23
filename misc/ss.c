@@ -88,7 +88,6 @@ static int security_get_initial_context(char *name,  char **context)
 }
 #endif
 
-int resolve_hosts;
 int resolve_services = 1;
 int preferred_family = AF_UNSPEC;
 int show_options;
@@ -107,6 +106,7 @@ int netid_width;
 int state_width;
 int addr_width;
 int serv_width;
+char *odd_width_pad = "";
 
 static const char *TCP_PROTO = "tcp";
 static const char *SCTP_PROTO = "sctp";
@@ -784,6 +784,8 @@ static const char *proto_name(int protocol)
 		return "sctp";
 	case IPPROTO_DCCP:
 		return "dccp";
+	case IPPROTO_ICMPV6:
+		return "icmp6";
 	}
 
 	return "???";
@@ -836,7 +838,7 @@ static void sock_state_print(struct sockstat *s)
 			printf("%-*s ", state_width, sstate_name[s->state]);
 	}
 
-	printf("%-6d %-6d ", s->rq, s->wq);
+	printf("%-6d %-6d %s", s->rq, s->wq, odd_width_pad);
 }
 
 static void sock_details_print(struct sockstat *s)
@@ -1041,7 +1043,8 @@ do_numeric:
 	return buf;
 }
 
-static void inet_addr_print(const inet_prefix *a, int port, unsigned int ifindex)
+static void inet_addr_print(const inet_prefix *a, int port,
+			    unsigned int ifindex, bool v6only)
 {
 	char buf[1024];
 	const char *ap = buf;
@@ -1049,14 +1052,10 @@ static void inet_addr_print(const inet_prefix *a, int port, unsigned int ifindex
 	const char *ifname = NULL;
 
 	if (a->family == AF_INET) {
-		if (a->data[0] == 0) {
-			buf[0] = '*';
-			buf[1] = 0;
-		} else {
-			ap = format_host(AF_INET, 4, a->data);
-		}
+		ap = format_host(AF_INET, 4, a->data);
 	} else {
-		if (!memcmp(a->data, &in6addr_any, sizeof(in6addr_any))) {
+		if (!v6only &&
+		    !memcmp(a->data, &in6addr_any, sizeof(in6addr_any))) {
 			buf[0] = '*';
 			buf[1] = 0;
 		} else {
@@ -1728,12 +1727,12 @@ static void proc_ctx_print(struct sockstat *s)
 	}
 }
 
-static void inet_stats_print(struct sockstat *s)
+static void inet_stats_print(struct sockstat *s, bool v6only)
 {
 	sock_state_print(s);
 
-	inet_addr_print(&s->local, s->lport, s->iface);
-	inet_addr_print(&s->remote, s->rport, 0);
+	inet_addr_print(&s->local, s->lport, s->iface, v6only);
+	inet_addr_print(&s->remote, s->rport, 0, v6only);
 
 	proc_ctx_print(s);
 }
@@ -2065,7 +2064,7 @@ static int tcp_show_line(char *line, const struct filter *f, int family)
 	s.rto	    = s.rto != 3 * hz  ? s.rto / hz : 0;
 	s.ss.type   = IPPROTO_TCP;
 
-	inet_stats_print(&s.ss);
+	inet_stats_print(&s.ss, false);
 
 	if (show_options)
 		tcp_timer_print(&s);
@@ -2153,6 +2152,16 @@ static void print_skmeminfo(struct rtattr *tb[], int attrtype)
 	printf(")");
 }
 
+static void print_md5sig(struct tcp_diag_md5sig *sig)
+{
+	printf("%s/%d=",
+	       format_host(sig->tcpm_family,
+			   sig->tcpm_family == AF_INET6 ? 16 : 4,
+			   &sig->tcpm_addr),
+	       sig->tcpm_prefixlen);
+	print_escape_buf(sig->tcpm_key, sig->tcpm_keylen, " ,");
+}
+
 #define TCPI_HAS_OPT(info, opt) !!(info->tcpi_options & (opt))
 
 static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
@@ -2216,6 +2225,7 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
 		s.retrans_total  = info->tcpi_total_retrans;
 		s.lost		 = info->tcpi_lost;
 		s.sacked	 = info->tcpi_sacked;
+		s.fackets	 = info->tcpi_fackets;
 		s.reordering	 = info->tcpi_reordering;
 		s.rcv_space	 = info->tcpi_rcv_space;
 		s.cwnd		 = info->tcpi_snd_cwnd;
@@ -2288,6 +2298,17 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
 		tcp_stats_print(&s);
 		free(s.dctcp);
 		free(s.bbr_info);
+	}
+	if (tb[INET_DIAG_MD5SIG]) {
+		struct tcp_diag_md5sig *sig = RTA_DATA(tb[INET_DIAG_MD5SIG]);
+		int len = RTA_PAYLOAD(tb[INET_DIAG_MD5SIG]);
+
+		printf(" md5keys:");
+		print_md5sig(sig++);
+		for (len -= sizeof(*sig); len > 0; len -= sizeof(*sig)) {
+			printf(",");
+			print_md5sig(sig++);
+		}
 	}
 }
 
@@ -2390,6 +2411,7 @@ static int inet_show_sock(struct nlmsghdr *nlh,
 {
 	struct rtattr *tb[INET_DIAG_MAX+1];
 	struct inet_diag_msg *r = NLMSG_DATA(nlh);
+	unsigned char v6only = 0;
 
 	parse_rtattr(tb, INET_DIAG_MAX, (struct rtattr *)(r+1),
 		     nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*r)));
@@ -2397,7 +2419,10 @@ static int inet_show_sock(struct nlmsghdr *nlh,
 	if (tb[INET_DIAG_PROTOCOL])
 		s->type = rta_getattr_u8(tb[INET_DIAG_PROTOCOL]);
 
-	inet_stats_print(s);
+	if (s->local.family == AF_INET6 && tb[INET_DIAG_SKV6ONLY])
+		v6only = rta_getattr_u8(tb[INET_DIAG_SKV6ONLY]);
+
+	inet_stats_print(s, v6only);
 
 	if (show_options) {
 		struct tcpstat t = {};
@@ -2413,12 +2438,9 @@ static int inet_show_sock(struct nlmsghdr *nlh,
 
 	if (show_details) {
 		sock_details_print(s);
-		if (s->local.family == AF_INET6 && tb[INET_DIAG_SKV6ONLY]) {
-			unsigned char v6only;
-
-			v6only = rta_getattr_u8(tb[INET_DIAG_SKV6ONLY]);
+		if (s->local.family == AF_INET6 && tb[INET_DIAG_SKV6ONLY])
 			printf(" v6only:%u", v6only);
-		}
+
 		if (tb[INET_DIAG_SHUTDOWN]) {
 			unsigned char mask;
 
@@ -2889,7 +2911,7 @@ static int dgram_show_line(char *line, const struct filter *f, int family)
 		opt[0] = 0;
 
 	s.type = dg_proto == UDP_PROTO ? IPPROTO_UDP : 0;
-	inet_stats_print(&s);
+	inet_stats_print(&s, false);
 
 	if (show_details && opt[0])
 		printf(" opt:\"%s\"", opt);
@@ -3571,12 +3593,8 @@ static int netlink_show_one(struct filter *f,
 		else if (pid > 0)
 			getpidcon(pid, &pid_context);
 
-		if (pid_context != NULL) {
-			printf("proc_ctx=%-*s ", serv_width, pid_context);
-			free(pid_context);
-		} else {
-			printf("proc_ctx=%-*s ", serv_width, "unavailable");
-		}
+		printf(" proc_ctx=%s", pid_context ? : "unavailable");
+		free(pid_context);
 	}
 
 	if (show_details) {
@@ -4346,8 +4364,10 @@ int main(int argc, char *argv[])
 	}
 
 	addrp_width = screen_width;
-	addrp_width -= netid_width+1;
-	addrp_width -= state_width+1;
+	if (netid_width)
+		addrp_width -= netid_width + 1;
+	if (state_width)
+		addrp_width -= state_width + 1;
 	addrp_width -= 14;
 
 	if (addrp_width&1) {
@@ -4355,6 +4375,8 @@ int main(int argc, char *argv[])
 			netid_width++;
 		else if (state_width)
 			state_width++;
+		else
+			odd_width_pad = " ";
 	}
 
 	addrp_width /= 2;
@@ -4372,7 +4394,7 @@ int main(int argc, char *argv[])
 			printf("%-*s ", netid_width, "Netid");
 		if (state_width)
 			printf("%-*s ", state_width, "State");
-		printf("%-6s %-6s ", "Recv-Q", "Send-Q");
+		printf("%-6s %-6s %s", "Recv-Q", "Send-Q", odd_width_pad);
 	}
 
 	/* Make enough space for the local/remote port field */

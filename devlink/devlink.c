@@ -20,6 +20,7 @@
 #include <linux/genetlink.h>
 #include <linux/devlink.h>
 #include <libmnl/libmnl.h>
+#include <netinet/ether.h>
 
 #include "SNAPSHOT.h"
 #include "list.h"
@@ -3077,27 +3078,42 @@ static const char
 	}
 }
 
-static void pr_out_dpipe_action(struct dpipe_ctx *ctx,
-				uint32_t header_id, uint32_t field_id,
-				uint32_t action_type, bool global)
+struct dpipe_op_info {
+	uint32_t header_id;
+	uint32_t field_id;
+	bool header_global;
+};
+
+struct dpipe_action {
+	struct dpipe_op_info info;
+	uint32_t type;
+};
+
+static void pr_out_dpipe_action(struct dpipe_action *action,
+				struct dpipe_ctx *ctx)
 {
+	struct dpipe_op_info *op_info = &action->info;
 	const char *mapping;
 
-	pr_out_str(ctx->dl, "type", dpipe_action_type_e2s(action_type));
-	pr_out_str(ctx->dl, "header", dpipe_header_id2s(ctx, header_id,
-							global));
-	pr_out_str(ctx->dl, "field", dpipe_field_id2s(ctx, header_id, field_id,
-						      global));
-	mapping = dpipe_mapping_get(ctx, header_id, field_id, global);
+	pr_out_str(ctx->dl, "type",
+		   dpipe_action_type_e2s(action->type));
+	pr_out_str(ctx->dl, "header",
+		   dpipe_header_id2s(ctx, op_info->header_id,
+				     op_info->header_global));
+	pr_out_str(ctx->dl, "field",
+		   dpipe_field_id2s(ctx, op_info->header_id,
+				    op_info->field_id,
+				    op_info->header_global));
+	mapping = dpipe_mapping_get(ctx, op_info->header_id,
+				    op_info->field_id,
+				    op_info->header_global);
 	if (mapping)
 		pr_out_str(ctx->dl, "mapping", mapping);
 }
 
-static int dpipe_action_show(struct dpipe_ctx *ctx, struct nlattr *nl)
+static int dpipe_action_parse(struct dpipe_action *action, struct nlattr *nl)
 {
 	struct nlattr *nla_action[DEVLINK_ATTR_MAX + 1] = {};
-	uint32_t header_id, field_id, action_type;
-	bool global;
 	int err;
 
 	err = mnl_attr_parse_nested(nl, attr_cb, nla_action);
@@ -3111,12 +3127,11 @@ static int dpipe_action_show(struct dpipe_ctx *ctx, struct nlattr *nl)
 		return -EINVAL;
 	}
 
-	header_id = mnl_attr_get_u32(nla_action[DEVLINK_ATTR_DPIPE_HEADER_ID]);
-	field_id = mnl_attr_get_u32(nla_action[DEVLINK_ATTR_DPIPE_FIELD_ID]);
-	action_type = mnl_attr_get_u32(nla_action[DEVLINK_ATTR_DPIPE_ACTION_TYPE]);
-	global = !!mnl_attr_get_u8(nla_action[DEVLINK_ATTR_DPIPE_HEADER_GLOBAL]);
+	action->type = mnl_attr_get_u32(nla_action[DEVLINK_ATTR_DPIPE_ACTION_TYPE]);
+	action->info.header_id = mnl_attr_get_u32(nla_action[DEVLINK_ATTR_DPIPE_HEADER_ID]);
+	action->info.field_id = mnl_attr_get_u32(nla_action[DEVLINK_ATTR_DPIPE_FIELD_ID]);
+	action->info.header_global = !!mnl_attr_get_u8(nla_action[DEVLINK_ATTR_DPIPE_HEADER_GLOBAL]);
 
-	pr_out_dpipe_action(ctx, header_id, field_id, action_type, global);
 	return 0;
 }
 
@@ -3124,16 +3139,18 @@ static int dpipe_table_actions_show(struct dpipe_ctx *ctx,
 				    struct nlattr *nla_actions)
 {
 	struct nlattr *nla_action;
+	struct dpipe_action action;
 
 	mnl_attr_for_each_nested(nla_action, nla_actions) {
 		pr_out_entry_start(ctx->dl);
-		if (dpipe_action_show(ctx, nla_action))
-			goto err_action_show;
+		if (dpipe_action_parse(&action, nla_action))
+			goto err_action_parse;
+		pr_out_dpipe_action(&action, ctx);
 		pr_out_entry_end(ctx->dl);
 	}
 	return 0;
 
-err_action_show:
+err_action_parse:
 	pr_out_entry_end(ctx->dl);
 	return -EINVAL;
 }
@@ -3149,28 +3166,38 @@ dpipe_match_type_e2s(enum devlink_dpipe_match_type match_type)
 	}
 }
 
-static void pr_out_dpipe_match(struct dpipe_ctx *ctx,
-			       uint32_t header_id, uint32_t field_id,
-			       uint32_t match_type, bool global)
+struct dpipe_match {
+	struct dpipe_op_info info;
+	uint32_t type;
+};
+
+static void pr_out_dpipe_match(struct dpipe_match *match,
+			       struct dpipe_ctx *ctx)
 {
+	struct dpipe_op_info *op_info = &match->info;
 	const char *mapping;
 
-	pr_out_str(ctx->dl, "type", dpipe_match_type_e2s(match_type));
-	pr_out_str(ctx->dl, "header", dpipe_header_id2s(ctx, header_id,
-							global));
-	pr_out_str(ctx->dl, "field", dpipe_field_id2s(ctx, header_id, field_id,
-						      global));
-	mapping = dpipe_mapping_get(ctx, header_id, field_id, global);
+	pr_out_str(ctx->dl, "type",
+		   dpipe_match_type_e2s(match->type));
+	pr_out_str(ctx->dl, "header",
+		   dpipe_header_id2s(ctx, op_info->header_id,
+				     op_info->header_global));
+	pr_out_str(ctx->dl, "field",
+		   dpipe_field_id2s(ctx, op_info->header_id,
+				    op_info->field_id,
+				    op_info->header_global));
+	mapping = dpipe_mapping_get(ctx, op_info->header_id,
+				    op_info->field_id,
+				    op_info->header_global);
 	if (mapping)
 		pr_out_str(ctx->dl, "mapping", mapping);
-
 }
 
-static int dpipe_match_show(struct dpipe_ctx *ctx, struct nlattr *nl)
+static int dpipe_match_parse(struct dpipe_match *match,
+			     struct nlattr *nl)
+
 {
 	struct nlattr *nla_match[DEVLINK_ATTR_MAX + 1] = {};
-	uint32_t header_id, field_id, match_type;
-	bool global;
 	int err;
 
 	err = mnl_attr_parse_nested(nl, attr_cb, nla_match);
@@ -3184,12 +3211,11 @@ static int dpipe_match_show(struct dpipe_ctx *ctx, struct nlattr *nl)
 		return -EINVAL;
 	}
 
-	match_type = mnl_attr_get_u32(nla_match[DEVLINK_ATTR_DPIPE_MATCH_TYPE]);
-	header_id = mnl_attr_get_u32(nla_match[DEVLINK_ATTR_DPIPE_HEADER_ID]);
-	field_id = mnl_attr_get_u32(nla_match[DEVLINK_ATTR_DPIPE_FIELD_ID]);
-	global = !!mnl_attr_get_u8(nla_match[DEVLINK_ATTR_DPIPE_HEADER_GLOBAL]);
+	match->type = mnl_attr_get_u32(nla_match[DEVLINK_ATTR_DPIPE_MATCH_TYPE]);
+	match->info.header_id = mnl_attr_get_u32(nla_match[DEVLINK_ATTR_DPIPE_HEADER_ID]);
+	match->info.field_id = mnl_attr_get_u32(nla_match[DEVLINK_ATTR_DPIPE_FIELD_ID]);
+	match->info.header_global = !!mnl_attr_get_u8(nla_match[DEVLINK_ATTR_DPIPE_HEADER_GLOBAL]);
 
-	pr_out_dpipe_match(ctx, header_id, field_id, match_type, global);
 	return 0;
 }
 
@@ -3197,16 +3223,18 @@ static int dpipe_table_matches_show(struct dpipe_ctx *ctx,
 				    struct nlattr *nla_matches)
 {
 	struct nlattr *nla_match;
+	struct dpipe_match match;
 
 	mnl_attr_for_each_nested(nla_match, nla_matches) {
 		pr_out_entry_start(ctx->dl);
-		if (dpipe_match_show(ctx, nla_match))
-			goto err_match_show;
+		if (dpipe_match_parse(&match, nla_match))
+			goto err_match_parse;
+		pr_out_dpipe_match(&match, ctx);
 		pr_out_entry_end(ctx->dl);
 	}
 	return 0;
 
-err_match_show:
+err_match_parse:
 	pr_out_entry_end(ctx->dl);
 	return -EINVAL;
 }
@@ -3345,9 +3373,161 @@ static int cmd_dpipe_table_set(struct dl *dl)
 	return _mnlg_socket_sndrcv(dl->nlg, nlh, NULL, NULL);
 }
 
-static int dpipe_entry_value_show(struct dpipe_ctx *ctx,
-				  struct nlattr **nla_match_value)
+enum dpipe_value_type {
+	DPIPE_VALUE_TYPE_VALUE,
+	DPIPE_VALUE_TYPE_MASK,
+};
+
+static const char *
+dpipe_value_type_e2s(enum dpipe_value_type type)
 {
+	switch (type) {
+	case DPIPE_VALUE_TYPE_VALUE:
+		return "value";
+	case DPIPE_VALUE_TYPE_MASK:
+		return "value_mask";
+	default:
+		return "<unknown>";
+	}
+}
+
+struct dpipe_field_printer {
+	unsigned int field_id;
+	void (*printer)(struct dpipe_ctx *, enum dpipe_value_type, void *);
+};
+
+struct dpipe_header_printer {
+	struct dpipe_field_printer *printers;
+	unsigned int printers_count;
+	unsigned int header_id;
+};
+
+static void dpipe_field_printer_ipv4_addr(struct dpipe_ctx *ctx,
+					  enum dpipe_value_type type,
+					  void *value)
+{
+	struct in_addr ip_addr;
+
+	ip_addr.s_addr = htonl(*(uint32_t *)value);
+	pr_out_str(ctx->dl, dpipe_value_type_e2s(type), inet_ntoa(ip_addr));
+}
+
+static void
+dpipe_field_printer_ethernet_addr(struct dpipe_ctx *ctx,
+				  enum dpipe_value_type type,
+				  void *value)
+{
+	pr_out_str(ctx->dl, dpipe_value_type_e2s(type),
+		   ether_ntoa((struct ether_addr *)value));
+}
+
+static void dpipe_field_printer_ipv6_addr(struct dpipe_ctx *ctx,
+					  enum dpipe_value_type type,
+					  void *value)
+{
+	char str[INET6_ADDRSTRLEN];
+
+	inet_ntop(AF_INET6, value, str, INET6_ADDRSTRLEN);
+	pr_out_str(ctx->dl, dpipe_value_type_e2s(type), str);
+}
+
+static struct dpipe_field_printer dpipe_field_printers_ipv4[] = {
+	{
+		.printer = dpipe_field_printer_ipv4_addr,
+		.field_id = DEVLINK_DPIPE_FIELD_IPV4_DST_IP,
+	}
+};
+
+static struct dpipe_header_printer dpipe_header_printer_ipv4  = {
+	.printers = dpipe_field_printers_ipv4,
+	.printers_count = ARRAY_SIZE(dpipe_field_printers_ipv4),
+	.header_id = DEVLINK_DPIPE_HEADER_IPV4,
+};
+
+static struct dpipe_field_printer dpipe_field_printers_ethernet[] = {
+	{
+		.printer = dpipe_field_printer_ethernet_addr,
+		.field_id = DEVLINK_DPIPE_FIELD_ETHERNET_DST_MAC,
+	},
+};
+
+static struct dpipe_header_printer dpipe_header_printer_ethernet = {
+	.printers = dpipe_field_printers_ethernet,
+	.printers_count = ARRAY_SIZE(dpipe_field_printers_ethernet),
+	.header_id = DEVLINK_DPIPE_HEADER_ETHERNET,
+};
+
+static struct dpipe_field_printer dpipe_field_printers_ipv6[] = {
+	{
+		.printer = dpipe_field_printer_ipv6_addr,
+		.field_id = DEVLINK_DPIPE_FIELD_IPV6_DST_IP,
+	}
+};
+
+static struct dpipe_header_printer dpipe_header_printer_ipv6 = {
+	.printers = dpipe_field_printers_ipv6,
+	.printers_count = ARRAY_SIZE(dpipe_field_printers_ipv6),
+	.header_id = DEVLINK_DPIPE_HEADER_IPV6,
+};
+
+static struct dpipe_header_printer *dpipe_header_printers[] = {
+	&dpipe_header_printer_ipv4,
+	&dpipe_header_printer_ethernet,
+	&dpipe_header_printer_ipv6,
+};
+
+static int dpipe_print_prot_header(struct dpipe_ctx *ctx,
+				   struct dpipe_op_info *info,
+				   enum dpipe_value_type type,
+				   void *value)
+{
+	unsigned int header_printers_count = ARRAY_SIZE(dpipe_header_printers);
+	struct dpipe_header_printer *header_printer;
+	struct dpipe_field_printer *field_printer;
+	unsigned int field_printers_count;
+	int j;
+	int i;
+
+	for (i = 0; i < header_printers_count; i++) {
+		header_printer = dpipe_header_printers[i];
+		if (header_printer->header_id != info->header_id)
+			continue;
+		field_printers_count = header_printer->printers_count;
+		for (j = 0; j < field_printers_count; j++) {
+			field_printer = &header_printer->printers[j];
+			if (field_printer->field_id != info->field_id)
+				continue;
+			field_printer->printer(ctx, type, value);
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
+static void __pr_out_entry_value(struct dpipe_ctx *ctx,
+				 void *value,
+				 unsigned int value_len,
+				 struct dpipe_op_info *info,
+				 enum dpipe_value_type type)
+{
+	if (info->header_global &&
+	    !dpipe_print_prot_header(ctx, info, type, value))
+		return;
+
+	if (value_len == sizeof(uint32_t)) {
+		uint32_t *value_32 = value;
+
+		pr_out_uint(ctx->dl, dpipe_value_type_e2s(type), *value_32);
+	}
+}
+
+static void pr_out_dpipe_entry_value(struct dpipe_ctx *ctx,
+				     struct nlattr **nla_match_value,
+				     struct dpipe_op_info *info)
+{
+	void *value, *value_mask;
+	uint32_t value_mapping;
 	uint16_t value_len;
 	bool mask, mapping;
 
@@ -3355,33 +3535,27 @@ static int dpipe_entry_value_show(struct dpipe_ctx *ctx,
 	mapping = !!nla_match_value[DEVLINK_ATTR_DPIPE_VALUE_MAPPING];
 
 	value_len = mnl_attr_get_payload_len(nla_match_value[DEVLINK_ATTR_DPIPE_VALUE]);
-	if (value_len == sizeof(uint32_t)) {
-		uint32_t value, value_mask, value_mapping;
+	value = mnl_attr_get_payload(nla_match_value[DEVLINK_ATTR_DPIPE_VALUE]);
 
-		if (mapping) {
-			value_mapping = mnl_attr_get_u32(nla_match_value[DEVLINK_ATTR_DPIPE_VALUE_MAPPING]);
-			pr_out_uint(ctx->dl, "mapping_value", value_mapping);
-		}
-
-		if (mask) {
-			value_mask = mnl_attr_get_u32(nla_match_value[DEVLINK_ATTR_DPIPE_VALUE_MASK]);
-			pr_out_uint(ctx->dl, "mask_value", value_mask);
-		}
-
-		value = mnl_attr_get_u32(nla_match_value[DEVLINK_ATTR_DPIPE_VALUE]);
-		pr_out_uint(ctx->dl, "value", value);
-
-	} else {
-		return -EINVAL;
+	if (mapping) {
+		value_mapping = mnl_attr_get_u32(nla_match_value[DEVLINK_ATTR_DPIPE_VALUE_MAPPING]);
+		pr_out_uint(ctx->dl, "mapping_value", value_mapping);
 	}
 
-	return 0;
+	if (mask) {
+		value_mask = mnl_attr_get_payload(nla_match_value[DEVLINK_ATTR_DPIPE_VALUE]);
+		__pr_out_entry_value(ctx, value_mask, value_len, info,
+				     DPIPE_VALUE_TYPE_MASK);
+	}
+
+	__pr_out_entry_value(ctx, value, value_len, info, DPIPE_VALUE_TYPE_VALUE);
 }
 
 static int dpipe_entry_match_value_show(struct dpipe_ctx *ctx,
 					struct nlattr *nl)
 {
 	struct nlattr *nla_match_value[DEVLINK_ATTR_MAX + 1] = {};
+	struct dpipe_match match;
 	int err;
 
 	err = mnl_attr_parse_nested(nl, attr_cb, nla_match_value);
@@ -3394,16 +3568,16 @@ static int dpipe_entry_match_value_show(struct dpipe_ctx *ctx,
 	}
 
 	pr_out_entry_start(ctx->dl);
-	if (dpipe_match_show(ctx, nla_match_value[DEVLINK_ATTR_DPIPE_MATCH]))
-		goto err_match_show;
-	if (dpipe_entry_value_show(ctx, nla_match_value))
-		goto err_value_show;
+	if (dpipe_match_parse(&match,
+			      nla_match_value[DEVLINK_ATTR_DPIPE_MATCH]))
+		goto err_match_parse;
+	pr_out_dpipe_match(&match, ctx);
+	pr_out_dpipe_entry_value(ctx, nla_match_value, &match.info);
 	pr_out_entry_end(ctx->dl);
 
 	return 0;
 
-err_match_show:
-err_value_show:
+err_match_parse:
 	pr_out_entry_end(ctx->dl);
 	return -EINVAL;
 }
@@ -3412,6 +3586,7 @@ static int dpipe_entry_action_value_show(struct dpipe_ctx *ctx,
 					 struct nlattr *nl)
 {
 	struct nlattr *nla_action_value[DEVLINK_ATTR_MAX + 1] = {};
+	struct dpipe_action action;
 	int err;
 
 	err = mnl_attr_parse_nested(nl, attr_cb, nla_action_value);
@@ -3424,16 +3599,16 @@ static int dpipe_entry_action_value_show(struct dpipe_ctx *ctx,
 	}
 
 	pr_out_entry_start(ctx->dl);
-	if (dpipe_action_show(ctx, nla_action_value[DEVLINK_ATTR_DPIPE_ACTION]))
-		goto err_action_show;
-	if (dpipe_entry_value_show(ctx, nla_action_value))
-		goto err_value_show;
+	if (dpipe_action_parse(&action,
+			       nla_action_value[DEVLINK_ATTR_DPIPE_ACTION]))
+		goto err_action_parse;
+	pr_out_dpipe_action(&action, ctx);
+	pr_out_dpipe_entry_value(ctx, nla_action_value, &action.info);
 	pr_out_entry_end(ctx->dl);
 
 	return 0;
 
-err_action_show:
-err_value_show:
+err_action_parse:
 	pr_out_entry_end(ctx->dl);
 	return -EINVAL;
 }
@@ -3628,12 +3803,16 @@ static int cmd_dpipe(struct dl *dl)
 static void help(void)
 {
 	pr_err("Usage: devlink [ OPTIONS ] OBJECT { COMMAND | help }\n"
+	       "       devlink [ -f[orce] ] -b[atch] filename\n"
 	       "where  OBJECT := { dev | port | sb | monitor | dpipe }\n"
 	       "       OPTIONS := { -V[ersion] | -n[no-nice-names] | -j[json] | -p[pretty] | -v[verbose] }\n");
 }
 
-static int dl_cmd(struct dl *dl)
+static int dl_cmd(struct dl *dl, int argc, char **argv)
 {
+	dl->argc = argc;
+	dl->argv = argv;
+
 	if (dl_argv_match(dl, "help") || dl_no_arg(dl)) {
 		help();
 		return 0;
@@ -3657,12 +3836,9 @@ static int dl_cmd(struct dl *dl)
 	return -ENOENT;
 }
 
-static int dl_init(struct dl *dl, int argc, char **argv)
+static int dl_init(struct dl *dl)
 {
 	int err;
-
-	dl->argc = argc;
-	dl->argv = argv;
 
 	dl->nlg = mnlg_socket_open(DEVLINK_GENL_NAME, DEVLINK_GENL_VERSION);
 	if (!dl->nlg) {
@@ -3715,16 +3891,59 @@ static void dl_free(struct dl *dl)
 	free(dl);
 }
 
+static int dl_batch(struct dl *dl, const char *name, bool force)
+{
+	char *line = NULL;
+	size_t len = 0;
+	int ret = EXIT_SUCCESS;
+
+	if (name && strcmp(name, "-") != 0) {
+		if (freopen(name, "r", stdin) == NULL) {
+			fprintf(stderr,
+				"Cannot open file \"%s\" for reading: %s\n",
+				name, strerror(errno));
+			return EXIT_FAILURE;
+		}
+	}
+
+	cmdlineno = 0;
+	while (getcmdline(&line, &len, stdin) != -1) {
+		char *largv[100];
+		int largc;
+
+		largc = makeargs(line, largv, 100);
+		if (!largc)
+			continue;	/* blank line */
+
+		if (dl_cmd(dl, largc, largv)) {
+			fprintf(stderr, "Command failed %s:%d\n",
+				name, cmdlineno);
+			ret = EXIT_FAILURE;
+			if (!force)
+				break;
+		}
+	}
+
+	if (line)
+		free(line);
+
+	return ret;
+}
+
 int main(int argc, char **argv)
 {
 	static const struct option long_options[] = {
 		{ "Version",		no_argument,		NULL, 'V' },
+		{ "force",		no_argument,		NULL, 'f' },
+		{ "batch",		required_argument,	NULL, 'b' },
 		{ "no-nice-names",	no_argument,		NULL, 'n' },
 		{ "json",		no_argument,		NULL, 'j' },
 		{ "pretty",		no_argument,		NULL, 'p' },
 		{ "verbose",		no_argument,		NULL, 'v' },
 		{ NULL, 0, NULL, 0 }
 	};
+	const char *batch_file = NULL;
+	bool force = false;
 	struct dl *dl;
 	int opt;
 	int err;
@@ -3736,7 +3955,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	while ((opt = getopt_long(argc, argv, "Vnjpv",
+	while ((opt = getopt_long(argc, argv, "Vfb:njpv",
 				  long_options, NULL)) >= 0) {
 
 		switch (opt) {
@@ -3744,6 +3963,12 @@ int main(int argc, char **argv)
 			printf("devlink utility, iproute2-ss%s\n", SNAPSHOT);
 			ret = EXIT_SUCCESS;
 			goto dl_free;
+		case 'f':
+			force = true;
+			break;
+		case 'b':
+			batch_file = optarg;
+			break;
 		case 'n':
 			dl->no_nice_names = true;
 			break;
@@ -3767,13 +3992,17 @@ int main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	err = dl_init(dl, argc, argv);
+	err = dl_init(dl);
 	if (err) {
 		ret = EXIT_FAILURE;
 		goto dl_free;
 	}
 
-	err = dl_cmd(dl);
+	if (batch_file)
+		err = dl_batch(dl, batch_file, force);
+	else
+		err = dl_cmd(dl, argc, argv);
+
 	if (err) {
 		ret = EXIT_FAILURE;
 		goto dl_fini;

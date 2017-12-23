@@ -112,8 +112,9 @@ void iplink_usage(void)
 			"\n"
 			"TYPE := { vlan | veth | vcan | dummy | ifb | macvlan | macvtap |\n"
 			"          bridge | bond | team | ipoib | ip6tnl | ipip | sit | vxlan |\n"
-			"          gre | gretap | ip6gre | ip6gretap | vti | nlmon | team_slave |\n"
-			"          bond_slave | ipvlan | geneve | bridge_slave | vrf | macsec }\n");
+			"          gre | gretap | erspan | ip6gre | ip6gretap | vti | nlmon |\n"
+			"          team_slave | bond_slave | ipvlan | geneve | bridge_slave |\n"
+			"          vrf | macsec }\n");
 	}
 	exit(-1);
 }
@@ -572,6 +573,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			req->i.ifi_flags &= ~IFF_UP;
 		} else if (strcmp(*argv, "name") == 0) {
 			NEXT_ARG();
+			if (check_ifname(*argv))
+				invarg("\"name\" not a valid ifname", *argv);
 			*name = *argv;
 		} else if (strcmp(*argv, "index") == 0) {
 			NEXT_ARG();
@@ -847,6 +850,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 				NEXT_ARG();
 			if (*dev)
 				duparg2("dev", *argv);
+			if (check_ifname(*argv))
+				invarg("\"dev\" not a valid ifname", *argv);
 			*dev = *argv;
 			dev_index = ll_name_to_index(*dev);
 		}
@@ -869,7 +874,6 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 
 static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 {
-	int len;
 	char *dev = NULL;
 	char *name = NULL;
 	char *link = NULL;
@@ -959,13 +963,8 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 	}
 
 	if (name) {
-		len = strlen(name) + 1;
-		if (len == 1)
-			invarg("\"\" is not a valid device identifier\n",
-			       "name");
-		if (len > IFNAMSIZ)
-			invarg("\"name\" too long\n", name);
-		addattr_l(&req.n, sizeof(req), IFLA_IFNAME, name, len);
+		addattr_l(&req.n, sizeof(req),
+			  IFLA_IFNAME, name, strlen(name) + 1);
 	}
 
 	if (type) {
@@ -1015,7 +1014,6 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
 {
-	int len;
 	struct iplink_req req = {
 		.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)),
 		.n.nlmsg_flags = NLM_F_REQUEST | flags,
@@ -1028,13 +1026,8 @@ int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
 	} answer;
 
 	if (name) {
-		len = strlen(name) + 1;
-		if (len == 1)
-			invarg("\"\" is not a valid device identifier\n",
-				   "name");
-		if (len > IFNAMSIZ)
-			invarg("\"name\" too long\n", name);
-		addattr_l(&req.n, sizeof(req), IFLA_IFNAME, name, len);
+		addattr_l(&req.n, sizeof(req),
+			  IFLA_IFNAME, name, strlen(name) + 1);
 	}
 	addattr32(&req.n, sizeof(req), IFLA_EXT_MASK, filt_mask);
 
@@ -1046,10 +1039,12 @@ int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
 		return -2;
 	}
 
+	open_json_object(NULL);
 	if (brief)
 		print_linkinfo_brief(NULL, &answer.n, stdout, NULL);
 	else
 		print_linkinfo(NULL, &answer.n, stdout);
+	close_json_object();
 
 	return 0;
 }
@@ -1262,6 +1257,8 @@ static int do_set(int argc, char **argv)
 			flags &= ~IFF_UP;
 		} else if (strcmp(*argv, "name") == 0) {
 			NEXT_ARG();
+			if (check_ifname(*argv))
+				invarg("\"name\" not a valid ifname", *argv);
 			newname = *argv;
 		} else if (matches(*argv, "address") == 0) {
 			NEXT_ARG();
@@ -1352,6 +1349,8 @@ static int do_set(int argc, char **argv)
 
 			if (dev)
 				duparg2("dev", *argv);
+			if (check_ifname(*argv))
+				invarg("\"dev\" not a valid ifname", *argv);
 			dev = *argv;
 		}
 		argc--; argv++;
@@ -1380,9 +1379,6 @@ static int do_set(int argc, char **argv)
 	}
 
 	if (newname && strcmp(dev, newname)) {
-		if (strlen(newname) == 0)
-			invarg("\"\" is not a valid device identifier\n",
-			       "name");
 		if (do_changename(dev, newname) < 0)
 			return -1;
 		dev = newname;

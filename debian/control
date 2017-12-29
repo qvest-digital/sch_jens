@@ -8,7 +8,6 @@ Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/pkg-iproute.git
 Vcs-Git: https://anonscm.debian.org/git/collab-maint/pkg-iproute.git
 Standards-Version: 3.9.8
 Build-Depends: bison,
-               cm-super-minimal,
                debhelper (>= 9),
                flex,
                iptables-dev,
@@ -18,13 +17,7 @@ Build-Depends: bison,
                libmnl-dev,
                libselinux1-dev,
                linux-libc-dev,
-               linuxdoc-tools,
-               lynx | lynx-cur,
                pkg-config,
-               texlive-fonts-recommended,
-               texlive-latex-base,
-               texlive-latex-extra,
-               texlive-latex-recommended,
                zlib1g-dev,
 
 Package: iproute2

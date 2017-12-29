@@ -1,7 +1,5 @@
 #!/usr/bin/make -f
 
-DEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
-
 DEB_BUILD_GNU_TYPE ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
 DEB_HOST_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 
@@ -27,9 +25,3 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	$(MAKE) KERNEL_INCLUDE=./include $(CROSS)
-
-# bump version of the transitional packages...
-override_dh_gencontrol:
-	dh_gencontrol -piproute -- -v1:$(DEB_VERSION)
-	dh_gencontrol -piproute-doc -- -v1:$(DEB_VERSION)
-	dh_gencontrol --remaining-packages

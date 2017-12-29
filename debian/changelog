@@ -14,6 +14,8 @@ iproute2 (4.14.1-2) UNRELEASED; urgency=medium
     - build reproducible out-of-the-box since 4.14.0
   * Add 0005-fix-manpage-path.patch to fix paths to documentation
     files in the manpages. (Closes: #819131, #867875)
+  * Import autopkgtest (and 0006-fix-testsuite-broken-pipes.patch)
+    from Ubuntu. Thanks Christian Ehrhardt!
 
  -- Luca Boccassi <bluca@debian.org>  Fri, 29 Dec 2017 12:50:18 +0100
 

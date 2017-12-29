@@ -1,0 +1,28 @@
+Description: avoid broken pipes in autopktest environment
+
+In autopkgtest it can happen that the used random device names
+are generated with the pipes between tr and head dying too fast.
+That prints issues like:
+  Running ip/link/new_link.t [iproute2-this/4.13.0-17-generic]: tr: write error: Broken pipe
+  tr: write error
+  PASS
+
+Read a defined amount from urandom to avoid that.
+
+Forwarded: no
+Author: Christian Ehrhardt <christian.ehrhardt@canonical.com>
+Origin: n/a
+Bug-Ubuntu: none
+Last-Update: 2017-12-04
+
+--- a/testsuite/lib/generic.sh
++++ b/testsuite/lib/generic.sh
+@@ -87,7 +87,7 @@ ts_qdisc_available()
+ 
+ rand_dev()
+ {
+-    echo "dev-$(tr -dc "[:alpha:]" < /dev/urandom | head -c 6)"
++    echo "dev-$(head -c 100 /dev/urandom | tr -dc '[:alpha:]' | head -c 6)"
+ }
+ 
+ pr_failed()

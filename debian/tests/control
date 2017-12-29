@@ -1,0 +1,5 @@
+# the tests depend on the kernel and might break the env
+# therefore do not run as build time tests
+Tests: testsuite.sh
+Restrictions: allow-stderr, isolation-machine, needs-root, breaks-testbed, rw-build-tree
+Depends: libmnl-dev, build-essential, dpkg-dev

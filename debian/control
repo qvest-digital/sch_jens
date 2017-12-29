@@ -51,6 +51,7 @@ Architecture: all
 Conflicts: iproute-doc (<< 20130000-1)
 Replaces: iproute-doc
 Depends: ${misc:Depends}
+Multi-Arch: foreign
 Description: networking and traffic control tools - documentation
  The iproute2 suite is a collection of utilities for networking and
  traffic control.

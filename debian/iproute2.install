@@ -1,15 +1,21 @@
 etc/
 sbin/arpd /usr/sbin
 sbin/bridge
+sbin/ctstat /usr/bin/
 sbin/devlink
 sbin/genl /usr/sbin
+sbin/ifcfg /usr/bin/
+sbin/ifstat /usr/bin/
 sbin/ip /bin
 sbin/lnstat /usr/bin/
 sbin/nstat /usr/bin/
+sbin/rdma /usr/bin
 sbin/routef /usr/bin
 sbin/routel /usr/bin
 sbin/rtacct
 sbin/rtmon
+sbin/rtpr /usr/bin/
+sbin/rtstat /usr/bin/
 sbin/ss /bin
 sbin/tc
 sbin/tipc

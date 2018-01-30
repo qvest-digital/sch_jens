@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef __UTILS_H__
 #define __UTILS_H__ 1
 
@@ -6,6 +7,7 @@
 #include <resolv.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
 
 #include "libnetlink.h"
 #include "ll_map.h"
@@ -87,6 +89,8 @@ int get_prefix(inet_prefix *dst, char *arg, int family);
 int mask2bits(__u32 netmask);
 int get_addr_ila(__u64 *val, const char *arg);
 
+int read_prop(const char *dev, char *prop, long *value);
+int parse_percent(double *val, const char *str);
 int get_hex(char c);
 int get_integer(int *val, const char *arg, int base);
 int get_unsigned(unsigned *val, const char *arg, int base);
@@ -256,7 +260,9 @@ int make_path(const char *path, mode_t mode);
 char *find_cgroup2_mount(void);
 int get_command_name(const char *pid, char *comm, size_t len);
 
+#ifdef NEED_STRLCPY
 size_t strlcpy(char *dst, const char *src, size_t size);
 size_t strlcat(char *dst, const char *src, size_t size);
+#endif
 
 #endif /* __UTILS_H__ */

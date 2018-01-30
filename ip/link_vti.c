@@ -53,7 +53,6 @@ static int vti_parse_opt(struct link_util *lu, int argc, char **argv,
 	struct {
 		struct nlmsghdr n;
 		struct ifinfomsg i;
-		char buf[1024];
 	} req = {
 		.n.nlmsg_len = NLMSG_LENGTH(sizeof(*ifi)),
 		.n.nlmsg_flags = NLM_F_REQUEST,
@@ -61,31 +60,32 @@ static int vti_parse_opt(struct link_util *lu, int argc, char **argv,
 		.i.ifi_family = preferred_family,
 		.i.ifi_index = ifi->ifi_index,
 	};
+	struct nlmsghdr *answer;
 	struct rtattr *tb[IFLA_MAX + 1];
 	struct rtattr *linkinfo[IFLA_INFO_MAX+1];
 	struct rtattr *vtiinfo[IFLA_VTI_MAX + 1];
-	unsigned int ikey = 0;
-	unsigned int okey = 0;
+	__be32 ikey = 0;
+	__be32 okey = 0;
 	unsigned int saddr = 0;
 	unsigned int daddr = 0;
 	unsigned int link = 0;
-	unsigned int fwmark = 0;
+	__u32 fwmark = 0;
 	int len;
 
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
-		if (rtnl_talk(&rth, &req.n, &req.n, sizeof(req)) < 0) {
+		if (rtnl_talk(&rth, &req.n, &answer) < 0) {
 get_failed:
 			fprintf(stderr,
 				"Failed to get existing tunnel info.\n");
 			return -1;
 		}
 
-		len = req.n.nlmsg_len;
+		len = answer->nlmsg_len;
 		len -= NLMSG_LENGTH(sizeof(*ifi));
 		if (len < 0)
 			goto get_failed;
 
-		parse_rtattr(tb, IFLA_MAX, IFLA_RTA(&req.i), len);
+		parse_rtattr(tb, IFLA_MAX, IFLA_RTA(NLMSG_DATA(answer)), len);
 
 		if (!tb[IFLA_LINKINFO])
 			goto get_failed;
@@ -115,72 +115,29 @@ get_failed:
 
 		if (vtiinfo[IFLA_VTI_FWMARK])
 			fwmark = rta_getattr_u32(vtiinfo[IFLA_VTI_FWMARK]);
+
+		free(answer);
 	}
 
 	while (argc > 0) {
 		if (!matches(*argv, "key")) {
-			unsigned int uval;
-
 			NEXT_ARG();
-			if (strchr(*argv, '.'))
-				uval = get_addr32(*argv);
-			else {
-				if (get_unsigned(&uval, *argv, 0) < 0) {
-					fprintf(stderr,
-						"Invalid value for \"key\": \"%s\"; it should be an unsigned integer\n", *argv);
-					exit(-1);
-				}
-				uval = htonl(uval);
-			}
-
-			ikey = okey = uval;
+			ikey = okey = tnl_parse_key("key", *argv);
 		} else if (!matches(*argv, "ikey")) {
-			unsigned int uval;
-
 			NEXT_ARG();
-			if (strchr(*argv, '.'))
-				uval = get_addr32(*argv);
-			else {
-				if (get_unsigned(&uval, *argv, 0) < 0) {
-					fprintf(stderr, "invalid value for \"ikey\": \"%s\"; it should be an unsigned integer\n", *argv);
-					exit(-1);
-				}
-				uval = htonl(uval);
-			}
-			ikey = uval;
+			ikey = tnl_parse_key("ikey", *argv);
 		} else if (!matches(*argv, "okey")) {
-			unsigned int uval;
-
 			NEXT_ARG();
-			if (strchr(*argv, '.'))
-				uval = get_addr32(*argv);
-			else {
-				if (get_unsigned(&uval, *argv, 0) < 0) {
-					fprintf(stderr, "invalid value for \"okey\": \"%s\"; it should be an unsigned integer\n", *argv);
-					exit(-1);
-				}
-				uval = htonl(uval);
-			}
-			okey = uval;
+			okey = tnl_parse_key("okey", *argv);
 		} else if (!matches(*argv, "remote")) {
 			NEXT_ARG();
-			if (!strcmp(*argv, "any")) {
-				fprintf(stderr, "invalid value for \"remote\": \"%s\"\n", *argv);
-				exit(-1);
-			} else {
-				daddr = get_addr32(*argv);
-			}
+			daddr = get_addr32(*argv);
 		} else if (!matches(*argv, "local")) {
 			NEXT_ARG();
-			if (!strcmp(*argv, "any")) {
-				fprintf(stderr, "invalid value for \"local\": \"%s\"\n", *argv);
-				exit(-1);
-			} else {
-				saddr = get_addr32(*argv);
-			}
+			saddr = get_addr32(*argv);
 		} else if (!matches(*argv, "dev")) {
 			NEXT_ARG();
-			link = if_nametoindex(*argv);
+			link = ll_name_to_index(*argv);
 			if (link == 0) {
 				fprintf(stderr, "Cannot find device \"%s\"\n",
 					*argv);
@@ -210,9 +167,7 @@ static void vti_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 {
 	const char *local = "any";
 	const char *remote = "any";
-	__u32 key;
-	unsigned int link;
-	char s2[IFNAMSIZ];
+	char s2[64];
 
 	if (!tb)
 		return;
@@ -235,33 +190,37 @@ static void vti_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 	print_string(PRINT_ANY, "local", "local %s ", local);
 
-	if (tb[IFLA_VTI_LINK] &&
-	    (link = rta_getattr_u32(tb[IFLA_VTI_LINK]))) {
-		const char *n = if_indextoname(link, s2);
+	if (tb[IFLA_VTI_LINK]) {
+		unsigned int link = rta_getattr_u32(tb[IFLA_VTI_LINK]);
 
-		if (n)
-			print_string(PRINT_ANY, "link", "dev %s ", n);
-		else
-			print_uint(PRINT_ANY, "link_index", "dev %u ", link);
+		if (link) {
+			print_string(PRINT_ANY, "link", "dev %s ",
+				     ll_index_to_name(link));
+		}
 	}
 
-	if (tb[IFLA_VTI_IKEY] &&
-	    (key = rta_getattr_u32(tb[IFLA_VTI_IKEY])))
-		print_0xhex(PRINT_ANY, "ikey", "ikey %#x ", ntohl(key));
+	if (tb[IFLA_VTI_IKEY]) {
+		struct rtattr *rta = tb[IFLA_VTI_IKEY];
+		__u32 key = rta_getattr_u32(rta);
 
+		if (key && inet_ntop(AF_INET, RTA_DATA(rta), s2, sizeof(s2)))
+			print_string(PRINT_ANY, "ikey", "ikey %s ", s2);
+	}
 
-	if (tb[IFLA_VTI_OKEY] &&
-	    (key = rta_getattr_u32(tb[IFLA_VTI_OKEY])))
-		print_0xhex(PRINT_ANY, "okey", "okey %#x ", ntohl(key));
+	if (tb[IFLA_VTI_OKEY]) {
+		struct rtattr *rta = tb[IFLA_VTI_OKEY];
+		__u32 key = rta_getattr_u32(rta);
+
+		if (key && inet_ntop(AF_INET, RTA_DATA(rta), s2, sizeof(s2)))
+			print_string(PRINT_ANY, "okey", "okey %s ", s2);
+	}
 
 	if (tb[IFLA_VTI_FWMARK]) {
 		__u32 fwmark = rta_getattr_u32(tb[IFLA_VTI_FWMARK]);
 
 		if (fwmark) {
-			SPRINT_BUF(b1);
-
-			snprintf(b1, sizeof(b1), "0x%x", fwmark);
-			print_string(PRINT_ANY, "fwmark", "fwmark %s ", s2);
+			print_0xhex(PRINT_ANY,
+				    "fwmark", "fwmark 0x%x ", fwmark);
 		}
 	}
 }

@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -166,7 +165,7 @@ static int iptoken_set(int argc, char **argv, bool delete)
 	addattr_nest_end(&req.n, afs6);
 	addattr_nest_end(&req.n, afs);
 
-	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
+	if (rtnl_talk(&rth, &req.n, NULL) < 0)
 		return -2;
 
 	return 0;

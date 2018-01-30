@@ -16,7 +16,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <sys/socket.h>
@@ -42,6 +41,7 @@ int batch_mode;
 int use_iec;
 int force;
 bool use_names;
+int json;
 
 static char *conf_file;
 
@@ -60,7 +60,7 @@ static int print_noqopt(struct qdisc_util *qu, FILE *f,
 	return 0;
 }
 
-static int parse_noqopt(struct qdisc_util *qu, int argc, char **argv, struct nlmsghdr *n)
+static int parse_noqopt(struct qdisc_util *qu, int argc, char **argv, struct nlmsghdr *n, const char *dev)
 {
 	if (argc) {
 		fprintf(stderr, "Unknown qdisc \"%s\", hence option \"%s\" is unparsable\n", qu->id, *argv);
@@ -190,7 +190,7 @@ static void usage(void)
 			"       tc [-force] -batch filename\n"
 			"where  OBJECT := { qdisc | class | filter | action | monitor | exec }\n"
 	                "       OPTIONS := { -s[tatistics] | -d[etails] | -r[aw] | -p[retty] | -b[atch] [filename] | -n[etns] name |\n"
-			"                    -nm | -nam[es] | { -cf | -conf } path }\n");
+			"                    -nm | -nam[es] | { -cf | -conf } path } | -j[son]\n");
 }
 
 static int do_cmd(int argc, char **argv)
@@ -313,6 +313,8 @@ int main(int argc, char **argv)
 		} else if (matches(argv[1], "-tshort") == 0) {
 			++timestamp;
 			++timestamp_short;
+		} else if (matches(argv[1], "-json") == 0) {
+			++json;
 		} else {
 			fprintf(stderr, "Option \"%s\" is unknown, try \"tc -help\".\n", argv[1]);
 			return -1;

@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -32,7 +31,7 @@ static void explain(void)
 }
 
 static int choke_parse_opt(struct qdisc_util *qu, int argc, char **argv,
-			   struct nlmsghdr *n)
+			   struct nlmsghdr *n, const char *dev)
 {
 	struct tc_red_qopt opt = {};
 	unsigned int burst = 0;
@@ -54,7 +53,12 @@ static int choke_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 			}
 		} else if (strcmp(*argv, "bandwidth") == 0) {
 			NEXT_ARG();
-			if (get_rate(&rate, *argv)) {
+			if (strchr(*argv, '%')) {
+				if (get_percent_rate(&rate, *argv, dev)) {
+					fprintf(stderr, "Illegal \"bandwidth\"\n");
+					return -1;
+				}
+			} else if (get_rate(&rate, *argv)) {
 				fprintf(stderr, "Illegal \"bandwidth\"\n");
 				return -1;
 			}

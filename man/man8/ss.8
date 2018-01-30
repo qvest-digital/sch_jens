@@ -184,6 +184,10 @@ max segment size
 congestion window size
 .P
 .TP
+.B pmtu:<pmtu>
+path MTU value
+.P
+.TP
 .B ssthresh:<ssthresh>
 tcp congestion window slow start threshold
 .P
@@ -302,14 +306,18 @@ Display Unix domain sockets (alias for -f unix).
 .B \-S, \-\-sctp
 Display SCTP sockets.
 .TP
+.B \-\-vsock
+Display vsock sockets (alias for -f vsock).
+.TP
 .B \-f FAMILY, \-\-family=FAMILY
 Display sockets of type FAMILY.
-Currently the following families are supported: unix, inet, inet6, link, netlink.
+Currently the following families are supported: unix, inet, inet6, link, netlink, vsock.
 .TP
 .B \-A QUERY, \-\-query=QUERY, \-\-socket=QUERY
 List of socket tables to dump, separated by commas. The following identifiers
 are understood: all, inet, tcp, udp, raw, unix, packet, netlink, unix_dgram,
-unix_stream, unix_seqpacket, packet_raw, packet_dgram, dccp, sctp.
+unix_stream, unix_seqpacket, packet_raw, packet_dgram, dccp, sctp,
+vsock_stream, vsock_dgram.
 .TP
 .B \-D FILE, \-\-diag=FILE
 Do not display anything, just dump raw information about TCP sockets to FILE after applying filters. If FILE is - stdout is used.
@@ -319,7 +327,7 @@ Read filter information from FILE.
 Each line of FILE is interpreted like single command line option. If FILE is - stdin is used.
 .TP
 .B FILTER := [ state STATE-FILTER ] [ EXPRESSION ]
-Please take a look at the official documentation (Debian package iproute-doc) for details regarding filters.
+Please take a look at the official documentation for details regarding filters.
 
 .SH STATE-FILTER
 
@@ -374,7 +382,6 @@ Find all local processes connected to X server.
 List all the tcp sockets in state FIN-WAIT-1 for our apache to network 193.233.7/24 and look at their timers.
 .SH SEE ALSO
 .BR ip (8),
-.BR /usr/share/doc/iproute-doc/ss.html " (package iproute­doc)",
 .br
 .BR RFC " 793 "
 - https://tools.ietf.org/rfc/rfc793.txt (TCP states)

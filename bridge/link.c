@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,8 +25,6 @@ static const char *port_states[] = {
 	[BR_STATE_FORWARDING] = "forwarding",
 	[BR_STATE_BLOCKING] = "blocking",
 };
-
-extern char *if_indextoname(unsigned int __ifindex, char *__ifname);
 
 static void print_link_flags(FILE *fp, unsigned int flags)
 {
@@ -103,7 +102,6 @@ int print_linkinfo(const struct sockaddr_nl *who,
 	int len = n->nlmsg_len;
 	struct ifinfomsg *ifi = NLMSG_DATA(n);
 	struct rtattr *tb[IFLA_MAX+1];
-	char b1[IFNAMSIZ];
 
 	len -= NLMSG_LENGTH(sizeof(*ifi));
 	if (len < 0) {
@@ -134,14 +132,10 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		print_operstate(fp, rta_getattr_u8(tb[IFLA_OPERSTATE]));
 
 	if (tb[IFLA_LINK]) {
-		SPRINT_BUF(b1);
 		int iflink = rta_getattr_u32(tb[IFLA_LINK]);
 
-		if (iflink == 0)
-			fprintf(fp, "@NONE: ");
-		else
-			fprintf(fp, "@%s: ",
-				if_indextoname(iflink, b1));
+		fprintf(fp, "@%s: ",
+			iflink ? ll_index_to_name(iflink) : "NONE");
 	} else
 		fprintf(fp, ": ");
 
@@ -150,9 +144,11 @@ int print_linkinfo(const struct sockaddr_nl *who,
 	if (tb[IFLA_MTU])
 		fprintf(fp, "mtu %u ", rta_getattr_u32(tb[IFLA_MTU]));
 
-	if (tb[IFLA_MASTER])
-		fprintf(fp, "master %s ",
-			if_indextoname(rta_getattr_u32(tb[IFLA_MASTER]), b1));
+	if (tb[IFLA_MASTER]) {
+		int master = rta_getattr_u32(tb[IFLA_MASTER]);
+
+		fprintf(fp, "master %s ", ll_index_to_name(master));
+	}
 
 	if (tb[IFLA_PROTINFO]) {
 		if (tb[IFLA_PROTINFO]->rta_type & NLA_F_NESTED) {
@@ -198,6 +194,12 @@ int print_linkinfo(const struct sockaddr_nl *who,
 				if (prtb[IFLA_BRPORT_MCAST_FLOOD])
 					print_onoff(fp, "mcast_flood",
 						    rta_getattr_u8(prtb[IFLA_BRPORT_MCAST_FLOOD]));
+				if (prtb[IFLA_BRPORT_NEIGH_SUPPRESS])
+					print_onoff(fp, "neigh_suppress",
+						    rta_getattr_u8(prtb[IFLA_BRPORT_NEIGH_SUPPRESS]));
+				if (prtb[IFLA_BRPORT_VLAN_TUNNEL])
+					print_onoff(fp, "vlan_tunnel",
+						    rta_getattr_u8(prtb[IFLA_BRPORT_VLAN_TUNNEL]));
 			}
 		} else
 			print_portstate(fp, rta_getattr_u8(tb[IFLA_PROTINFO]));
@@ -238,6 +240,8 @@ static void usage(void)
 	fprintf(stderr,	"                               [ learning_sync {on | off} ]\n");
 	fprintf(stderr,	"                               [ flood {on | off} ]\n");
 	fprintf(stderr,	"                               [ mcast_flood {on | off} ]\n");
+	fprintf(stderr,	"                               [ neigh_suppress {on | off} ]\n");
+	fprintf(stderr,	"                               [ vlan_tunnel {on | off} ]\n");
 	fprintf(stderr, "                               [ hwmode {vepa | veb} ]\n");
 	fprintf(stderr, "                               [ self ] [ master ]\n");
 	fprintf(stderr, "       bridge link show [dev DEV]\n");
@@ -273,9 +277,11 @@ static int brlink_modify(int argc, char **argv)
 		.ifm.ifi_family = PF_BRIDGE,
 	};
 	char *d = NULL;
+	__s8 neigh_suppress = -1;
 	__s8 learning = -1;
 	__s8 learning_sync = -1;
 	__s8 flood = -1;
+	__s8 vlan_tunnel = -1;
 	__s8 mcast_flood = -1;
 	__s8 hairpin = -1;
 	__s8 bpdu_guard = -1;
@@ -362,6 +368,16 @@ static int brlink_modify(int argc, char **argv)
 			flags |= BRIDGE_FLAGS_SELF;
 		} else if (strcmp(*argv, "master") == 0) {
 			flags |= BRIDGE_FLAGS_MASTER;
+		} else if (strcmp(*argv, "neigh_suppress") == 0) {
+			NEXT_ARG();
+			if (!on_off("neigh_suppress", &neigh_suppress,
+				    *argv))
+				return -1;
+		} else if (strcmp(*argv, "vlan_tunnel") == 0) {
+			NEXT_ARG();
+			if (!on_off("vlan_tunnel", &vlan_tunnel,
+				    *argv))
+				return -1;
 		} else {
 			usage();
 		}
@@ -414,6 +430,13 @@ static int brlink_modify(int argc, char **argv)
 	if (state >= 0)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_STATE, state);
 
+	if (neigh_suppress != -1)
+		addattr8(&req.n, sizeof(req), IFLA_BRPORT_NEIGH_SUPPRESS,
+			 neigh_suppress);
+	if (vlan_tunnel != -1)
+		addattr8(&req.n, sizeof(req), IFLA_BRPORT_VLAN_TUNNEL,
+			 vlan_tunnel);
+
 	addattr_nest_end(&req.n, nest);
 
 	/* IFLA_AF_SPEC nested attribute. Contains IFLA_BRIDGE_FLAGS that
@@ -433,7 +456,7 @@ static int brlink_modify(int argc, char **argv)
 		addattr_nest_end(&req.n, nest);
 	}
 
-	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
+	if (rtnl_talk(&rth, &req.n, NULL) < 0)
 		return -1;
 
 	return 0;

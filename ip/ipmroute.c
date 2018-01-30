@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <sys/ioctl.h>
@@ -161,6 +160,8 @@ int print_mroute(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 	}
 	fprintf(fp, " State: %s",
 		r->rtm_flags & RTNH_F_UNRESOLVED ? "unresolved" : "resolved");
+	if (r->rtm_flags & RTNH_F_OFFLOAD)
+		fprintf(fp, " offload");
 	if (show_stats && tb[RTA_MFC_STATS]) {
 		struct rta_mfc_stats *mfcs = RTA_DATA(tb[RTA_MFC_STATS]);
 

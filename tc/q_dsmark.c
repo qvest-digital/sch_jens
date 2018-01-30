@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * q_dsmark.c		Differentiated Services field marking.
  *
@@ -8,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -26,7 +26,7 @@ static void explain(void)
 
 
 static int dsmark_parse_opt(struct qdisc_util *qu, int argc, char **argv,
-    struct nlmsghdr *n)
+	struct nlmsghdr *n, const char *dev)
 {
 	struct rtattr *tail;
 	__u16 ind;
@@ -85,7 +85,7 @@ static void explain_class(void)
 
 
 static int dsmark_parse_class_opt(struct qdisc_util *qu, int argc, char **argv,
-   struct nlmsghdr *n)
+	struct nlmsghdr *n, const char *dev)
 {
 	struct rtattr *tail;
 	__u8 tmp;

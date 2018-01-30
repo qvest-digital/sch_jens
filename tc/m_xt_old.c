@@ -13,7 +13,6 @@
 /*XXX: in the future (xtables 1.4.3?) get rid of everything tagged
  * as TC_CONFIG_XT_H */
 
-#include <syslog.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -214,7 +213,7 @@ static int parse_ipt(struct action_util *a, int *argc_p,
 	int rargc = *argc_p;
 	char **argv = *argv_p;
 	int argc = 0, iargc = 0;
-	char k[16];
+	char k[FILTER_NAMESZ];
 	int size = 0;
 	int iok = 0, ok = 0;
 	__u32 hook = 0, index = 0;

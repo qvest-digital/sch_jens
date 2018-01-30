@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -88,13 +87,12 @@ parse_gact(struct action_util *a, int *argc_p, char ***argv_p,
 	if (argc < 0)
 		return -1;
 
-
-	if (matches(*argv, "gact") == 0) {
-		argc--;
-		argv++;
-	} else if (parse_action_control(&argc, &argv, &p.action, false) == -1) {
+	if (matches(*argv, "gact") != 0 &&
+		parse_action_control(&argc, &argv, &p.action, false) == -1) {
 		usage();	/* does not return */
 	}
+
+	NEXT_ARG_FWD();
 
 #ifdef CONFIG_GACT_PROB
 	if (argc > 0) {
@@ -115,18 +113,23 @@ parse_gact(struct action_util *a, int *argc_p, char ***argv_p,
 			if (parse_action_control(&argc, &argv,
 						 &pp.paction, false) == -1)
 				usage();
+			NEXT_ARG_FWD();
 			if (get_u16(&pp.pval, *argv, 10)) {
-				fprintf(stderr, "Illegal probability val 0x%x\n", pp.pval);
+				fprintf(stderr,
+					"Illegal probability val 0x%x\n",
+					pp.pval);
 				return -1;
 			}
 			if (pp.pval > 10000) {
-				fprintf(stderr, "Illegal probability val  0x%x\n", pp.pval);
+				fprintf(stderr,
+					"Illegal probability val  0x%x\n",
+					pp.pval);
 				return -1;
 			}
 			argc--;
 			argv++;
 		} else if (matches(*argv, "help") == 0) {
-				usage();
+			usage();
 		}
 	}
 #endif
@@ -141,7 +144,7 @@ parse_gact(struct action_util *a, int *argc_p, char ***argv_p,
 			argc--;
 			argv++;
 		} else if (matches(*argv, "help") == 0) {
-				usage();
+			usage();
 		}
 	}
 
@@ -149,9 +152,8 @@ parse_gact(struct action_util *a, int *argc_p, char ***argv_p,
 	addattr_l(n, MAX_MSG, tca_id, NULL, 0);
 	addattr_l(n, MAX_MSG, TCA_GACT_PARMS, &p, sizeof(p));
 #ifdef CONFIG_GACT_PROB
-	if (rd) {
+	if (rd)
 		addattr_l(n, MAX_MSG, TCA_GACT_PROB, &pp, sizeof(pp));
-	}
 #endif
 	tail->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail;
 
@@ -161,7 +163,7 @@ parse_gact(struct action_util *a, int *argc_p, char ***argv_p,
 }
 
 static int
-print_gact(struct action_util *au, FILE * f, struct rtattr *arg)
+print_gact(struct action_util *au, FILE *f, struct rtattr *arg)
 {
 #ifdef CONFIG_GACT_PROB
 	struct tc_gact_p *pp = NULL;
@@ -176,12 +178,12 @@ print_gact(struct action_util *au, FILE * f, struct rtattr *arg)
 	parse_rtattr_nested(tb, TCA_GACT_MAX, arg);
 
 	if (tb[TCA_GACT_PARMS] == NULL) {
-		fprintf(f, "[NULL gact parameters]");
+		print_string(PRINT_FP, NULL, "%s", "[NULL gact parameters]");
 		return -1;
 	}
 	p = RTA_DATA(tb[TCA_GACT_PARMS]);
 
-	fprintf(f, "gact ");
+	print_string(PRINT_ANY, "kind", "%s ", "gact");
 	print_action_control(f, "action ", p->action, "");
 #ifdef CONFIG_GACT_PROB
 	if (tb[TCA_GACT_PROB] != NULL) {
@@ -191,12 +193,16 @@ print_gact(struct action_util *au, FILE * f, struct rtattr *arg)
 		memset(&pp_dummy, 0, sizeof(pp_dummy));
 		pp = &pp_dummy;
 	}
-	fprintf(f, "\n\t random type %s", prob_n2a(pp->ptype));
+	open_json_object("prob");
+	print_string(PRINT_ANY, "random_type", "\n\t random type %s",
+		     prob_n2a(pp->ptype));
 	print_action_control(f, " ", pp->paction, " ");
-	fprintf(f, "val %d", pp->pval);
+	print_int(PRINT_ANY, "val", "val %d", pp->pval);
+	close_json_object();
 #endif
-	fprintf(f, "\n\t index %u ref %d bind %d", p->index, p->refcnt,
-		p->bindcnt);
+	print_uint(PRINT_ANY, "index", "\n\t index %u", p->index);
+	print_int(PRINT_ANY, "ref", " ref %d", p->refcnt);
+	print_int(PRINT_ANY, "bind", " bind %d", p->bindcnt);
 	if (show_stats) {
 		if (tb[TCA_GACT_TM]) {
 			struct tcf_t *tm = RTA_DATA(tb[TCA_GACT_TM]);
@@ -204,7 +210,7 @@ print_gact(struct action_util *au, FILE * f, struct rtattr *arg)
 			print_tm(f, tm);
 		}
 	}
-	fprintf(f, "\n ");
+	print_string(PRINT_FP, NULL, "%s", "\n");
 	return 0;
 }
 

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Get/set/delete fdb table with netlink
  *
@@ -205,14 +206,22 @@ int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				rta_getattr_u32(tb[NDA_VNI]));
 	}
 
+	if (tb[NDA_SRC_VNI]) {
+		if (jw_global)
+			jsonw_uint_field(jw_global, "src_vni",
+					 rta_getattr_u32(tb[NDA_SRC_VNI]));
+		else
+			fprintf(fp, "src_vni %d ",
+				rta_getattr_u32(tb[NDA_SRC_VNI]));
+	}
+
 	if (tb[NDA_IFINDEX]) {
 		unsigned int ifindex = rta_getattr_u32(tb[NDA_IFINDEX]);
 
 		if (ifindex) {
-			char ifname[IF_NAMESIZE];
+			if (!tb[NDA_LINK_NETNSID]) {
+				const char *ifname = ll_index_to_name(ifindex);
 
-			if (!tb[NDA_LINK_NETNSID] &&
-			    if_indextoname(ifindex, ifname)) {
 				if (jw_global)
 					jsonw_string_field(jw_global, "viaIf",
 							   ifname);
@@ -365,7 +374,7 @@ static int fdb_show(int argc, char **argv)
 
 	/*we'll keep around filter_dev for older kernels */
 	if (filter_dev) {
-		filter_index = if_nametoindex(filter_dev);
+		filter_index = ll_name_to_index(filter_dev);
 		if (filter_index == 0) {
 			fprintf(stderr, "Cannot find device \"%s\"\n",
 				filter_dev);
@@ -454,7 +463,7 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 				invarg("invalid VNI\n", *argv);
 		} else if (strcmp(*argv, "via") == 0) {
 			NEXT_ARG();
-			via = if_nametoindex(*argv);
+			via = ll_name_to_index(*argv);
 			if (via == 0)
 				invarg("invalid device\n", *argv);
 		} else if (strcmp(*argv, "self") == 0) {
@@ -536,7 +545,7 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 		return -1;
 	}
 
-	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
+	if (rtnl_talk(&rth, &req.n, NULL) < 0)
 		return -1;
 
 	return 0;

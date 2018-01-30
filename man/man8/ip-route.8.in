@@ -33,6 +33,8 @@ ip-route \- routing table management
 .BI from " ADDRESS " iif " STRING"
 .RB " ] [ " oif
 .IR STRING " ] [ "
+.B  mark
+.IR MARK " ] [ "
 .B  tos
 .IR TOS " ] [ "
 .B  vrf
@@ -141,7 +143,9 @@ replace " } "
 .B  pref
 .IR PREF " ] [ "
 .B  expires
-.IR TIME " ]"
+.IR TIME " ] ["
+.B  fastopen_no_cookie
+.IR BOOL " ]"
 
 .ti -8
 .IR TYPE " := [ "
@@ -523,6 +527,10 @@ sysctl is set to 0.
 .TP
 .BI quickack " BOOL " "(3.11+ only)"
 Enable or disable quick ack for connections to this destination.
+
+.TP
+.BI fastopen_no_cookie " BOOL " "(4.15+ only)"
+Enable TCP Fastopen without a cookie for connections to this destination.
 
 .TP
 .BI congctl " NAME " "(3.20+ only)"
@@ -1026,6 +1034,11 @@ the device from which this packet is expected to arrive.
 .TP
 .BI oif " NAME"
 force the output device on which this packet will be routed.
+
+.TP
+.BI mark " MARK"
+the firewall mark
+.RB ( "fwmark" )
 
 .TP
 .BI vrf " NAME"

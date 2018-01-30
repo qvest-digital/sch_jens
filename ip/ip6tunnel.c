@@ -52,6 +52,7 @@ static void usage(void)
 	fprintf(stderr, "          [ encaplimit ELIM ]\n");
 	fprintf(stderr, "          [ hoplimit TTL ] [ tclass TCLASS ] [ flowlabel FLOWLABEL ]\n");
 	fprintf(stderr, "          [ dscp inherit ]\n");
+	fprintf(stderr, "          [ [no]allow-localremote ]\n");
 	fprintf(stderr, "          [ [i|o]seq ] [ [i|o]key KEY ] [ [i|o]csum ]\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Where: NAME      := STRING\n");
@@ -91,7 +92,10 @@ static void print_tunnel(struct ip6_tnl_parm2 *p)
 	else
 		printf(" encaplimit %u", p->encap_limit);
 
-	printf(" hoplimit %u", p->hop_limit);
+	if (p->hop_limit)
+		printf(" hoplimit %u", p->hop_limit);
+	else
+		printf(" hoplimit inherit");
 
 	if (p->flags & IP6_TNL_F_USE_ORIG_TCLASS)
 		printf(" tclass inherit");
@@ -110,6 +114,9 @@ static void print_tunnel(struct ip6_tnl_parm2 *p)
 
 	if (p->flags & IP6_TNL_F_RCV_DSCP_COPY)
 		printf(" dscp inherit");
+
+	if (p->flags & IP6_TNL_F_ALLOW_LOCAL_REMOTE)
+		printf(" allow-localremote");
 
 	if ((p->i_flags & GRE_KEY) && (p->o_flags & GRE_KEY) &&
 	    p->o_key == p->i_key)
@@ -166,17 +173,13 @@ static int parse_args(int argc, char **argv, int cmd, struct ip6_tnl_parm2 *p)
 			inet_prefix raddr;
 
 			NEXT_ARG();
-			get_prefix(&raddr, *argv, preferred_family);
-			if (raddr.family == AF_UNSPEC)
-				invarg("\"remote\" address family is AF_UNSPEC", *argv);
+			get_addr(&raddr, *argv, AF_INET6);
 			memcpy(&p->raddr, &raddr.data, sizeof(p->raddr));
 		} else if (strcmp(*argv, "local") == 0) {
 			inet_prefix laddr;
 
 			NEXT_ARG();
-			get_prefix(&laddr, *argv, preferred_family);
-			if (laddr.family == AF_UNSPEC)
-				invarg("\"local\" address family is AF_UNSPEC", *argv);
+			get_addr(&laddr, *argv, AF_INET6);
 			memcpy(&p->laddr, &laddr.data, sizeof(p->laddr));
 		} else if (strcmp(*argv, "dev") == 0) {
 			NEXT_ARG();
@@ -239,6 +242,10 @@ static int parse_args(int argc, char **argv, int cmd, struct ip6_tnl_parm2 *p)
 			if (strcmp(*argv, "inherit") != 0)
 				invarg("not inherit", *argv);
 			p->flags |= IP6_TNL_F_RCV_DSCP_COPY;
+		} else if (strcmp(*argv, "allow-localremote") == 0) {
+			p->flags |= IP6_TNL_F_ALLOW_LOCAL_REMOTE;
+		} else if (strcmp(*argv, "noallow-localremote") == 0) {
+			p->flags &= ~IP6_TNL_F_ALLOW_LOCAL_REMOTE;
 		} else if (strcmp(*argv, "key") == 0) {
 			NEXT_ARG();
 			p->i_flags |= GRE_KEY;

@@ -194,6 +194,7 @@ ip-link \- network device configuration
 .BR macvlan  " | "
 .BR macvtap  " | "
 .BR vcan " | "
+.BR vxcan " | "
 .BR veth " | "
 .BR vlan " | "
 .BR vxlan " |"
@@ -205,6 +206,7 @@ ip-link \- network device configuration
 .BR erspan " |"
 .BR ip6gre " |"
 .BR ip6gretap " |"
+.BR ip6erspan " |"
 .BR vti " |"
 .BR nlmon " |"
 .BR ipvlan " |"
@@ -251,9 +253,6 @@ Link types:
 .B bond
 - Bonding device
 .sp
-.B can
-- Controller Area Network interface
-.sp
 .B dummy
 - Dummy network interface
 .sp
@@ -274,6 +273,9 @@ Link types:
 .sp
 .B vcan
 - Virtual Controller Area Network interface
+.sp
+.B vxcan
+- Virtual Controller Area Network tunnel interface
 .sp
 .B veth
 - Virtual ethernet interface
@@ -307,6 +309,9 @@ Link types:
 .sp
 .BR ip6gretap
 - Virtual L2 tunnel interface GRE over IPv6
+.sp
+.BR ip6erspan
+- Encapsulated Remote SPAN over GRE and IPv6
 .sp
 .BR vti
 - Virtual tunnel interface
@@ -648,6 +653,29 @@ keyword.
 .in -8
 
 .TP
+VETH, VXCAN Type Support
+For a link of types
+.I VETH/VXCAN
+the following additional arguments are supported:
+
+.BI "ip link add " DEVICE
+.BR type " { " veth " | " vxcan " }"
+[
+.BR peer
+.BI "name " NAME
+]
+
+.in +8
+.sp
+.BR peer
+.BI "name " NAME
+- specifies the virtual pair device name of the
+.I VETH/VXCAN
+tunnel.
+
+.in -8
+
+.TP
 GRE, IPIP, SIT, ERSPAN Type Support
 For a link of types
 .I GRE/IPIP/SIT/ERSPAN
@@ -670,6 +698,8 @@ the following additional arguments are supported:
 .I " mode " { ip6ip | ipip | mplsip | any } "
 ] [
 .BR erspan " \fIIDX "
+] [
+.BR external
 ]
 
 .in +8
@@ -720,6 +750,11 @@ IPv6-Over-IPv4 is not supported for IPIP.
 .IR IDX
 indicates a 20 bit index/port number associated with the ERSPAN
 traffic's source port and direction.
+
+.sp
+.BR external
+- make this tunnel externally controlled
+.RB "(e.g. " "ip route encap" ).
 
 .in -8
 
@@ -1240,7 +1275,7 @@ or disable
 arptables hooks on the bridge.
 
 
-.in-8
+.in -8
 
 .TP
 MACsec Type Support
@@ -1560,6 +1595,7 @@ option instead.
 .sp
 .BI max_tx_rate " TXRATE"
 - change the allowed maximum transmit bandwidth, in Mbps, for the specified VF.
+Setting this parameter to 0 disables rate limiting.
 .B vf
 parameter must be specified.
 
@@ -1567,6 +1603,7 @@ parameter must be specified.
 .BI min_tx_rate " TXRATE"
 - change the allowed minimum transmit bandwidth, in Mbps, for the specified VF.
 Minimum TXRATE should be always <= Maximum TXRATE.
+Setting this parameter to 0 disables rate limiting.
 .B vf
 parameter must be specified.
 
@@ -1746,7 +1783,13 @@ the following additional arguments are supported:
 ] [
 .BR mcast_fast_leave " { " on " | " off "}"
 ] [
-.BR mcast_flood " { " on " | " off " } ]"
+.BR mcast_flood " { " on " | " off " }"
+] [
+.BR group_fwd_mask " MASK"
+] [
+.BR neigh_suppress " { " on " | " off " } ]"
+] [
+.BR vlan_tunnel " { " on " | " off " } ]"
 
 .in +8
 .sp
@@ -1820,6 +1863,15 @@ option above.
 
 .BR mcast_flood " { " on " | " off " }"
 - controls whether a given port will be flooded with multicast traffic for which there is no MDB entry.
+
+.BI group_fwd_mask " MASK "
+- set the group forward mask. This is the bitmask that is applied to decide whether to forward incoming frames destined to link-local addresses, ie addresses of the form 01:80:C2:00:00:0X (defaults to 0, ie the bridge does not forward any link-local frames coming on this port).
+
+.BR neigh_suppress " { " on " | " off " }"
+- controls whether neigh discovery (arp and nd) proxy and suppression is enabled on the port. By default this flag is off.
+
+.BR vlan_tunnel " { " on " | " off " }"
+- Controls whether vlan to tunnel mapping is enabled on the port. By default this flag is off.
 
 .in -8
 

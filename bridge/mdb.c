@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Get mdb table with netlink
  */
@@ -310,7 +311,7 @@ static int mdb_show(int argc, char **argv)
 	}
 
 	if (filter_dev) {
-		filter_index = if_nametoindex(filter_dev);
+		filter_index = ll_name_to_index(filter_dev);
 		if (filter_index == 0) {
 			fprintf(stderr, "Cannot find device \"%s\"\n",
 				filter_dev);
@@ -440,7 +441,7 @@ static int mdb_modify(int cmd, int flags, int argc, char **argv)
 	entry.vid = vid;
 	addattr_l(&req.n, sizeof(req), MDBA_SET_ENTRY, &entry, sizeof(entry));
 
-	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
+	if (rtnl_talk(&rth, &req.n, NULL) < 0)
 		return -1;
 
 	return 0;

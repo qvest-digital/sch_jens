@@ -18,7 +18,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -525,7 +524,7 @@ static int parse_munge(int *argc_p, char ***argv_p, struct m_pedit_sel *sel)
 		res = parse_offset(&argc, &argv, sel, &tkey);
 		goto done;
 	} else {
-		char k[16];
+		char k[FILTER_NAMESZ];
 		struct m_pedit_util *p = NULL;
 
 		strncpy(k, *argv, sizeof(k) - 1);
@@ -673,6 +672,7 @@ int parse_pedit(struct action_util *a, int *argc_p, char ***argv_p, int tca_id,
 
 	parse_action_control_dflt(&argc, &argv, &sel.sel.action, false, TC_ACT_OK);
 
+	NEXT_ARG_FWD();
 	if (argc) {
 		if (matches(*argv, "index") == 0) {
 			NEXT_ARG();

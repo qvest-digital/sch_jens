@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -68,8 +67,8 @@ static int tc_class_modify(int cmd, unsigned int flags, int argc, char **argv)
 	};
 	struct qdisc_util *q = NULL;
 	struct tc_estimator est = {};
-	char  d[16] = {};
-	char  k[16] = {};
+	char  d[IFNAMSIZ] = {};
+	char  k[FILTER_NAMESZ] = {};
 
 	while (argc > 0) {
 		if (strcmp(*argv, "dev") == 0) {
@@ -129,7 +128,7 @@ static int tc_class_modify(int cmd, unsigned int flags, int argc, char **argv)
 			fprintf(stderr, "Error: Qdisc \"%s\" is classless.\n", k);
 			return 1;
 		}
-		if (q->parse_copt(q, argc, argv, &req.n))
+		if (q->parse_copt(q, argc, argv, &req.n, d))
 			return 1;
 	} else {
 		if (argc) {
@@ -149,7 +148,7 @@ static int tc_class_modify(int cmd, unsigned int flags, int argc, char **argv)
 		}
 	}
 
-	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
+	if (rtnl_talk(&rth, &req.n, NULL) < 0)
 		return 2;
 
 	return 0;
@@ -389,7 +388,7 @@ int print_class(const struct sockaddr_nl *who,
 static int tc_class_list(int argc, char **argv)
 {
 	struct tcmsg t = { .tcm_family = AF_UNSPEC };
-	char d[16] = {};
+	char d[IFNAMSIZ] = {};
 	char buf[1024] = {0};
 
 	filter_qdisc = 0;

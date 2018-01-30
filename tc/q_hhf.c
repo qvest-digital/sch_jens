@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /* q_hhf.c		Heavy-Hitter Filter (HHF)
  *
  * Copyright (C) 2013 Terry Lam <vtlam@google.com>
@@ -5,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -26,7 +26,7 @@ static void explain(void)
 }
 
 static int hhf_parse_opt(struct qdisc_util *qu, int argc, char **argv,
-			 struct nlmsghdr *n)
+			 struct nlmsghdr *n, const char *dev)
 {
 	unsigned int limit = 0;
 	unsigned int quantum = 0;

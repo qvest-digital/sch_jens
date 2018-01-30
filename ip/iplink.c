@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -110,11 +109,11 @@ void iplink_usage(void)
 			"\n"
 			"       ip link help [ TYPE ]\n"
 			"\n"
-			"TYPE := { vlan | veth | vcan | dummy | ifb | macvlan | macvtap |\n"
+			"TYPE := { vlan | veth | vcan | vxcan | dummy | ifb | macvlan | macvtap |\n"
 			"          bridge | bond | team | ipoib | ip6tnl | ipip | sit | vxlan |\n"
-			"          gre | gretap | erspan | ip6gre | ip6gretap | vti | nlmon |\n"
-			"          team_slave | bond_slave | ipvlan | geneve | bridge_slave |\n"
-			"          vrf | macsec }\n");
+			"          gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan |\n"
+			"          vti | nlmon | team_slave | bond_slave | ipvlan | geneve |\n"
+			"          bridge_slave | vrf | macsec }\n");
 	}
 	exit(-1);
 }
@@ -249,19 +248,26 @@ static int nl_get_ll_addr_len(unsigned int dev_index)
 			.ifi_index = dev_index,
 		}
 	};
+	struct nlmsghdr *answer;
 	struct rtattr *tb[IFLA_MAX+1];
 
-	if (rtnl_talk(&rth, &req.n, &req.n, sizeof(req)) < 0)
+	if (rtnl_talk(&rth, &req.n, &answer) < 0)
 		return -1;
 
-	len = req.n.nlmsg_len - NLMSG_LENGTH(sizeof(req.i));
-	if (len < 0)
+	len = answer->nlmsg_len - NLMSG_LENGTH(sizeof(struct ifinfomsg));
+	if (len < 0) {
+		free(answer);
 		return -1;
+	}
 
-	parse_rtattr_flags(tb, IFLA_MAX, IFLA_RTA(&req.i), len, NLA_F_NESTED);
-	if (!tb[IFLA_ADDRESS])
+	parse_rtattr_flags(tb, IFLA_MAX, IFLA_RTA(NLMSG_DATA(answer)),
+			   len, NLA_F_NESTED);
+	if (!tb[IFLA_ADDRESS]) {
+		free(answer);
 		return -1;
+	}
 
+	free(answer);
 	return RTA_PAYLOAD(tb[IFLA_ADDRESS]);
 }
 
@@ -270,11 +276,13 @@ static void iplink_parse_vf_vlan_info(int vf, int *argcp, char ***argvp,
 {
 	int argc = *argcp;
 	char **argv = *argvp;
+	unsigned int vci;
 
 	NEXT_ARG();
-	if (get_unsigned(&ivvip->vlan, *argv, 0))
+	if (get_unsigned(&vci, *argv, 0) || vci > 4095)
 		invarg("Invalid \"vlan\" value\n", *argv);
 
+	ivvip->vlan = vci;
 	ivvip->vf = vf;
 	ivvip->qos = 0;
 	ivvip->vlan_proto = htons(ETH_P_8021Q);
@@ -531,6 +539,14 @@ static int iplink_parse_vf(int vf, int *argcp, char ***argvp,
 			if (tivt.max_tx_rate == -1)
 				tivt.max_tx_rate = tmax;
 		}
+
+		if (tivt.max_tx_rate && tivt.min_tx_rate > tivt.max_tx_rate) {
+			fprintf(stderr,
+				"Invalid min_tx_rate %d - must be <= max_tx_rate %d\n",
+				tivt.min_tx_rate, tivt.max_tx_rate);
+			return -1;
+		}
+
 		addattr_l(&req->n, sizeof(*req), IFLA_VF_RATE, &tivt,
 			  sizeof(tivt));
 	}
@@ -578,8 +594,10 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			*name = *argv;
 		} else if (strcmp(*argv, "index") == 0) {
 			NEXT_ARG();
+			if (*index)
+				duparg("index", *argv);
 			*index = atoi(*argv);
-			if (*index < 0)
+			if (*index <= 0)
 				invarg("Invalid \"index\" value", *argv);
 		} else if (matches(*argv, "link") == 0) {
 			NEXT_ARG();
@@ -625,8 +643,8 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			bool offload = strcmp(*argv, "xdpoffload") == 0;
 
 			NEXT_ARG();
-			if (xdp_parse(&argc, &argv, req, generic, drv,
-				      offload))
+			if (xdp_parse(&argc, &argv, req, dev_index,
+				      generic, drv, offload))
 				exit(-1);
 		} else if (strcmp(*argv, "netns") == 0) {
 			NEXT_ARG();
@@ -761,10 +779,11 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 			break;
 		} else if (matches(*argv, "alias") == 0) {
 			NEXT_ARG();
+			len = strlen(*argv);
+			if (len >= IFALIASZ)
+				invarg("alias too long\n", *argv);
 			addattr_l(&req->n, sizeof(*req), IFLA_IFALIAS,
-				  *argv, strlen(*argv));
-			argc--; argv++;
-			break;
+				  *argv, len);
 		} else if (strcmp(*argv, "group") == 0) {
 			NEXT_ARG();
 			if (*group != -1)
@@ -878,7 +897,7 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 	char *name = NULL;
 	char *link = NULL;
 	char *type = NULL;
-	int index = -1;
+	int index = 0;
 	int group;
 	struct link_util *lu = NULL;
 	struct iplink_req req = {
@@ -914,9 +933,8 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 				return -1;
 			}
 
-			req.i.ifi_index = 0;
 			addattr32(&req.n, sizeof(req), IFLA_GROUP, group);
-			if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
+			if (rtnl_talk(&rth, &req.n, NULL) < 0)
 				return -2;
 			return 0;
 		}
@@ -928,7 +946,7 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 				"Not enough information: \"dev\" argument is required.\n");
 			exit(-1);
 		}
-		if (cmd == RTM_NEWLINK && index != -1) {
+		if (cmd == RTM_NEWLINK && index) {
 			fprintf(stderr,
 				"index can be used only when creating devices.\n");
 			exit(-1);
@@ -956,10 +974,7 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 			addattr_l(&req.n, sizeof(req), IFLA_LINK, &ifindex, 4);
 		}
 
-		if (index == -1)
-			req.i.ifi_index = 0;
-		else
-			req.i.ifi_index = index;
+		req.i.ifi_index = index;
 	}
 
 	if (name) {
@@ -1006,7 +1021,7 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 		return -1;
 	}
 
-	if (rtnl_talk(&rth, &req.n, NULL, 0) < 0)
+	if (rtnl_talk(&rth, &req.n, NULL) < 0)
 		return -2;
 
 	return 0;
@@ -1020,10 +1035,7 @@ int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
 		.n.nlmsg_type = RTM_GETLINK,
 		.i.ifi_family = preferred_family,
 	};
-	struct {
-		struct nlmsghdr n;
-		char buf[32768];
-	} answer;
+	struct nlmsghdr *answer;
 
 	if (name) {
 		addattr_l(&req.n, sizeof(req),
@@ -1031,21 +1043,17 @@ int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
 	}
 	addattr32(&req.n, sizeof(req), IFLA_EXT_MASK, filt_mask);
 
-	if (rtnl_talk(&rth, &req.n, &answer.n, sizeof(answer)) < 0)
+	if (rtnl_talk(&rth, &req.n, &answer) < 0)
 		return -2;
-	if (answer.n.nlmsg_len > sizeof(answer.buf)) {
-		fprintf(stderr, "Message truncated from %u to %lu\n",
-			answer.n.nlmsg_len, sizeof(answer.buf));
-		return -2;
-	}
 
 	open_json_object(NULL);
 	if (brief)
-		print_linkinfo_brief(NULL, &answer.n, stdout, NULL);
+		print_linkinfo_brief(NULL, answer, stdout, NULL);
 	else
-		print_linkinfo(NULL, &answer.n, stdout);
+		print_linkinfo(NULL, answer, stdout);
 	close_json_object();
 
+	free(answer);
 	return 0;
 }
 

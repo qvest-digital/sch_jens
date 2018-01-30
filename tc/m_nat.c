@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <syslog.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -117,6 +116,7 @@ parse_nat(struct action_util *a, int *argc_p, char ***argv_p, int tca_id, struct
 
 	parse_action_control_dflt(&argc, &argv, &sel.action, false, TC_ACT_OK);
 
+	NEXT_ARG_FWD();
 	if (argc) {
 		if (matches(*argv, "index") == 0) {
 			NEXT_ARG();

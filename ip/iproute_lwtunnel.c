@@ -25,6 +25,7 @@
 #include "utils.h"
 #include "iproute_lwtunnel.h"
 #include "bpf_util.h"
+#include "ila_common.h"
 
 #include <linux/seg6.h>
 #include <linux/seg6_iptunnel.h>
@@ -195,7 +196,6 @@ static int read_action_type(const char *name)
 static void print_encap_seg6local(FILE *fp, struct rtattr *encap)
 {
 	struct rtattr *tb[SEG6_LOCAL_MAX + 1];
-	char ifbuf[IFNAMSIZ];
 	int action;
 
 	parse_rtattr_nested(tb, SEG6_LOCAL_MAX, encap);
@@ -228,15 +228,13 @@ static void print_encap_seg6local(FILE *fp, struct rtattr *encap)
 	if (tb[SEG6_LOCAL_IIF]) {
 		int iif = rta_getattr_u32(tb[SEG6_LOCAL_IIF]);
 
-		fprintf(fp, "iif %s ",
-			if_indextoname(iif, ifbuf) ?: "<unknown>");
+		fprintf(fp, "iif %s ", ll_index_to_name(iif));
 	}
 
 	if (tb[SEG6_LOCAL_OIF]) {
 		int oif = rta_getattr_u32(tb[SEG6_LOCAL_OIF]);
 
-		fprintf(fp, "oif %s ",
-			if_indextoname(oif, ifbuf) ?: "<unknown>");
+		fprintf(fp, "oif %s ", ll_index_to_name(oif));
 	}
 }
 
@@ -273,36 +271,10 @@ static void print_encap_ip(FILE *fp, struct rtattr *encap)
 			rt_addr_n2a_rta(AF_INET, tb[LWTUNNEL_IP_DST]));
 
 	if (tb[LWTUNNEL_IP_TTL])
-		fprintf(fp, "ttl %d ", rta_getattr_u8(tb[LWTUNNEL_IP_TTL]));
+		fprintf(fp, "ttl %u ", rta_getattr_u8(tb[LWTUNNEL_IP_TTL]));
 
 	if (tb[LWTUNNEL_IP_TOS])
 		fprintf(fp, "tos %d ", rta_getattr_u8(tb[LWTUNNEL_IP_TOS]));
-}
-
-static char *ila_csum_mode2name(__u8 csum_mode)
-{
-	switch (csum_mode) {
-	case ILA_CSUM_ADJUST_TRANSPORT:
-		return "adj-transport";
-	case ILA_CSUM_NEUTRAL_MAP:
-		return "neutral-map";
-	case ILA_CSUM_NO_ACTION:
-		return "no-action";
-	default:
-		return "unknown";
-	}
-}
-
-static int ila_csum_name2mode(char *name)
-{
-	if (strcmp(name, "adj-transport") == 0)
-		return ILA_CSUM_ADJUST_TRANSPORT;
-	else if (strcmp(name, "neutral-map") == 0)
-		return ILA_CSUM_NEUTRAL_MAP;
-	else if (strcmp(name, "no-action") == 0)
-		return ILA_CSUM_NO_ACTION;
-	else
-		return -1;
 }
 
 static void print_encap_ila(FILE *fp, struct rtattr *encap)
@@ -321,7 +293,18 @@ static void print_encap_ila(FILE *fp, struct rtattr *encap)
 
 	if (tb[ILA_ATTR_CSUM_MODE])
 		fprintf(fp, " csum-mode %s ",
-			ila_csum_mode2name(rta_getattr_u8(tb[ILA_ATTR_CSUM_MODE])));
+			ila_csum_mode2name(rta_getattr_u8(
+						tb[ILA_ATTR_CSUM_MODE])));
+
+	if (tb[ILA_ATTR_IDENT_TYPE])
+		fprintf(fp, " ident-type %s ",
+			ila_ident_type2name(rta_getattr_u8(
+						tb[ILA_ATTR_IDENT_TYPE])));
+
+	if (tb[ILA_ATTR_HOOK_TYPE])
+		fprintf(fp, " hook-type %s ",
+			ila_hook_type2name(rta_getattr_u8(
+						tb[ILA_ATTR_HOOK_TYPE])));
 }
 
 static void print_encap_ip6(FILE *fp, struct rtattr *encap)
@@ -343,7 +326,7 @@ static void print_encap_ip6(FILE *fp, struct rtattr *encap)
 			rt_addr_n2a_rta(AF_INET6, tb[LWTUNNEL_IP6_DST]));
 
 	if (tb[LWTUNNEL_IP6_HOPLIMIT])
-		fprintf(fp, "hoplimit %d ",
+		fprintf(fp, "hoplimit %u ",
 			rta_getattr_u8(tb[LWTUNNEL_IP6_HOPLIMIT]));
 
 	if (tb[LWTUNNEL_IP6_TC])
@@ -573,7 +556,7 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 			NEXT_ARG();
 			if (iif_ok++)
 				duparg2("iif", *argv);
-			iif = if_nametoindex(*argv);
+			iif = ll_name_to_index(*argv);
 			if (!iif)
 				invarg("\"iif\" interface not found\n", *argv);
 			rta_addattr32(rta, len, SEG6_LOCAL_IIF, iif);
@@ -581,7 +564,7 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 			NEXT_ARG();
 			if (oif_ok++)
 				duparg2("oif", *argv);
-			oif = if_nametoindex(*argv);
+			oif = ll_name_to_index(*argv);
 			if (!oif)
 				invarg("\"oif\" interface not found\n", *argv);
 			rta_addattr32(rta, len, SEG6_LOCAL_OIF, oif);
@@ -773,6 +756,34 @@ static int parse_encap_ila(struct rtattr *rta, size_t len,
 				     (__u8)csum_mode);
 
 			argc--; argv++;
+		} else if (strcmp(*argv, "ident-type") == 0) {
+			int ident_type;
+
+			NEXT_ARG();
+
+			ident_type = ila_ident_name2type(*argv);
+			if (ident_type < 0)
+				invarg("\"ident-type\" value is invalid\n",
+				       *argv);
+
+			rta_addattr8(rta, 1024, ILA_ATTR_IDENT_TYPE,
+				     (__u8)ident_type);
+
+			argc--; argv++;
+		} else if (strcmp(*argv, "hook-type") == 0) {
+			int hook_type;
+
+			NEXT_ARG();
+
+			hook_type = ila_hook_name2type(*argv);
+			if (hook_type < 0)
+				invarg("\"hook-type\" value is invalid\n",
+				       *argv);
+
+			rta_addattr8(rta, 1024, ILA_ATTR_HOOK_TYPE,
+				     (__u8)hook_type);
+
+			argc--; argv++;
 		} else {
 			break;
 		}
@@ -872,6 +883,7 @@ static int lwt_parse_bpf(struct rtattr *rta, size_t len,
 			 int attr, const enum bpf_prog_type bpf_type)
 {
 	struct bpf_cfg_in cfg = {
+		.type = bpf_type,
 		.argc = *argcp,
 		.argv = *argvp,
 	};
@@ -883,7 +895,7 @@ static int lwt_parse_bpf(struct rtattr *rta, size_t len,
 	int err;
 
 	nest = rta_nest(rta, len, attr);
-	err = bpf_parse_common(bpf_type, &cfg, &bpf_cb_ops, &x);
+	err = bpf_parse_and_load_common(&cfg, &bpf_cb_ops, &x);
 	if (err < 0) {
 		fprintf(stderr, "Failed to parse eBPF program: %s\n",
 			strerror(-err));

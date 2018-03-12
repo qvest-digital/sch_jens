@@ -1,3 +1,10 @@
+iproute2 (4.15.0-3) unstable; urgency=medium
+
+  * Backport 0005-revert-flush-default.patch to fix ip route flush all
+    (Closes: #891511)
+
+ -- Luca Boccassi <bluca@debian.org>  Mon, 12 Mar 2018 22:46:24 +0000
+
 iproute2 (4.15.0-2) unstable; urgency=medium
 
   * Update upstream git repository URL. (Closes: #888804)

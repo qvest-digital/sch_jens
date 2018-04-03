@@ -30,7 +30,7 @@ static const char *caps_to_str(uint32_t idx)
 	x(PKEY_NVRAM, 8) \
 	x(LED_INFO, 9) \
 	x(SM_DISABLED, 10) \
-	x(SYS_IMAGE_GUIG, 11) \
+	x(SYS_IMAGE_GUID, 11) \
 	x(PKEY_SW_EXT_PORT_TRAP, 12) \
 	x(EXTENDED_SPEEDS, 14) \
 	x(CM, 16) \
@@ -277,56 +277,15 @@ static int link_one_show(struct rd *rd)
 		{ 0 }
 	};
 
+	if (!rd->port_idx)
+		return 0;
+
 	return rd_exec_cmd(rd, cmds, "parameter");
 }
 
 static int link_show(struct rd *rd)
 {
-	struct dev_map *dev_map;
-	uint32_t port;
-	int ret = 0;
-
-	if (rd->json_output)
-		jsonw_start_array(rd->jw);
-	if (rd_no_arg(rd)) {
-		list_for_each_entry(dev_map, &rd->dev_map_list, list) {
-			rd->dev_idx = dev_map->idx;
-			for (port = 1; port < dev_map->num_ports + 1; port++) {
-				rd->port_idx = port;
-				ret = link_one_show(rd);
-				if (ret)
-					goto out;
-			}
-		}
-
-	} else {
-		dev_map = dev_map_lookup(rd, true);
-		port = get_port_from_argv(rd);
-		if (!dev_map || port > dev_map->num_ports) {
-			pr_err("Wrong device name\n");
-			ret = -ENOENT;
-			goto out;
-		}
-		rd_arg_inc(rd);
-		rd->dev_idx = dev_map->idx;
-		rd->port_idx = port ? : 1;
-		for (; rd->port_idx < dev_map->num_ports + 1; rd->port_idx++) {
-			ret = link_one_show(rd);
-			if (ret)
-				goto out;
-			if (port)
-				/*
-				 * We got request to show link for devname
-				 * with port index.
-				 */
-				break;
-		}
-	}
-
-out:
-	if (rd->json_output)
-		jsonw_end_array(rd->jw);
-	return ret;
+	return rd_exec_link(rd, link_one_show, true);
 }
 
 int cmd_link(struct rd *rd)

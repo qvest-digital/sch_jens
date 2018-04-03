@@ -78,7 +78,7 @@ static void usage(void)
 	fprintf(stderr, "          bridge | bond | ipoib | ip6tnl | ipip | sit | vxlan | lowpan |\n");
 	fprintf(stderr, "          gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan | vti |\n");
 	fprintf(stderr, "          nlmon | can | bond_slave | ipvlan | geneve | bridge_slave |\n");
-	fprintf(stderr, "          hsr | macsec\n");
+	fprintf(stderr, "          hsr | macsec | netdevsim\n");
 
 	exit(-1);
 }
@@ -417,10 +417,10 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 	}
 
 	if (vf_tx_rate->rate)
-		print_int(PRINT_ANY,
-			  "tx_rate",
-			  ", tx rate %d (Mbps)",
-			  vf_tx_rate->rate);
+		print_uint(PRINT_ANY,
+			   "tx_rate",
+			   ", tx rate %u (Mbps)",
+			   vf_tx_rate->rate);
 
 	if (vf[IFLA_VF_RATE]) {
 		struct ifla_vf_rate *vf_rate = RTA_DATA(vf[IFLA_VF_RATE]);
@@ -429,14 +429,14 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 
 		if (is_json_context()) {
 			open_json_object("rate");
-			print_int(PRINT_JSON, "max_tx", NULL, max_tx);
-			print_int(PRINT_ANY, "min_tx", NULL, min_tx);
+			print_uint(PRINT_JSON, "max_tx", NULL, max_tx);
+			print_uint(PRINT_ANY, "min_tx", NULL, min_tx);
 			close_json_object();
 		} else {
 			if (max_tx)
-				fprintf(fp, ", max_tx_rate %dMbps", max_tx);
+				fprintf(fp, ", max_tx_rate %uMbps", max_tx);
 			if (min_tx)
-				fprintf(fp, ", min_tx_rate %dMbps", min_tx);
+				fprintf(fp, ", min_tx_rate %uMbps", min_tx);
 		}
 	}
 
@@ -1523,17 +1523,11 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 		if (fnmatch(filter.label, label, 0) != 0)
 			return 0;
 	}
-	if (filter.pfx.family) {
-		if (rta_tb[IFA_LOCAL]) {
-			inet_prefix dst = { .family = ifa->ifa_family };
-
-			memcpy(&dst.data, RTA_DATA(rta_tb[IFA_LOCAL]), RTA_PAYLOAD(rta_tb[IFA_LOCAL]));
-			if (inet_addr_match(&dst, &filter.pfx, filter.pfx.bitlen))
-				return 0;
-		}
-	}
 
 	if (filter.family && filter.family != ifa->ifa_family)
+		return 0;
+
+	if (inet_addr_match_rta(&filter.pfx, rta_tb[IFA_LOCAL]))
 		return 0;
 
 	if (filter.flushb) {
@@ -1889,18 +1883,12 @@ static void ipaddr_filter(struct nlmsg_chain *linfo, struct nlmsg_chain *ainfo)
 			if ((filter.flags ^ ifa_flags) & filter.flagmask)
 				continue;
 			if (filter.pfx.family || filter.label) {
-				if (!tb[IFA_LOCAL])
-					tb[IFA_LOCAL] = tb[IFA_ADDRESS];
+				struct rtattr *rta =
+					tb[IFA_LOCAL] ? : tb[IFA_ADDRESS];
 
-				if (filter.pfx.family && tb[IFA_LOCAL]) {
-					inet_prefix dst = {
-						.family = ifa->ifa_family
-					};
+				if (inet_addr_match_rta(&filter.pfx, rta))
+					continue;
 
-					memcpy(&dst.data, RTA_DATA(tb[IFA_LOCAL]), RTA_PAYLOAD(tb[IFA_LOCAL]));
-					if (inet_addr_match(&dst, &filter.pfx, filter.pfx.bitlen))
-						continue;
-				}
 				if (filter.label) {
 					SPRINT_BUF(b1);
 					const char *label;
@@ -2072,7 +2060,8 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	while (argc > 0) {
 		if (strcmp(*argv, "to") == 0) {
 			NEXT_ARG();
-			get_prefix(&filter.pfx, *argv, filter.family);
+			if (get_prefix(&filter.pfx, *argv, filter.family))
+				invarg("invalid \"to\"\n", *argv);
 			if (filter.family == AF_UNSPEC)
 				filter.family = filter.pfx.family;
 		} else if (strcmp(*argv, "scope") == 0) {

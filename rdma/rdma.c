@@ -15,7 +15,7 @@
 static void help(char *name)
 {
 	pr_out("Usage: %s [ OPTIONS ] OBJECT { COMMAND | help }\n"
-	       "where  OBJECT := { dev | link | help }\n"
+	       "where  OBJECT := { dev | link | resource | help }\n"
 	       "       OPTIONS := { -V[ersion] | -d[etails] | -j[son] | -p[retty]}\n", name);
 }
 
@@ -32,6 +32,7 @@ static int rd_cmd(struct rd *rd)
 		{ "help",	cmd_help },
 		{ "dev",	cmd_dev },
 		{ "link",	cmd_link },
+		{ "resource",	cmd_res },
 		{ 0 }
 	};
 
@@ -47,6 +48,7 @@ static int rd_init(struct rd *rd, int argc, char **argv, char *filename)
 	rd->argc = argc;
 	rd->argv = argv;
 	INIT_LIST_HEAD(&rd->dev_map_list);
+	INIT_LIST_HEAD(&rd->filter_list);
 
 	if (rd->json_output) {
 		rd->jw = jsonw_new(stdout);
@@ -70,12 +72,11 @@ static int rd_init(struct rd *rd, int argc, char **argv, char *filename)
 	return rd_recv_msg(rd, rd_dev_init_cb, rd, seq);
 }
 
-static void rd_free(struct rd *rd)
+static void rd_cleanup(struct rd *rd)
 {
 	if (rd->json_output)
 		jsonw_destroy(&rd->jw);
-	free(rd->buff);
-	rd_free_devmap(rd);
+	rd_free(rd);
 }
 
 int main(int argc, char **argv)
@@ -138,6 +139,6 @@ int main(int argc, char **argv)
 	err = rd_cmd(&rd);
 out:
 	/* Always cleanup */
-	rd_free(&rd);
+	rd_cleanup(&rd);
 	return err ? EXIT_FAILURE : EXIT_SUCCESS;
 }

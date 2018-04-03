@@ -64,7 +64,7 @@ int tnl_get_ioctl(const char *basedev, void *p)
 	int fd;
 	int err;
 
-	strncpy(ifr.ifr_name, basedev, IFNAMSIZ);
+	strlcpy(ifr.ifr_name, basedev, IFNAMSIZ);
 	ifr.ifr_ifru.ifru_data = (void *)p;
 
 	fd = socket(preferred_family, SOCK_DGRAM, 0);
@@ -89,9 +89,9 @@ int tnl_add_ioctl(int cmd, const char *basedev, const char *name, void *p)
 	int err;
 
 	if (cmd == SIOCCHGTUNNEL && name[0])
-		strncpy(ifr.ifr_name, name, IFNAMSIZ);
+		strlcpy(ifr.ifr_name, name, IFNAMSIZ);
 	else
-		strncpy(ifr.ifr_name, basedev, IFNAMSIZ);
+		strlcpy(ifr.ifr_name, basedev, IFNAMSIZ);
 	ifr.ifr_ifru.ifru_data = p;
 
 	fd = socket(preferred_family, SOCK_DGRAM, 0);
@@ -115,9 +115,9 @@ int tnl_del_ioctl(const char *basedev, const char *name, void *p)
 	int err;
 
 	if (name[0])
-		strncpy(ifr.ifr_name, name, IFNAMSIZ);
+		strlcpy(ifr.ifr_name, name, IFNAMSIZ);
 	else
-		strncpy(ifr.ifr_name, basedev, IFNAMSIZ);
+		strlcpy(ifr.ifr_name, basedev, IFNAMSIZ);
 
 	ifr.ifr_ifru.ifru_data = p;
 
@@ -142,7 +142,7 @@ static int tnl_gen_ioctl(int cmd, const char *name,
 	int fd;
 	int err;
 
-	strncpy(ifr.ifr_name, name, IFNAMSIZ);
+	strlcpy(ifr.ifr_name, name, IFNAMSIZ);
 	ifr.ifr_ifru.ifru_data = p;
 
 	fd = socket(preferred_family, SOCK_DGRAM, 0);
@@ -277,6 +277,33 @@ void tnl_print_encap(struct rtattr *tb[],
 		t = flags & TUNNEL_ENCAP_FLAG_REMCSUM;
 		print_string(PRINT_FP, NULL, "%s",
 			     tnl_encap_str("remcsum", t, -1));
+	}
+}
+
+void tnl_print_endpoint(const char *name, const struct rtattr *rta, int family)
+{
+	const char *value;
+	inet_prefix dst;
+
+	if (!rta) {
+		value = "any";
+	} else if (get_addr_rta(&dst, rta, family)) {
+		value = "unknown";
+	} else if (dst.flags & ADDRTYPE_UNSPEC) {
+		value = "any";
+	} else {
+		value = format_host(family, dst.bytelen, dst.data);
+		if (!value)
+			value = "unknown";
+	}
+
+	if (is_json_context()) {
+		print_string(PRINT_JSON, name, NULL, value);
+	} else {
+		SPRINT_BUF(b1);
+
+		snprintf(b1, sizeof(b1), "%s %%s ", name);
+		print_string(PRINT_FP, NULL, b1, value);
 	}
 }
 

@@ -1208,7 +1208,7 @@ static int bpf_log_realloc(struct bpf_elf_ctx *ctx)
 
 static int bpf_map_create(enum bpf_map_type type, uint32_t size_key,
 			  uint32_t size_value, uint32_t max_elem,
-			  uint32_t flags, int inner_fd)
+			  uint32_t flags, int inner_fd, uint32_t ifindex)
 {
 	union bpf_attr attr = {};
 
@@ -1218,6 +1218,7 @@ static int bpf_map_create(enum bpf_map_type type, uint32_t size_key,
 	attr.max_entries = max_elem;
 	attr.map_flags = flags;
 	attr.inner_map_fd = inner_fd;
+	attr.map_ifindex = ifindex;
 
 	return bpf(BPF_MAP_CREATE, &attr, sizeof(attr));
 }
@@ -1632,7 +1633,9 @@ static int bpf_map_attach(const char *name, struct bpf_elf_ctx *ctx,
 
 	errno = 0;
 	fd = bpf_map_create(map->type, map->size_key, map->size_value,
-			    map->max_elem, map->flags, map_inner_fd);
+			    map->max_elem, map->flags, map_inner_fd,
+			    ctx->ifindex);
+
 	if (fd < 0 || ctx->verbose) {
 		bpf_map_report(fd, name, map, ctx, map_inner_fd);
 		if (fd < 0)
@@ -2036,6 +2039,7 @@ static int bpf_apply_relo_data(struct bpf_elf_ctx *ctx,
 		    insns[ioff].code != (BPF_LD | BPF_IMM | BPF_DW)) {
 			fprintf(stderr, "ELF contains relo data for non ld64 instruction at offset %u! Compiler bug?!\n",
 				ioff);
+			fprintf(stderr, " - Current section: %s\n", data_relo->sec_name);
 			if (ioff < num_insns &&
 			    insns[ioff].code == (BPF_JMP | BPF_CALL))
 				fprintf(stderr, " - Try to annotate functions with always_inline attribute!\n");
@@ -2589,7 +2593,7 @@ bpf_map_set_send(int fd, struct sockaddr_un *addr, unsigned int addr_len,
 	char *amsg_buf;
 	int i;
 
-	strncpy(msg.aux.obj_name, aux->obj, sizeof(msg.aux.obj_name));
+	strlcpy(msg.aux.obj_name, aux->obj, sizeof(msg.aux.obj_name));
 	memcpy(&msg.aux.obj_st, aux->st, sizeof(msg.aux.obj_st));
 
 	cmsg_buf = bpf_map_set_init(&msg, addr, addr_len);
@@ -2678,7 +2682,7 @@ int bpf_send_map_fds(const char *path, const char *obj)
 		return -1;
 	}
 
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path));
+	strlcpy(addr.sun_path, path, sizeof(addr.sun_path));
 
 	ret = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
 	if (ret < 0) {
@@ -2711,7 +2715,7 @@ int bpf_recv_map_fds(const char *path, int *fds, struct bpf_map_aux *aux,
 		return -1;
 	}
 
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path));
+	strlcpy(addr.sun_path, path, sizeof(addr.sun_path));
 
 	ret = bind(fd, (struct sockaddr *)&addr, sizeof(addr));
 	if (ret < 0) {

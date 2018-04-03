@@ -52,7 +52,11 @@ static void print_usage(FILE *f)
 		"                                  [ [no]encap-csum ]\n"
 		"                                  [ [no]encap-csum6 ]\n"
 		"                                  [ [no]encap-remcsum ]\n"
+		"                                  [ erspan_ver version ]\n"
 		"                                  [ erspan IDX ]\n"
+		"                                  [ erspan_dir { ingress | egress } ]\n"
+		"                                  [ erspan_hwid hwid ]\n"
+		"                                  [ external ]\n"
 		"\n"
 		"Where: ADDR      := IPV6_ADDRESS\n"
 		"       TTL       := { 0..255 } (default=%d)\n"
@@ -105,9 +109,13 @@ static int gre_parse_opt(struct link_util *lu, int argc, char **argv,
 	__u16 encapflags = TUNNEL_ENCAP_FLAG_CSUM6;
 	__u16 encapsport = 0;
 	__u16 encapdport = 0;
+	__u8 metadata = 0;
 	int len;
 	__u32 fwmark = 0;
 	__u32 erspan_idx = 0;
+	__u8 erspan_ver = 0;
+	__u8 erspan_dir = 0;
+	__u16 erspan_hwid = 0;
 
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
 		if (rtnl_talk(&rth, &req.n, &answer) < 0) {
@@ -177,6 +185,9 @@ get_failed:
 		if (greinfo[IFLA_GRE_ENCAP_SPORT])
 			encapsport = rta_getattr_u16(greinfo[IFLA_GRE_ENCAP_SPORT]);
 
+		if (greinfo[IFLA_GRE_COLLECT_METADATA])
+			metadata = 1;
+
 		if (greinfo[IFLA_GRE_ENCAP_DPORT])
 			encapdport = rta_getattr_u16(greinfo[IFLA_GRE_ENCAP_DPORT]);
 
@@ -185,6 +196,15 @@ get_failed:
 
 		if (greinfo[IFLA_GRE_ERSPAN_INDEX])
 			erspan_idx = rta_getattr_u32(greinfo[IFLA_GRE_ERSPAN_INDEX]);
+
+		if (greinfo[IFLA_GRE_ERSPAN_VER])
+			erspan_ver = rta_getattr_u8(greinfo[IFLA_GRE_ERSPAN_VER]);
+
+		if (greinfo[IFLA_GRE_ERSPAN_DIR])
+			erspan_dir = rta_getattr_u8(greinfo[IFLA_GRE_ERSPAN_DIR]);
+
+		if (greinfo[IFLA_GRE_ERSPAN_HWID])
+			erspan_hwid = rta_getattr_u16(greinfo[IFLA_GRE_ERSPAN_HWID]);
 
 		free(answer);
 	}
@@ -316,6 +336,8 @@ get_failed:
 			encapflags |= TUNNEL_ENCAP_FLAG_REMCSUM;
 		} else if (strcmp(*argv, "noencap-remcsum") == 0) {
 			encapflags &= ~TUNNEL_ENCAP_FLAG_REMCSUM;
+		} else if (strcmp(*argv, "external") == 0) {
+			metadata = 1;
 		} else if (strcmp(*argv, "fwmark") == 0) {
 			NEXT_ARG();
 			if (strcmp(*argv, "inherit") == 0) {
@@ -344,31 +366,62 @@ get_failed:
 				invarg("invalid erspan index\n", *argv);
 			if (erspan_idx & ~((1<<20) - 1) || erspan_idx == 0)
 				invarg("erspan index must be > 0 and <= 20-bit\n", *argv);
+		} else if (strcmp(*argv, "erspan_ver") == 0) {
+			NEXT_ARG();
+			if (get_u8(&erspan_ver, *argv, 0))
+				invarg("invalid erspan version\n", *argv);
+			if (erspan_ver != 1 && erspan_ver != 2)
+				invarg("erspan version must be 1 or 2\n", *argv);
+		} else if (strcmp(*argv, "erspan_dir") == 0) {
+			NEXT_ARG();
+			if (matches(*argv, "ingress") == 0)
+				erspan_dir = 0;
+			else if (matches(*argv, "egress") == 0)
+				erspan_dir = 1;
+			else
+				invarg("Invalid erspan direction.", *argv);
+		} else if (strcmp(*argv, "erspan_hwid") == 0) {
+			NEXT_ARG();
+			if (get_u16(&erspan_hwid, *argv, 0))
+				invarg("invalid erspan hwid\n", *argv);
 		} else
 			usage();
 		argc--; argv++;
 	}
 
-	addattr32(n, 1024, IFLA_GRE_IKEY, ikey);
-	addattr32(n, 1024, IFLA_GRE_OKEY, okey);
-	addattr_l(n, 1024, IFLA_GRE_IFLAGS, &iflags, 2);
-	addattr_l(n, 1024, IFLA_GRE_OFLAGS, &oflags, 2);
-	addattr_l(n, 1024, IFLA_GRE_LOCAL, &laddr, sizeof(laddr));
-	addattr_l(n, 1024, IFLA_GRE_REMOTE, &raddr, sizeof(raddr));
-	if (link)
-		addattr32(n, 1024, IFLA_GRE_LINK, link);
-	addattr_l(n, 1024, IFLA_GRE_TTL, &hop_limit, 1);
-	addattr_l(n, 1024, IFLA_GRE_ENCAP_LIMIT, &encap_limit, 1);
-	addattr_l(n, 1024, IFLA_GRE_FLOWINFO, &flowinfo, 4);
-	addattr32(n, 1024, IFLA_GRE_FLAGS, flags);
-	addattr32(n, 1024, IFLA_GRE_FWMARK, fwmark);
-	if (erspan_idx != 0)
-		addattr32(n, 1024, IFLA_GRE_ERSPAN_INDEX, erspan_idx);
-
-	addattr16(n, 1024, IFLA_GRE_ENCAP_TYPE, encaptype);
-	addattr16(n, 1024, IFLA_GRE_ENCAP_FLAGS, encapflags);
-	addattr16(n, 1024, IFLA_GRE_ENCAP_SPORT, htons(encapsport));
-	addattr16(n, 1024, IFLA_GRE_ENCAP_DPORT, htons(encapdport));
+	if (!metadata) {
+		addattr32(n, 1024, IFLA_GRE_IKEY, ikey);
+		addattr32(n, 1024, IFLA_GRE_OKEY, okey);
+		addattr_l(n, 1024, IFLA_GRE_IFLAGS, &iflags, 2);
+		addattr_l(n, 1024, IFLA_GRE_OFLAGS, &oflags, 2);
+		addattr_l(n, 1024, IFLA_GRE_LOCAL, &laddr, sizeof(laddr));
+		addattr_l(n, 1024, IFLA_GRE_REMOTE, &raddr, sizeof(raddr));
+		if (link)
+			addattr32(n, 1024, IFLA_GRE_LINK, link);
+		addattr_l(n, 1024, IFLA_GRE_TTL, &hop_limit, 1);
+		addattr_l(n, 1024, IFLA_GRE_ENCAP_LIMIT, &encap_limit, 1);
+		addattr_l(n, 1024, IFLA_GRE_FLOWINFO, &flowinfo, 4);
+		addattr32(n, 1024, IFLA_GRE_FLAGS, flags);
+		addattr32(n, 1024, IFLA_GRE_FWMARK, fwmark);
+		if (erspan_ver) {
+			addattr8(n, 1024, IFLA_GRE_ERSPAN_VER, erspan_ver);
+			if (erspan_ver == 1 && erspan_idx != 0) {
+				addattr32(n, 1024,
+					  IFLA_GRE_ERSPAN_INDEX, erspan_idx);
+			} else if (erspan_ver == 2) {
+				addattr8(n, 1024,
+					 IFLA_GRE_ERSPAN_DIR, erspan_dir);
+				addattr16(n, 1024,
+					  IFLA_GRE_ERSPAN_HWID, erspan_hwid);
+			}
+		}
+		addattr16(n, 1024, IFLA_GRE_ENCAP_TYPE, encaptype);
+		addattr16(n, 1024, IFLA_GRE_ENCAP_FLAGS, encapflags);
+		addattr16(n, 1024, IFLA_GRE_ENCAP_SPORT, htons(encapsport));
+		addattr16(n, 1024, IFLA_GRE_ENCAP_DPORT, htons(encapdport));
+	} else {
+		addattr_l(n, 1024, IFLA_GRE_COLLECT_METADATA, NULL, 0);
+	}
 
 	return 0;
 }
@@ -376,17 +429,19 @@ get_failed:
 static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 {
 	char s2[64];
-	const char *local = "any";
-	const char *remote = "any";
 	unsigned int iflags = 0;
 	unsigned int oflags = 0;
 	unsigned int flags = 0;
 	__u32 flowinfo = 0;
-	struct in6_addr in6_addr_any = IN6ADDR_ANY_INIT;
 	__u8 ttl = 0;
 
 	if (!tb)
 		return;
+
+	if (tb[IFLA_GRE_COLLECT_METADATA]) {
+		print_bool(PRINT_ANY, "external", "external", true);
+		return;
+	}
 
 	if (tb[IFLA_GRE_FLAGS])
 		flags = rta_getattr_u32(tb[IFLA_GRE_FLAGS]);
@@ -394,27 +449,8 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 	if (tb[IFLA_GRE_FLOWINFO])
 		flowinfo = rta_getattr_u32(tb[IFLA_GRE_FLOWINFO]);
 
-	if (tb[IFLA_GRE_REMOTE]) {
-		struct in6_addr addr;
-
-		memcpy(&addr, RTA_DATA(tb[IFLA_GRE_REMOTE]), sizeof(addr));
-
-		if (memcmp(&addr, &in6_addr_any, sizeof(addr)))
-			remote = format_host(AF_INET6, sizeof(addr), &addr);
-	}
-
-	print_string(PRINT_ANY, "remote", "remote %s ", remote);
-
-	if (tb[IFLA_GRE_LOCAL]) {
-		struct in6_addr addr;
-
-		memcpy(&addr, RTA_DATA(tb[IFLA_GRE_LOCAL]), sizeof(addr));
-
-		if (memcmp(&addr, &in6_addr_any, sizeof(addr)))
-			local = format_host(AF_INET6, sizeof(addr), &addr);
-	}
-
-	print_string(PRINT_ANY, "local", "local %s ", local);
+	tnl_print_endpoint("remote", tb[IFLA_GRE_REMOTE], AF_INET6);
+	tnl_print_endpoint("local", tb[IFLA_GRE_LOCAL], AF_INET6);
 
 	if (tb[IFLA_GRE_LINK]) {
 		unsigned int link = rta_getattr_u32(tb[IFLA_GRE_LINK]);
@@ -514,9 +550,31 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 	if (tb[IFLA_GRE_ERSPAN_INDEX]) {
 		__u32 erspan_idx = rta_getattr_u32(tb[IFLA_GRE_ERSPAN_INDEX]);
-
 		print_uint(PRINT_ANY,
 			   "erspan_index", "erspan_index %u ", erspan_idx);
+	}
+
+	if (tb[IFLA_GRE_ERSPAN_VER]) {
+		__u8 erspan_ver = rta_getattr_u8(tb[IFLA_GRE_ERSPAN_VER]);
+
+		print_uint(PRINT_ANY, "erspan_ver", "erspan_ver %u ", erspan_ver);
+	}
+
+	if (tb[IFLA_GRE_ERSPAN_DIR]) {
+		__u8 erspan_dir = rta_getattr_u8(tb[IFLA_GRE_ERSPAN_DIR]);
+
+		if (erspan_dir == 0)
+			print_string(PRINT_ANY, "erspan_dir",
+				     "erspan_dir ingress ", NULL);
+		else
+			print_string(PRINT_ANY, "erspan_dir",
+				     "erspan_dir egress ", NULL);
+	}
+
+	if (tb[IFLA_GRE_ERSPAN_HWID]) {
+		__u16 erspan_hwid = rta_getattr_u16(tb[IFLA_GRE_ERSPAN_HWID]);
+
+		print_hex(PRINT_ANY, "erspan_hwid", "erspan_hwid 0x%x ", erspan_hwid);
 	}
 
 	tnl_print_encap(tb,
@@ -527,7 +585,7 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 }
 
 static void gre_print_help(struct link_util *lu, int argc, char **argv,
-	FILE *f)
+			   FILE *f)
 {
 	print_usage(f);
 }

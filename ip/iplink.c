@@ -39,6 +39,14 @@
 #define LIBDIR "/usr/lib"
 #endif
 
+#ifndef GSO_MAX_SIZE
+#define GSO_MAX_SIZE		65536
+#endif
+#ifndef GSO_MAX_SEGS
+#define GSO_MAX_SEGS		65535
+#endif
+
+
 static void usage(void) __attribute__((noreturn));
 static int iplink_have_newlink(void);
 
@@ -97,7 +105,8 @@ void iplink_usage(void)
 		"			  [ master DEVICE ][ vrf NAME ]\n"
 		"			  [ nomaster ]\n"
 		"			  [ addrgenmode { eui64 | none | stable_secret | random } ]\n"
-		"	                  [ protodown { on | off } ]\n"
+		"			  [ protodown { on | off } ]\n"
+		"			  [ gso_max_size BYTES ] | [ gso_max_segs PACKETS ]\n"
 		"\n"
 		"       ip link show [ DEVICE | group GROUP ] [up] [master DEV] [vrf NAME] [type TYPE]\n");
 
@@ -113,7 +122,7 @@ void iplink_usage(void)
 			"          bridge | bond | team | ipoib | ip6tnl | ipip | sit | vxlan |\n"
 			"          gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan |\n"
 			"          vti | nlmon | team_slave | bond_slave | ipvlan | geneve |\n"
-			"          bridge_slave | vrf | macsec }\n");
+			"          bridge_slave | vrf | macsec | netdevsim }\n");
 	}
 	exit(-1);
 }
@@ -267,8 +276,9 @@ static int nl_get_ll_addr_len(unsigned int dev_index)
 		return -1;
 	}
 
+	len = RTA_PAYLOAD(tb[IFLA_ADDRESS]);
 	free(answer);
-	return RTA_PAYLOAD(tb[IFLA_ADDRESS]);
+	return len;
 }
 
 static void iplink_parse_vf_vlan_info(int vf, int *argcp, char ***argvp,
@@ -861,6 +871,26 @@ int iplink_parse(int argc, char **argv, struct iplink_req *req,
 				return on_off("protodown", *argv);
 			addattr8(&req->n, sizeof(*req), IFLA_PROTO_DOWN,
 				 proto_down);
+		} else if (strcmp(*argv, "gso_max_size") == 0) {
+			unsigned int max_size;
+
+			NEXT_ARG();
+			if (get_unsigned(&max_size, *argv, 0) ||
+			    max_size > GSO_MAX_SIZE)
+				invarg("Invalid \"gso_max_size\" value\n",
+				       *argv);
+			addattr32(&req->n, sizeof(*req),
+				  IFLA_GSO_MAX_SIZE, max_size);
+		} else if (strcmp(*argv, "gso_max_segs") == 0) {
+			unsigned int max_segs;
+
+			NEXT_ARG();
+			if (get_unsigned(&max_segs, *argv, 0) ||
+			    max_segs > GSO_MAX_SEGS)
+				invarg("Invalid \"gso_max_segs\" value\n",
+				       *argv);
+			addattr32(&req->n, sizeof(*req),
+				  IFLA_GSO_MAX_SEGS, max_segs);
 		} else {
 			if (matches(*argv, "help") == 0)
 				usage();
@@ -1084,7 +1114,7 @@ static int do_chflags(const char *dev, __u32 flags, __u32 mask)
 	int fd;
 	int err;
 
-	strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+	strlcpy(ifr.ifr_name, dev, IFNAMSIZ);
 	fd = get_ctl_fd();
 	if (fd < 0)
 		return -1;
@@ -1111,8 +1141,8 @@ static int do_changename(const char *dev, const char *newdev)
 	int fd;
 	int err;
 
-	strncpy(ifr.ifr_name, dev, IFNAMSIZ);
-	strncpy(ifr.ifr_newname, newdev, IFNAMSIZ);
+	strlcpy(ifr.ifr_name, dev, IFNAMSIZ);
+	strlcpy(ifr.ifr_newname, newdev, IFNAMSIZ);
 	fd = get_ctl_fd();
 	if (fd < 0)
 		return -1;
@@ -1135,7 +1165,7 @@ static int set_qlen(const char *dev, int qlen)
 	if (s < 0)
 		return -1;
 
-	strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+	strlcpy(ifr.ifr_name, dev, IFNAMSIZ);
 	if (ioctl(s, SIOCSIFTXQLEN, &ifr) < 0) {
 		perror("SIOCSIFXQLEN");
 		close(s);
@@ -1155,7 +1185,7 @@ static int set_mtu(const char *dev, int mtu)
 	if (s < 0)
 		return -1;
 
-	strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+	strlcpy(ifr.ifr_name, dev, IFNAMSIZ);
 	if (ioctl(s, SIOCSIFMTU, &ifr) < 0) {
 		perror("SIOCSIFMTU");
 		close(s);
@@ -1182,7 +1212,7 @@ static int get_address(const char *dev, int *htype)
 		return -1;
 	}
 
-	strncpy(ifr.ifr_name, dev, IFNAMSIZ);
+	strlcpy(ifr.ifr_name, dev, IFNAMSIZ);
 	if (ioctl(s, SIOCGIFINDEX, &ifr) < 0) {
 		perror("SIOCGIFINDEX");
 		close(s);
@@ -1213,7 +1243,7 @@ static int parse_address(const char *dev, int hatype, int halen,
 	int alen;
 
 	memset(ifr, 0, sizeof(*ifr));
-	strncpy(ifr->ifr_name, dev, IFNAMSIZ);
+	strlcpy(ifr->ifr_name, dev, IFNAMSIZ);
 	ifr->ifr_hwaddr.sa_family = hatype;
 	alen = ll_addr_a2n(ifr->ifr_hwaddr.sa_data, 14, lla);
 	if (alen < 0)

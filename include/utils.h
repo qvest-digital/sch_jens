@@ -54,7 +54,40 @@ typedef struct
 	__u32 data[64];
 } inet_prefix;
 
-#define PREFIXLEN_SPECIFIED 1
+enum {
+	PREFIXLEN_SPECIFIED	= (1 << 0),
+	ADDRTYPE_INET		= (1 << 1),
+	ADDRTYPE_UNSPEC		= (1 << 2),
+	ADDRTYPE_MULTI		= (1 << 3),
+
+	ADDRTYPE_INET_UNSPEC	= ADDRTYPE_INET | ADDRTYPE_UNSPEC,
+	ADDRTYPE_INET_MULTI	= ADDRTYPE_INET | ADDRTYPE_MULTI
+};
+
+static inline bool is_addrtype_inet(const inet_prefix *p)
+{
+	return p->flags & ADDRTYPE_INET;
+}
+
+static inline bool is_addrtype_inet_unspec(const inet_prefix *p)
+{
+	return (p->flags & ADDRTYPE_INET_UNSPEC) == ADDRTYPE_INET_UNSPEC;
+}
+
+static inline bool is_addrtype_inet_multi(const inet_prefix *p)
+{
+	return (p->flags & ADDRTYPE_INET_MULTI) == ADDRTYPE_INET_MULTI;
+}
+
+static inline bool is_addrtype_inet_not_unspec(const inet_prefix *p)
+{
+	return (p->flags & ADDRTYPE_INET_UNSPEC) == ADDRTYPE_INET;
+}
+
+static inline bool is_addrtype_inet_not_multi(const inet_prefix *p)
+{
+	return (p->flags & ADDRTYPE_INET_MULTI) == ADDRTYPE_INET;
+}
 
 #define DN_MAXADDL 20
 #ifndef AF_DECnet
@@ -87,6 +120,7 @@ int get_prefix_1(inet_prefix *dst, char *arg, int family);
 int get_addr(inet_prefix *dst, const char *arg, int family);
 int get_prefix(inet_prefix *dst, char *arg, int family);
 int mask2bits(__u32 netmask);
+int get_addr_rta(inet_prefix *dst, const struct rtattr *rta, int family);
 int get_addr_ila(__u64 *val, const char *arg);
 
 int read_prop(const char *dev, char *prop, long *value);
@@ -141,6 +175,7 @@ int check_ifname(const char *);
 int get_ifname(char *, const char *);
 int matches(const char *arg, const char *pattern);
 int inet_addr_match(const inet_prefix *a, const inet_prefix *b, int bits);
+int inet_addr_match_rta(const inet_prefix *m, const struct rtattr *rta);
 
 const char *dnet_ntop(int af, const void *addr, char *str, size_t len);
 int dnet_pton(int af, const char *src, void *addr);
@@ -236,7 +271,6 @@ void print_nlmsg_timestamp(FILE *fp, const struct nlmsghdr *n);
 extern int cmdlineno;
 ssize_t getcmdline(char **line, size_t *len, FILE *in);
 int makeargs(char *line, char *argv[], int maxargs);
-int inet_get_addr(const char *src, __u32 *dst, struct in6_addr *dst6);
 
 struct iplink_req {
 	struct nlmsghdr		n;
@@ -264,5 +298,7 @@ int get_command_name(const char *pid, char *comm, size_t len);
 size_t strlcpy(char *dst, const char *src, size_t size);
 size_t strlcat(char *dst, const char *src, size_t size);
 #endif
+
+void drop_cap(void);
 
 #endif /* __UTILS_H__ */

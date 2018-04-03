@@ -12,6 +12,7 @@ Build-Depends: bison,
                flex,
                iptables-dev,
                libatm1-dev,
+               libcap-dev,
                libdb-dev,
                libelf-dev,
                libmnl-dev,
@@ -26,7 +27,7 @@ Architecture: any
 Provides: arpd
 Conflicts: arpd, iproute (<< 20130000-1)
 Replaces: iproute
-Depends: ${misc:Depends}, ${shlibs:Depends}
+Depends: ${misc:Depends}, ${shlibs:Depends}, libcap2-bin,
 Recommends: ${ipmods:Recommends}
 Suggests: iproute2-doc
 Multi-Arch: foreign

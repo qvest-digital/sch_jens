@@ -1,3 +1,14 @@
+iproute2 (4.16.0-1) UNRELEASED; urgency=medium
+
+  * Merge tag 'upstream/4.16.0'
+  * Drop 0005-revert-flush-default.patch, fixed upstream.
+  * Build-Depend on libcap-dev and Depend on libcap-bin.
+    If capabilities are set on /bin/ip, they will now be dropped
+    immediately unless the command executed is ip vrf exec, in which case
+    they will be dropped after the VRF has been switched, before forking.
+
+ -- Luca Boccassi <bluca@debian.org>  Thu, 12 Apr 2018 11:24:05 +0100
+
 iproute2 (4.15.0-3) unstable; urgency=medium
 
   * Backport 0005-revert-flush-default.patch to fix ip route flush all

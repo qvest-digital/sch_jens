@@ -1,4 +1,4 @@
-iproute2 (4.16.0-1) UNRELEASED; urgency=medium
+iproute2 (4.16.0-1) experimental; urgency=medium
 
   * Merge tag 'upstream/4.16.0' (Closes: #895719).
   * Drop 0005-revert-flush-default.patch, fixed upstream.
@@ -6,8 +6,12 @@ iproute2 (4.16.0-1) UNRELEASED; urgency=medium
     If capabilities are set on /bin/ip, they will now be dropped
     immediately unless the command executed is ip vrf exec, in which case
     they will be dropped after the VRF has been switched, before forking.
+  * Add capabilities to /bin/ip on postinst to fix ip vrf exec if the
+    new low-priority debconf iproute2/setcaps is set to true (false by
+    default).
+  * Bump Standards-Version to 4.1.4, no changes.
 
- -- Luca Boccassi <bluca@debian.org>  Thu, 12 Apr 2018 11:24:05 +0100
+ -- Luca Boccassi <bluca@debian.org>  Mon, 16 Apr 2018 14:44:50 +0100
 
 iproute2 (4.15.0-3) unstable; urgency=medium
 

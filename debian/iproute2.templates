@@ -1,0 +1,20 @@
+Template: iproute2/setcaps
+Type: boolean
+Default: false
+_Description: Allow ordinary users to run ip vrf exec using capabilities?
+ iproute2 can be used to configure and use Virtual Routing and Forwarding (VRF)
+ functionality in the  kernel.
+ This normally requires root permissions, but sometimes it's useful to allow
+ ordinary users to execute commands from inside a virtual routing and forwarding
+ domain. E.g. ip vrf exec examplevrf ping 10.0.0.1
+ .
+ The ip command supports dropping capabilities, making an exception for ip vrf exec.
+ The drawback of setting the permissions is that if in the unlikely case of a
+ security critical bug being found before the ip command has dropped capabilities
+ then it could be used by an attacker to gain root permissions.
+ It's up to you to decide about the trade-offs and select the best setting for your
+ system.
+ This will give cap_dac_override, cap_net_admin and cap_sys_admin to /bin/ip.
+ .
+ More information about VRF can be found at:
+ https://www.kernel.org/doc/Documentation/networking/vrf.txt

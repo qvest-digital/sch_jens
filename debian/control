@@ -19,6 +19,7 @@ Build-Depends: bison,
                libselinux1-dev,
                linux-libc-dev,
                pkg-config,
+               po-debconf,
                zlib1g-dev,
 
 Package: iproute2

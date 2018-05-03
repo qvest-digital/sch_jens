@@ -24,7 +24,7 @@ Build-Depends: bison,
 
 Package: iproute2
 Priority: important
-Architecture: any
+Architecture: linux-any
 Provides: arpd
 Conflicts: arpd, iproute (<< 20130000-1)
 Replaces: iproute

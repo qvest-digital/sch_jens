@@ -1,0 +1,76 @@
+# Russian translation of iproute2 debconf template
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the iproute2 package.
+# Lev Lamberov <dogsleg@debian.org>, 2018.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: iproute2\n"
+"Report-Msgid-Bugs-To: iproute2@packages.debian.org\n"
+"POT-Creation-Date: 2018-04-12 12:01+0100\n"
+"PO-Revision-Date: 2018-05-06 21:31+0500\n"
+"Language-Team: Debian L10n Russian <debian-l10n-russian@lists.debian.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 2.0.7\n"
+"Last-Translator: Lev Lamberov <dogsleg@debian.org>\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
+"%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Language: ru\n"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid "Allow ordinary users to run ip vrf exec using capabilities?"
+msgstr ""
+"Разрешить обычным пользователям запускать ip vrf exec, используя привилегии "
+"процессов?"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"iproute2 can be used to configure and use Virtual Routing and Forwarding "
+"(VRF) functionality in the  kernel. This normally requires root permissions, "
+"but sometimes it's useful to allow ordinary users to execute commands from "
+"inside a virtual routing and forwarding domain. E.g. ip vrf exec examplevrf "
+"ping 10.0.0.1"
+msgstr ""
+"Утилита iproute2 может использоваться для настройки и работы с "
+"функциональностью виртуальной маршрутизации и переадресации (VRF) ядра. "
+"Обычно для этого требуются права суперпользователя, но иногда полезно "
+"разрешить обычным пользователям выполнять команды изнутри домена виртуальной "
+"маршрутизации и переадресации. Например, ip vrf exec examplevrf ping 10.0.0.1"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"The ip command supports dropping capabilities, making an exception for ip "
+"vrf exec. The drawback of setting the permissions is that if in the unlikely "
+"case of a security critical bug being found before the ip command has "
+"dropped capabilities then it could be used by an attacker to gain root "
+"permissions. It's up to you to decide about the trade-offs and select the "
+"best setting for your system. This will give cap_dac_override, cap_net_admin "
+"and cap_sys_admin to /bin/ip."
+msgstr ""
+"Команда ip поддерживает сброс привилегий процессов, делая исключение для ip "
+"vrf exec. Недостаток настройки прав доступа состоит в том, что в "
+"маловероятном случае критической с точки зрения безопасности ошибки до того "
+"как команда ip выполнит сброс привилегий процессов, она может использоваться "
+"злоумышленником для получения прав суперпользователя. Вам необходимо "
+"самостоятельно взвесить все за и против и выбрать для вашей системы наиболее "
+"подходящий вариант. Эта опция даст исполняемому файлу /bin/ip привилегии "
+"процессов cap_dac_override, cap_net_admin и cap_sys_admin."
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"More information about VRF can be found at: https://www.kernel.org/doc/"
+"Documentation/networking/vrf.txt"
+msgstr ""
+"Дополнительную информацию о виртуальной маршрутизации и переадресации (VRF) "
+"можно найти по адресу https://www.kernel.org/doc/Documentation/networking/"
+"vrf.txt"

@@ -1,3 +1,20 @@
+iproute2 (4.16.0-3) unstable; urgency=medium
+
+  * Add Russian translation for Debconf template. Thanks Lev Lamberov!
+    (Closes: #898164)
+  * Add Portuguese translation for Debconf template. Thanks Portuguese
+    Translation Team!
+    (Closes: #898292)
+  * iproute2.postinst: use setcap -r instead of empty set.
+    Thanks Mantas Mikulėnas!
+  * Backport patch to avoid dropping caps if NET_ADMIN is inherited to
+    avoid breaking applications that set ambient capabilities and then
+    fork and exec ip.
+    (Closes: #898015)
+  * Re-enable pristine-tar (note: needs v1.43).
+
+ -- Luca Boccassi <bluca@debian.org>  Tue, 15 May 2018 09:46:01 +0100
+
 iproute2 (4.16.0-2) unstable; urgency=medium
 
   * Restrict iproute2 to linux-any

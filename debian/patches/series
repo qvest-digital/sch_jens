@@ -1,2 +1,3 @@
 0001-Add-moo-feature.patch
 0004-sync-iptables-header.patch
+0005-fix-drop-cap-inherit.patch

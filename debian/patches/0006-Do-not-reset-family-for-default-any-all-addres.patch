@@ -1,0 +1,32 @@
+Description: utils: Do not reset family for default, any, all addresses
+ Thomas reported a change in behavior with respect to autodectecting
+ address families. Specifically, 'ip ro add default via fe80::1'
+ syntax was failing to treat fe80::1 as an IPv6 address as it did in
+ prior releases. The root causes appears to be a change in family when
+ the default keyword is parsed.
+ 'default', 'any' and 'all' are relevant outside of AF_INET. Leave the
+ family arg as is for these when setting addr.
+Bug: https://bugs.debian.og/898840
+Applied-Upstream: commit: d42c7891d26e4d5616a55aac9fe10813767fcf9c
+Author: David Ahern <dsahern@gmail.com>
+Last-Update: 2018-05-16
+--- a/lib/utils.c
++++ b/lib/utils.c
+@@ -566,7 +566,7 @@ static int __get_addr_1(inet_prefix *add
+ 	if (strcmp(name, "default") == 0) {
+ 		if ((family == AF_DECnet) || (family == AF_MPLS))
+ 			return -1;
+-		addr->family = (family != AF_UNSPEC) ? family : AF_INET;
++		addr->family = family;
+ 		addr->bytelen = af_byte_len(addr->family);
+ 		addr->bitlen = -2;
+ 		addr->flags |= PREFIXLEN_SPECIFIED;
+@@ -577,7 +577,7 @@ static int __get_addr_1(inet_prefix *add
+ 	    strcmp(name, "any") == 0) {
+ 		if ((family == AF_DECnet) || (family == AF_MPLS))
+ 			return -1;
+-		addr->family = AF_UNSPEC;
++		addr->family = family;
+ 		addr->bytelen = 0;
+ 		addr->bitlen = -2;
+ 		return 0;

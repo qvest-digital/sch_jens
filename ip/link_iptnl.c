@@ -24,55 +24,57 @@
 #include "ip_common.h"
 #include "tunnel.h"
 
-static void print_usage(FILE *f, int sit)
+static void iptunnel_print_help(struct link_util *lu, int argc, char **argv,
+				FILE *f)
 {
-	const char *type = sit ? "sit " : "ipip";
+	const char *mode;
 
 	fprintf(f,
-		"Usage: ... %s [ remote ADDR ]\n"
-		"                [ local ADDR ]\n"
-		"                [ ttl TTL ]\n"
-		"                [ tos TOS ]\n"
-		"                [ [no]pmtudisc ]\n"
-		"                [ dev PHYS_DEV ]\n"
-		"                [ 6rd-prefix ADDR ]\n"
-		"                [ 6rd-relay_prefix ADDR ]\n"
-		"                [ 6rd-reset ]\n"
-		"                [ noencap ]\n"
-		"                [ encap { fou | gue | none } ]\n"
-		"                [ encap-sport PORT ]\n"
-		"                [ encap-dport PORT ]\n"
-		"                [ [no]encap-csum ]\n"
-		"                [ [no]encap-csum6 ]\n"
-		"                [ [no]encap-remcsum ]\n",
-		type
+		"Usage: ... %-6s [ remote ADDR ]\n",
+		lu->id
 	);
-	if (sit) {
-		fprintf(f, "          [ mode { ip6ip | ipip | mplsip | any } ]\n");
-		fprintf(f, "          [ isatap ]\n");
+	fprintf(f,
+		"                  [ local ADDR ]\n"
+		"                  [ ttl TTL ]\n"
+		"                  [ tos TOS ]\n"
+		"                  [ [no]pmtudisc ]\n"
+		"                  [ 6rd-prefix ADDR ]\n"
+		"                  [ 6rd-relay_prefix ADDR ]\n"
+		"                  [ 6rd-reset ]\n"
+		"                  [ dev PHYS_DEV ]\n"
+		"                  [ fwmark MARK ]\n"
+		"                  [ external ]\n"
+		"                  [ noencap ]\n"
+		"                  [ encap { fou | gue | none } ]\n"
+		"                  [ encap-sport PORT ]\n"
+		"                  [ encap-dport PORT ]\n"
+		"                  [ [no]encap-csum ]\n"
+		"                  [ [no]encap-csum6 ]\n"
+		"                  [ [no]encap-remcsum ]\n"
+	);
+	if (strcmp(lu->id, "sit") == 0) {
+		mode = "{ ip6ip | ipip | mplsip | any } ]\n"
+		"                  [ isatap";
 	} else {
-		fprintf(f, "          [ mode { ipip | mplsip | any } ]\n");
+		mode = "{ ipip | mplsip | any }";
 	}
-	fprintf(f, "                [ external ]\n");
-	fprintf(f, "                [ fwmark MARK ]\n");
-	fprintf(f, "\n");
-	fprintf(f, "Where: ADDR := { IP_ADDRESS | any }\n");
-	fprintf(f, "       TOS  := { NUMBER | inherit }\n");
-	fprintf(f, "       TTL  := { 1..255 | inherit }\n");
-	fprintf(f, "       MARK := { 0x0..0xffffffff }\n");
-}
-
-static void usage(int sit) __attribute__((noreturn));
-static void usage(int sit)
-{
-	print_usage(stderr, sit);
-	exit(-1);
+	fprintf(f,
+		"                  [ mode %s ]\n"
+		"\n",
+		mode
+	);
+	fprintf(f,
+		"Where: ADDR := { IP_ADDRESS | any }\n"
+		"       TOS  := { NUMBER | inherit }\n"
+		"       TTL  := { 1..255 | inherit }\n"
+		"       MARK := { 0x0..0xffffffff }\n"
+	);
 }
 
 static int iptunnel_parse_opt(struct link_util *lu, int argc, char **argv,
 			      struct nlmsghdr *n)
 {
-	struct ifinfomsg *ifi = (struct ifinfomsg *)(n + 1);
+	struct ifinfomsg *ifi = NLMSG_DATA(n);
 	struct {
 		struct nlmsghdr n;
 		struct ifinfomsg i;
@@ -88,18 +90,13 @@ static int iptunnel_parse_opt(struct link_util *lu, int argc, char **argv,
 	struct rtattr *linkinfo[IFLA_INFO_MAX+1];
 	struct rtattr *iptuninfo[IFLA_IPTUN_MAX + 1];
 	int len;
-	__u32 link = 0;
-	__u32 laddr = 0;
-	__u32 raddr = 0;
-	__u8 ttl = 0;
-	__u8 tos = 0;
+	inet_prefix saddr, daddr, ip6rdprefix, ip6rdrelayprefix;
 	__u8 pmtudisc = 1;
+	__u8 tos = 0;
 	__u16 iflags = 0;
+	__u8 ttl = 0;
 	__u8 proto = 0;
-	struct in6_addr ip6rdprefix = {};
-	__u16 ip6rdprefixlen = 0;
-	__u32 ip6rdrelayprefix = 0;
-	__u16 ip6rdrelayprefixlen = 0;
+	__u32 link = 0;
 	__u16 encaptype = 0;
 	__u16 encapflags = 0;
 	__u16 encapsport = 0;
@@ -107,7 +104,15 @@ static int iptunnel_parse_opt(struct link_util *lu, int argc, char **argv,
 	__u8 metadata = 0;
 	__u32 fwmark = 0;
 
+	inet_prefix_reset(&saddr);
+	inet_prefix_reset(&daddr);
+
+	inet_prefix_reset(&ip6rdprefix);
+	inet_prefix_reset(&ip6rdrelayprefix);
+
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
+		const struct rtattr *rta;
+
 		if (rtnl_talk(&rth, &req.n, &answer) < 0) {
 get_failed:
 			fprintf(stderr,
@@ -133,21 +138,37 @@ get_failed:
 		parse_rtattr_nested(iptuninfo, IFLA_IPTUN_MAX,
 				    linkinfo[IFLA_INFO_DATA]);
 
-		if (iptuninfo[IFLA_IPTUN_LOCAL])
-			laddr = rta_getattr_u32(iptuninfo[IFLA_IPTUN_LOCAL]);
+		rta = iptuninfo[IFLA_IPTUN_LOCAL];
+		if (rta && get_addr_rta(&saddr, rta, AF_INET))
+			goto get_failed;
 
-		if (iptuninfo[IFLA_IPTUN_REMOTE])
-			raddr = rta_getattr_u32(iptuninfo[IFLA_IPTUN_REMOTE]);
+		rta = iptuninfo[IFLA_IPTUN_REMOTE];
+		if (rta && get_addr_rta(&daddr, rta, AF_INET))
+			goto get_failed;
+
+		rta = iptuninfo[IFLA_IPTUN_6RD_PREFIX];
+		if (rta && get_addr_rta(&ip6rdprefix, rta, AF_INET6))
+			goto get_failed;
+
+		rta = iptuninfo[IFLA_IPTUN_6RD_RELAY_PREFIX];
+		if (rta && get_addr_rta(&ip6rdrelayprefix, rta, AF_INET))
+			goto get_failed;
+
+		rta = iptuninfo[IFLA_IPTUN_6RD_PREFIXLEN];
+		ip6rdprefix.bitlen = rta ? rta_getattr_u16(rta) : 0;
+
+		rta = iptuninfo[IFLA_IPTUN_6RD_RELAY_PREFIXLEN];
+		ip6rdrelayprefix.bitlen = rta ? rta_getattr_u16(rta) : 0;
 
 		if (iptuninfo[IFLA_IPTUN_TTL])
 			ttl = rta_getattr_u8(iptuninfo[IFLA_IPTUN_TTL]);
 
-		if (iptuninfo[IFLA_IPTUN_TOS])
-			tos = rta_getattr_u8(iptuninfo[IFLA_IPTUN_TOS]);
-
 		if (iptuninfo[IFLA_IPTUN_PMTUDISC])
 			pmtudisc =
 				rta_getattr_u8(iptuninfo[IFLA_IPTUN_PMTUDISC]);
+
+		if (iptuninfo[IFLA_IPTUN_TOS])
+			tos = rta_getattr_u8(iptuninfo[IFLA_IPTUN_TOS]);
 
 		if (iptuninfo[IFLA_IPTUN_FLAGS])
 			iflags = rta_getattr_u16(iptuninfo[IFLA_IPTUN_FLAGS]);
@@ -166,22 +187,7 @@ get_failed:
 			encapsport = rta_getattr_u16(iptuninfo[IFLA_IPTUN_ENCAP_SPORT]);
 		if (iptuninfo[IFLA_IPTUN_ENCAP_DPORT])
 			encapdport = rta_getattr_u16(iptuninfo[IFLA_IPTUN_ENCAP_DPORT]);
-		if (iptuninfo[IFLA_IPTUN_6RD_PREFIX])
-			memcpy(&ip6rdprefix,
-			       RTA_DATA(iptuninfo[IFLA_IPTUN_6RD_PREFIX]),
-			       sizeof(laddr));
 
-		if (iptuninfo[IFLA_IPTUN_6RD_PREFIXLEN])
-			ip6rdprefixlen =
-				rta_getattr_u16(iptuninfo[IFLA_IPTUN_6RD_PREFIXLEN]);
-
-		if (iptuninfo[IFLA_IPTUN_6RD_RELAY_PREFIX])
-			ip6rdrelayprefix =
-				rta_getattr_u32(iptuninfo[IFLA_IPTUN_6RD_RELAY_PREFIX]);
-
-		if (iptuninfo[IFLA_IPTUN_6RD_RELAY_PREFIXLEN])
-			ip6rdrelayprefixlen =
-				rta_getattr_u16(iptuninfo[IFLA_IPTUN_6RD_RELAY_PREFIXLEN]);
 		if (iptuninfo[IFLA_IPTUN_COLLECT_METADATA])
 			metadata = 1;
 
@@ -192,46 +198,7 @@ get_failed:
 	}
 
 	while (argc > 0) {
-		if (strcmp(*argv, "remote") == 0) {
-			NEXT_ARG();
-			raddr = get_addr32(*argv);
-		} else if (strcmp(*argv, "local") == 0) {
-			NEXT_ARG();
-			laddr = get_addr32(*argv);
-		} else if (matches(*argv, "dev") == 0) {
-			NEXT_ARG();
-			link = ll_name_to_index(*argv);
-			if (link == 0)
-				invarg("\"dev\" is invalid", *argv);
-		} else if (strcmp(*argv, "ttl") == 0 ||
-			   strcmp(*argv, "hoplimit") == 0 ||
-			   strcmp(*argv, "hlim") == 0) {
-			NEXT_ARG();
-			if (strcmp(*argv, "inherit") != 0) {
-				if (get_u8(&ttl, *argv, 0))
-					invarg("invalid TTL\n", *argv);
-			} else
-				ttl = 0;
-		} else if (strcmp(*argv, "tos") == 0 ||
-			   strcmp(*argv, "tclass") == 0 ||
-			   matches(*argv, "dsfield") == 0) {
-			__u32 uval;
-
-			NEXT_ARG();
-			if (strcmp(*argv, "inherit") != 0) {
-				if (rtnl_dsfield_a2n(&uval, *argv))
-					invarg("bad TOS value", *argv);
-				tos = uval;
-			} else
-				tos = 1;
-		} else if (strcmp(*argv, "nopmtudisc") == 0) {
-			pmtudisc = 0;
-		} else if (strcmp(*argv, "pmtudisc") == 0) {
-			pmtudisc = 1;
-		} else if (strcmp(lu->id, "sit") == 0 &&
-			   strcmp(*argv, "isatap") == 0) {
-			iflags |= SIT_ISATAP;
-		} else if (strcmp(*argv, "mode") == 0) {
+		if (strcmp(*argv, "mode") == 0) {
 			NEXT_ARG();
 			if (strcmp(lu->id, "sit") == 0 &&
 			    (strcmp(*argv, "ipv6/ipv4") == 0 ||
@@ -249,6 +216,46 @@ get_failed:
 				proto = 0;
 			else
 				invarg("Cannot guess tunnel mode.", *argv);
+		} else if (strcmp(*argv, "remote") == 0) {
+			NEXT_ARG();
+			get_addr(&daddr, *argv, AF_INET);
+		} else if (strcmp(*argv, "local") == 0) {
+			NEXT_ARG();
+			get_addr(&saddr, *argv, AF_INET);
+		} else if (matches(*argv, "dev") == 0) {
+			NEXT_ARG();
+			link = ll_name_to_index(*argv);
+			if (!link)
+				exit(nodev(*argv));
+		} else if (strcmp(*argv, "ttl") == 0 ||
+			   strcmp(*argv, "hoplimit") == 0 ||
+			   strcmp(*argv, "hlim") == 0) {
+			NEXT_ARG();
+			if (strcmp(*argv, "inherit") != 0) {
+				if (get_u8(&ttl, *argv, 0))
+					invarg("invalid TTL\n", *argv);
+			} else
+				ttl = 0;
+		} else if (strcmp(*argv, "tos") == 0 ||
+			   strcmp(*argv, "tclass") == 0 ||
+			   strcmp(*argv, "tc") == 0 ||
+			   matches(*argv, "dsfield") == 0) {
+			__u32 uval;
+
+			NEXT_ARG();
+			if (strcmp(*argv, "inherit") != 0) {
+				if (rtnl_dsfield_a2n(&uval, *argv))
+					invarg("bad TOS value", *argv);
+				tos = uval;
+			} else
+				tos = 1;
+		} else if (strcmp(*argv, "nopmtudisc") == 0) {
+			pmtudisc = 0;
+		} else if (strcmp(*argv, "pmtudisc") == 0) {
+			pmtudisc = 1;
+		} else if (strcmp(lu->id, "sit") == 0 &&
+			   strcmp(*argv, "isatap") == 0) {
+			iflags |= SIT_ISATAP;
 		} else if (strcmp(*argv, "noencap") == 0) {
 			encaptype = TUNNEL_ENCAP_NONE;
 		} else if (strcmp(*argv, "encap") == 0) {
@@ -286,35 +293,24 @@ get_failed:
 		} else if (strcmp(*argv, "external") == 0) {
 			metadata = 1;
 		} else if (strcmp(*argv, "6rd-prefix") == 0) {
-			inet_prefix prefix;
-
 			NEXT_ARG();
-			if (get_prefix(&prefix, *argv, AF_INET6))
+			if (get_prefix(&ip6rdprefix, *argv, AF_INET6))
 				invarg("invalid 6rd_prefix\n", *argv);
-			memcpy(&ip6rdprefix, prefix.data, 16);
-			ip6rdprefixlen = prefix.bitlen;
 		} else if (strcmp(*argv, "6rd-relay_prefix") == 0) {
-			inet_prefix prefix;
-
 			NEXT_ARG();
-			if (get_prefix(&prefix, *argv, AF_INET))
+			if (get_prefix(&ip6rdrelayprefix, *argv, AF_INET))
 				invarg("invalid 6rd-relay_prefix\n", *argv);
-			memcpy(&ip6rdrelayprefix, prefix.data, 4);
-			ip6rdrelayprefixlen = prefix.bitlen;
 		} else if (strcmp(*argv, "6rd-reset") == 0) {
-			inet_prefix prefix;
-
-			get_prefix(&prefix, "2002::", AF_INET6);
-			memcpy(&ip6rdprefix, prefix.data, 16);
-			ip6rdprefixlen = 16;
-			ip6rdrelayprefix = 0;
-			ip6rdrelayprefixlen = 0;
+			get_prefix(&ip6rdprefix, "2002::/16", AF_INET6);
+			inet_prefix_reset(&ip6rdrelayprefix);
 		} else if (strcmp(*argv, "fwmark") == 0) {
 			NEXT_ARG();
 			if (get_u32(&fwmark, *argv, 0))
 				invarg("invalid fwmark\n", *argv);
-		} else
-			usage(strcmp(lu->id, "sit") == 0);
+		} else {
+			iptunnel_print_help(lu, argc, argv, stderr);
+			return -1;
+		}
 		argc--, argv++;
 	}
 
@@ -329,12 +325,18 @@ get_failed:
 		return 0;
 	}
 
-	addattr32(n, 1024, IFLA_IPTUN_LINK, link);
-	addattr32(n, 1024, IFLA_IPTUN_LOCAL, laddr);
-	addattr32(n, 1024, IFLA_IPTUN_REMOTE, raddr);
-	addattr8(n, 1024, IFLA_IPTUN_TTL, ttl);
-	addattr8(n, 1024, IFLA_IPTUN_TOS, tos);
+	if (is_addrtype_inet(&saddr)) {
+		addattr_l(n, 1024, IFLA_IPTUN_LOCAL,
+			  saddr.data, saddr.bytelen);
+	}
+	if (is_addrtype_inet(&daddr)) {
+		addattr_l(n, 1024, IFLA_IPTUN_REMOTE,
+			  daddr.data, daddr.bytelen);
+	}
 	addattr8(n, 1024, IFLA_IPTUN_PMTUDISC, pmtudisc);
+	addattr8(n, 1024, IFLA_IPTUN_TOS, tos);
+	addattr8(n, 1024, IFLA_IPTUN_TTL, ttl);
+	addattr32(n, 1024, IFLA_IPTUN_LINK, link);
 	addattr32(n, 1024, IFLA_IPTUN_FWMARK, fwmark);
 
 	addattr16(n, 1024, IFLA_IPTUN_ENCAP_TYPE, encaptype);
@@ -344,15 +346,17 @@ get_failed:
 
 	if (strcmp(lu->id, "sit") == 0) {
 		addattr16(n, 1024, IFLA_IPTUN_FLAGS, iflags);
-		if (ip6rdprefixlen) {
+		if (is_addrtype_inet(&ip6rdprefix)) {
 			addattr_l(n, 1024, IFLA_IPTUN_6RD_PREFIX,
-				  &ip6rdprefix, sizeof(ip6rdprefix));
+				  ip6rdprefix.data, ip6rdprefix.bytelen);
 			addattr16(n, 1024, IFLA_IPTUN_6RD_PREFIXLEN,
-				  ip6rdprefixlen);
+				  ip6rdprefix.bitlen);
+		}
+		if (is_addrtype_inet(&ip6rdrelayprefix)) {
 			addattr32(n, 1024, IFLA_IPTUN_6RD_RELAY_PREFIX,
-				  ip6rdrelayprefix);
+				  ip6rdrelayprefix.data[0]);
 			addattr16(n, 1024, IFLA_IPTUN_6RD_RELAY_PREFIXLEN,
-				  ip6rdrelayprefixlen);
+				  ip6rdrelayprefix.bitlen);
 		}
 	}
 
@@ -395,7 +399,7 @@ static void iptunnel_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[
 	tnl_print_endpoint("local", tb[IFLA_IPTUN_LOCAL], AF_INET);
 
 	if (tb[IFLA_IPTUN_LINK]) {
-		unsigned int link = rta_getattr_u32(tb[IFLA_IPTUN_LINK]);
+		__u32 link = rta_getattr_u32(tb[IFLA_IPTUN_LINK]);
 
 		if (link) {
 			print_string(PRINT_ANY, "link", "dev %s ",
@@ -481,12 +485,6 @@ static void iptunnel_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[
 			IFLA_IPTUN_ENCAP_FLAGS,
 			IFLA_IPTUN_ENCAP_SPORT,
 			IFLA_IPTUN_ENCAP_DPORT);
-}
-
-static void iptunnel_print_help(struct link_util *lu, int argc, char **argv,
-	FILE *f)
-{
-	print_usage(f, strcmp(lu->id, "sit") == 0);
 }
 
 struct link_util ipip_link_util = {

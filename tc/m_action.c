@@ -166,9 +166,7 @@ int parse_action(int *argc_p, char ***argv_p, int tca_id, struct nlmsghdr *n)
 	if (argc <= 0)
 		return -1;
 
-	tail = tail2 = NLMSG_TAIL(n);
-
-	addattr_l(n, MAX_MSG, tca_id, NULL, 0);
+	tail2 = addattr_nest(n, MAX_MSG, tca_id);
 
 	while (argc > 0) {
 
@@ -213,8 +211,7 @@ done0:
 				goto bad_val;
 
 
-			tail = NLMSG_TAIL(n);
-			addattr_l(n, MAX_MSG, ++prio, NULL, 0);
+			tail = addattr_nest(n, MAX_MSG, ++prio);
 			addattr_l(n, MAX_MSG, TCA_ACT_KIND, k, strlen(k) + 1);
 
 			ret = a->parse_aopt(a, &argc, &argv, TCA_ACT_OPTIONS,
@@ -252,7 +249,7 @@ done0:
 				addattr_l(n, MAX_MSG, TCA_ACT_COOKIE,
 					  &act_ck, act_ck_len);
 
-			tail->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail;
+			addattr_nest_end(n, tail);
 			ok++;
 		}
 	}
@@ -262,7 +259,7 @@ done0:
 		goto bad_val;
 	}
 
-	tail2->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail2;
+	addattr_nest_end(n, tail2);
 
 done:
 	*argc_p = argc;
@@ -304,19 +301,21 @@ static int tc_print_one_action(FILE *f, struct rtattr *arg)
 		return err;
 
 	if (show_stats && tb[TCA_ACT_STATS]) {
-		print_string(PRINT_FP, NULL, "\tAction statistics:\n", NULL);
+		print_string(PRINT_FP, NULL, "\tAction statistics:", NULL);
+		print_string(PRINT_FP, NULL, "%s", _SL_);
 		open_json_object("stats");
 		print_tcstats2_attr(f, tb[TCA_ACT_STATS], "\t", NULL);
 		close_json_object();
-		print_string(PRINT_FP, NULL, "\n", NULL);
+		print_string(PRINT_FP, NULL, "%s", _SL_);
 	}
 	if (tb[TCA_ACT_COOKIE]) {
 		int strsz = RTA_PAYLOAD(tb[TCA_ACT_COOKIE]);
 		char b1[strsz * 2 + 1];
 
-		print_string(PRINT_ANY, "cookie", "\tcookie %s\n",
+		print_string(PRINT_ANY, "cookie", "\tcookie %s",
 			     hexstring_n2a(RTA_DATA(tb[TCA_ACT_COOKIE]),
 					   strsz, b1, sizeof(b1)));
+		print_string(PRINT_FP, NULL, "%s", _SL_);
 	}
 
 	return 0;
@@ -371,8 +370,9 @@ tc_print_action(FILE *f, const struct rtattr *arg, unsigned short tot_acts)
 	for (i = 0; i <= tot_acts; i++) {
 		if (tb[i]) {
 			open_json_object(NULL);
+			print_string(PRINT_FP, NULL, "%s", _SL_);
 			print_uint(PRINT_ANY, "order",
-				   "\n\taction order %u: ", i);
+				   "\taction order %u: ", i);
 			if (tc_print_one_action(f, tb[i]) < 0) {
 				print_string(PRINT_FP, NULL,
 					     "Error printing action\n", NULL);
@@ -408,7 +408,11 @@ int print_action(const struct sockaddr_nl *who,
 	if (tb[TCA_ROOT_COUNT])
 		tot_acts = RTA_DATA(tb[TCA_ROOT_COUNT]);
 
-	fprintf(fp, "total acts %d\n", tot_acts ? *tot_acts:0);
+	open_json_object(NULL);
+	print_uint(PRINT_ANY, "total acts", "total acts %u",
+		   tot_acts ? *tot_acts : 0);
+	print_string(PRINT_FP, NULL, "%s", _SL_);
+	close_json_object();
 	if (tb[TCA_ACT_TAB] == NULL) {
 		if (n->nlmsg_type != RTM_GETACTION)
 			fprintf(stderr, "print_action: NULL kind\n");
@@ -433,8 +437,9 @@ int print_action(const struct sockaddr_nl *who,
 		}
 	}
 
-
+	open_json_object(NULL);
 	tc_print_action(fp, tb[TCA_ACT_TAB], tot_acts ? *tot_acts:0);
+	close_json_object();
 
 	return 0;
 }
@@ -468,8 +473,7 @@ static int tc_action_gd(int cmd, unsigned int flags,
 	argv += 1;
 
 
-	tail = NLMSG_TAIL(&req.n);
-	addattr_l(&req.n, MAX_MSG, TCA_ACT_TAB, NULL, 0);
+	tail = addattr_nest(&req.n, MAX_MSG, TCA_ACT_TAB);
 
 	while (argc > 0) {
 		if (strcmp(*argv, "action") == 0) {
@@ -518,16 +522,15 @@ static int tc_action_gd(int cmd, unsigned int flags,
 			goto bad_val;
 		}
 
-		tail2 = NLMSG_TAIL(&req.n);
-		addattr_l(&req.n, MAX_MSG, ++prio, NULL, 0);
+		tail2 = addattr_nest(&req.n, MAX_MSG, ++prio);
 		addattr_l(&req.n, MAX_MSG, TCA_ACT_KIND, k, strlen(k) + 1);
 		if (i > 0)
 			addattr32(&req.n, MAX_MSG, TCA_ACT_INDEX, i);
-		tail2->rta_len = (void *) NLMSG_TAIL(&req.n) - (void *) tail2;
+		addattr_nest_end(&req.n, tail2);
 
 	}
 
-	tail->rta_len = (void *) NLMSG_TAIL(&req.n) - (void *) tail;
+	addattr_nest_end(&req.n, tail);
 
 	req.n.nlmsg_seq = rth.dump = ++rth.seq;
 
@@ -536,10 +539,16 @@ static int tc_action_gd(int cmd, unsigned int flags,
 		return 1;
 	}
 
-	if (cmd == RTM_GETACTION && print_action(NULL, ans, stdout) < 0) {
-		fprintf(stderr, "Dump terminated\n");
-		free(ans);
-		return 1;
+	if (cmd == RTM_GETACTION) {
+		new_json_obj(json);
+		ret = print_action(NULL, ans, stdout);
+		if (ret < 0) {
+			fprintf(stderr, "Dump terminated\n");
+			free(ans);
+			delete_json_obj();
+			return 1;
+		}
+		delete_json_obj();
 	}
 	free(ans);
 
@@ -626,8 +635,7 @@ static int tc_act_list_or_flush(int *argc_p, char ***argv_p, int event)
 		.t.tca_family = AF_UNSPEC,
 	};
 
-	tail = NLMSG_TAIL(&req.n);
-	addattr_l(&req.n, MAX_MSG, TCA_ACT_TAB, NULL, 0);
+	tail = addattr_nest(&req.n, MAX_MSG, TCA_ACT_TAB);
 	tail2 = NLMSG_TAIL(&req.n);
 
 	strncpy(k, *argv, sizeof(k) - 1);
@@ -659,7 +667,7 @@ static int tc_act_list_or_flush(int *argc_p, char ***argv_p, int event)
 	addattr_l(&req.n, MAX_MSG, ++prio, NULL, 0);
 	addattr_l(&req.n, MAX_MSG, TCA_ACT_KIND, k, strlen(k) + 1);
 	tail2->rta_len = (void *) NLMSG_TAIL(&req.n) - (void *) tail2;
-	tail->rta_len = (void *) NLMSG_TAIL(&req.n) - (void *) tail;
+	addattr_nest_end(&req.n, tail);
 
 	tail3 = NLMSG_TAIL(&req.n);
 	flag_select.value |= TCA_FLAG_LARGE_DUMP_ON;
@@ -681,7 +689,9 @@ static int tc_act_list_or_flush(int *argc_p, char ***argv_p, int event)
 			perror("Cannot send dump request");
 			return 1;
 		}
+		new_json_obj(json);
 		ret = rtnl_dump_filter(&rth, print_action, stdout);
+		delete_json_obj();
 	}
 
 	if (event == RTM_DELACTION) {

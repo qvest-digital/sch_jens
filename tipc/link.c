@@ -97,6 +97,7 @@ static int cmd_link_get_prop(struct nlmsghdr *nlh, const struct cmd *cmd,
 {
 	int prop;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
+	struct nlattr *attrs;
 	struct opt *opt;
 	struct opt opts[] = {
 		{ "link",		OPT_KEYVAL,	NULL },
@@ -131,7 +132,9 @@ static int cmd_link_get_prop(struct nlmsghdr *nlh, const struct cmd *cmd,
 		fprintf(stderr, "error, missing link\n");
 		return -EINVAL;
 	}
+	attrs = mnl_attr_nest_start(nlh, TIPC_NLA_LINK);
 	mnl_attr_put_strz(nlh, TIPC_NLA_LINK_NAME, opt->val);
+	mnl_attr_nest_end(nlh, attrs);
 
 	return msg_doit(nlh, link_get_cb, &prop);
 }
@@ -616,8 +619,7 @@ static void link_mon_print_non_applied(uint16_t applied, uint16_t member_cnt,
 		if (i != applied)
 			printf(",");
 
-		sprintf(addr_str, "%u.%u.%u:", tipc_zone(members[i]),
-			tipc_cluster(members[i]), tipc_node(members[i]));
+		sprintf(addr_str, "%x:", members[i]);
 		state = map_get(up_map, i) ? 'U' : 'D';
 		printf("%s%c", addr_str, state);
 	}

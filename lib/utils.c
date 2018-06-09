@@ -36,10 +36,12 @@
 
 #include "rt_names.h"
 #include "utils.h"
+#include "ll_map.h"
 #include "namespace.h"
 
 int resolve_hosts;
 int timestamp_short;
+int pretty;
 
 int read_prop(const char *dev, char *prop, long *value)
 {
@@ -103,7 +105,7 @@ int parse_percent(double *val, const char *str)
 	*val = strtod(str, &p) / 100.;
 	if (*val == HUGE_VALF || *val == HUGE_VALL)
 		return 1;
-	if (*val == 0.0 || (*p && strcmp(p, "%")))
+	if (*p && strcmp(p, "%"))
 		return -1;
 
 	return 0;
@@ -566,7 +568,7 @@ static int __get_addr_1(inet_prefix *addr, const char *name, int family)
 	if (strcmp(name, "default") == 0) {
 		if ((family == AF_DECnet) || (family == AF_MPLS))
 			return -1;
-		addr->family = (family != AF_UNSPEC) ? family : AF_INET;
+		addr->family = family;
 		addr->bytelen = af_byte_len(addr->family);
 		addr->bitlen = -2;
 		addr->flags |= PREFIXLEN_SPECIFIED;
@@ -577,7 +579,7 @@ static int __get_addr_1(inet_prefix *addr, const char *name, int family)
 	    strcmp(name, "any") == 0) {
 		if ((family == AF_DECnet) || (family == AF_MPLS))
 			return -1;
-		addr->family = AF_UNSPEC;
+		addr->family = family;
 		addr->bytelen = 0;
 		addr->bitlen = -2;
 		return 0;
@@ -854,6 +856,12 @@ void duparg2(const char *key, const char *arg)
 	exit(-1);
 }
 
+int nodev(const char *dev)
+{
+	fprintf(stderr, "Cannot find device \"%s\"\n", dev);
+	return -1;
+}
+
 int check_ifname(const char *name)
 {
 	/* These checks mimic kernel checks in dev_valid_name */
@@ -880,6 +888,25 @@ int get_ifname(char *buf, const char *name)
 		strncpy(buf, name, IFNAMSIZ);
 
 	return ret;
+}
+
+const char *get_ifname_rta(int ifindex, const struct rtattr *rta)
+{
+	const char *name;
+
+	if (rta) {
+		name = rta_getattr_str(rta);
+	} else {
+		fprintf(stderr,
+			"BUG: device with ifindex %d has nil ifname\n",
+			ifindex);
+		name = ll_idx_n2a(ifindex);
+	}
+
+	if (check_ifname(name))
+		return NULL;
+
+	return name;
 }
 
 int matches(const char *cmd, const char *pattern)
@@ -1271,6 +1298,54 @@ int print_timestamp(FILE *fp)
 	return 0;
 }
 
+unsigned int print_name_and_link(const char *fmt,
+				 const char *name, struct rtattr *tb[])
+{
+	const char *link = NULL;
+	unsigned int m_flag = 0;
+	SPRINT_BUF(b1);
+
+	if (tb[IFLA_LINK]) {
+		int iflink = rta_getattr_u32(tb[IFLA_LINK]);
+
+		if (iflink) {
+			if (tb[IFLA_LINK_NETNSID]) {
+				if (is_json_context()) {
+					print_int(PRINT_JSON,
+						  "link_index", NULL, iflink);
+				} else {
+					link = ll_idx_n2a(iflink);
+				}
+			} else {
+				link = ll_index_to_name(iflink);
+
+				if (is_json_context()) {
+					print_string(PRINT_JSON,
+						     "link", NULL, link);
+					link = NULL;
+				}
+
+				m_flag = ll_index_to_flags(iflink);
+				m_flag = !(m_flag & IFF_UP);
+			}
+		} else {
+			if (is_json_context())
+				print_null(PRINT_JSON, "link", NULL, NULL);
+			else
+				link = "NONE";
+		}
+
+		if (link) {
+			snprintf(b1, sizeof(b1), "%s@%s", name, link);
+			name = b1;
+		}
+	}
+
+	print_color_string(PRINT_ANY, COLOR_IFNAME, "ifname", fmt, name);
+
+	return m_flag;
+}
+
 int cmdlineno;
 
 /* Like glibc getline but handle continuation lines and comments */
@@ -1461,6 +1536,51 @@ int get_real_family(int rtm_type, int rtm_family)
 	return rtm_family;
 }
 
+/* Based on copy_rtnl_link_stats() from kernel at net/core/rtnetlink.c */
+static void copy_rtnl_link_stats64(struct rtnl_link_stats64 *stats64,
+				   const struct rtnl_link_stats *stats)
+{
+	__u64 *a = (__u64 *)stats64;
+	const __u32 *b = (const __u32 *)stats;
+	const __u32 *e = b + sizeof(*stats) / sizeof(*b);
+
+	while (b < e)
+		*a++ = *b++;
+}
+
+int get_rtnl_link_stats_rta(struct rtnl_link_stats64 *stats64,
+			    struct rtattr *tb[])
+{
+	struct rtnl_link_stats stats;
+	void *s;
+	struct rtattr *rta;
+	int size, len;
+
+	if (tb[IFLA_STATS64]) {
+		rta = tb[IFLA_STATS64];
+		size = sizeof(struct rtnl_link_stats64);
+		s = stats64;
+	} else if (tb[IFLA_STATS]) {
+		rta = tb[IFLA_STATS];
+		size = sizeof(struct rtnl_link_stats);
+		s = &stats;
+	} else {
+		return -1;
+	}
+
+	len = RTA_PAYLOAD(rta);
+	if (len < size)
+		memset(s + len, 0, size - len);
+	else
+		len = size;
+
+	memcpy(s, RTA_DATA(rta), len);
+
+	if (s != stats64)
+		copy_rtnl_link_stats64(stats64, s);
+	return size;
+}
+
 #ifdef NEED_STRLCPY
 size_t strlcpy(char *dst, const char *src, size_t size)
 {
@@ -1492,14 +1612,23 @@ void drop_cap(void)
 	/* don't harmstring root/sudo */
 	if (getuid() != 0 && geteuid() != 0) {
 		cap_t capabilities;
+		cap_value_t net_admin = CAP_NET_ADMIN;
+		cap_flag_t inheritable = CAP_INHERITABLE;
+		cap_flag_value_t is_set;
 
 		capabilities = cap_get_proc();
 		if (!capabilities)
 			exit(EXIT_FAILURE);
-		if (cap_clear(capabilities) != 0)
+		if (cap_get_flag(capabilities, net_admin, inheritable,
+		    &is_set) != 0)
 			exit(EXIT_FAILURE);
-		if (cap_set_proc(capabilities) != 0)
-			exit(EXIT_FAILURE);
+		/* apps with ambient caps can fork and call ip */
+		if (is_set == CAP_CLEAR) {
+			if (cap_clear(capabilities) != 0)
+				exit(EXIT_FAILURE);
+			if (cap_set_proc(capabilities) != 0)
+				exit(EXIT_FAILURE);
+		}
 		cap_free(capabilities);
 	}
 #endif

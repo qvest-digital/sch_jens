@@ -23,33 +23,31 @@
 #include "ip_common.h"
 #include "tunnel.h"
 
-
-static void print_usage(FILE *f)
+static void vti_print_help(struct link_util *lu, int argc, char **argv, FILE *f)
 {
 	fprintf(f,
-		"Usage: ... vti [ remote ADDR ]\n"
-		"               [ local ADDR ]\n"
-		"               [ [i|o]key KEY ]\n"
-		"               [ dev PHYS_DEV ]\n"
-		"               [ fwmark MARK ]\n"
-		"\n"
-		"Where: ADDR := { IP_ADDRESS }\n"
-		"       KEY  := { DOTTED_QUAD | NUMBER }\n"
-		"       MARK := { 0x0..0xffffffff }\n"
+		"Usage: ... %-4s [ remote ADDR ]\n",
+		lu->id
 	);
-}
-
-static void usage(void) __attribute__((noreturn));
-static void usage(void)
-{
-	print_usage(stderr);
-	exit(-1);
+	fprintf(f,
+		"                [ local ADDR ]\n"
+		"                [ [i|o]key KEY ]\n"
+		"                [ dev PHYS_DEV ]\n"
+		"                [ fwmark MARK ]\n"
+		"\n"
+	);
+	fprintf(f,
+		"Where: ADDR := { IP%s_ADDRESS }\n"
+		"       KEY  := { DOTTED_QUAD | NUMBER }\n"
+		"       MARK := { 0x0..0xffffffff }\n",
+		""
+	);
 }
 
 static int vti_parse_opt(struct link_util *lu, int argc, char **argv,
 			 struct nlmsghdr *n)
 {
-	struct ifinfomsg *ifi = (struct ifinfomsg *)(n + 1);
+	struct ifinfomsg *ifi = NLMSG_DATA(n);
 	struct {
 		struct nlmsghdr n;
 		struct ifinfomsg i;
@@ -66,13 +64,17 @@ static int vti_parse_opt(struct link_util *lu, int argc, char **argv,
 	struct rtattr *vtiinfo[IFLA_VTI_MAX + 1];
 	__be32 ikey = 0;
 	__be32 okey = 0;
-	unsigned int saddr = 0;
-	unsigned int daddr = 0;
+	inet_prefix saddr, daddr;
 	unsigned int link = 0;
 	__u32 fwmark = 0;
 	int len;
 
+	inet_prefix_reset(&saddr);
+	inet_prefix_reset(&daddr);
+
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
+		const struct rtattr *rta;
+
 		if (rtnl_talk(&rth, &req.n, &answer) < 0) {
 get_failed:
 			fprintf(stderr,
@@ -98,17 +100,19 @@ get_failed:
 		parse_rtattr_nested(vtiinfo, IFLA_VTI_MAX,
 				    linkinfo[IFLA_INFO_DATA]);
 
+		rta = vtiinfo[IFLA_VTI_LOCAL];
+		if (rta && get_addr_rta(&saddr, rta, AF_INET))
+			goto get_failed;
+
+		rta = vtiinfo[IFLA_VTI_REMOTE];
+		if (rta && get_addr_rta(&daddr, rta, AF_INET))
+			goto get_failed;
+
 		if (vtiinfo[IFLA_VTI_IKEY])
 			ikey = rta_getattr_u32(vtiinfo[IFLA_VTI_IKEY]);
 
 		if (vtiinfo[IFLA_VTI_OKEY])
 			okey = rta_getattr_u32(vtiinfo[IFLA_VTI_OKEY]);
-
-		if (vtiinfo[IFLA_VTI_LOCAL])
-			saddr = rta_getattr_u32(vtiinfo[IFLA_VTI_LOCAL]);
-
-		if (vtiinfo[IFLA_VTI_REMOTE])
-			daddr = rta_getattr_u32(vtiinfo[IFLA_VTI_REMOTE]);
 
 		if (vtiinfo[IFLA_VTI_LINK])
 			link = rta_getattr_u8(vtiinfo[IFLA_VTI_LINK]);
@@ -131,31 +135,32 @@ get_failed:
 			okey = tnl_parse_key("okey", *argv);
 		} else if (!matches(*argv, "remote")) {
 			NEXT_ARG();
-			daddr = get_addr32(*argv);
+			get_addr(&daddr, *argv, AF_INET);
 		} else if (!matches(*argv, "local")) {
 			NEXT_ARG();
-			saddr = get_addr32(*argv);
+			get_addr(&saddr, *argv, AF_INET);
 		} else if (!matches(*argv, "dev")) {
 			NEXT_ARG();
 			link = ll_name_to_index(*argv);
-			if (link == 0) {
-				fprintf(stderr, "Cannot find device \"%s\"\n",
-					*argv);
-				exit(-1);
-			}
+			if (!link)
+				exit(nodev(*argv));
 		} else if (strcmp(*argv, "fwmark") == 0) {
 			NEXT_ARG();
 			if (get_u32(&fwmark, *argv, 0))
 				invarg("invalid fwmark\n", *argv);
-		} else
-			usage();
+		} else {
+			vti_print_help(lu, argc, argv, stderr);
+			return -1;
+		}
 		argc--; argv++;
 	}
 
 	addattr32(n, 1024, IFLA_VTI_IKEY, ikey);
 	addattr32(n, 1024, IFLA_VTI_OKEY, okey);
-	addattr_l(n, 1024, IFLA_VTI_LOCAL, &saddr, 4);
-	addattr_l(n, 1024, IFLA_VTI_REMOTE, &daddr, 4);
+	if (is_addrtype_inet(&saddr))
+		addattr_l(n, 1024, IFLA_VTI_LOCAL, saddr.data, saddr.bytelen);
+	if (is_addrtype_inet(&daddr))
+		addattr_l(n, 1024, IFLA_VTI_REMOTE, daddr.data, daddr.bytelen);
 	addattr32(n, 1024, IFLA_VTI_FWMARK, fwmark);
 	if (link)
 		addattr32(n, 1024, IFLA_VTI_LINK, link);
@@ -174,7 +179,7 @@ static void vti_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 	tnl_print_endpoint("local", tb[IFLA_VTI_LOCAL], AF_INET);
 
 	if (tb[IFLA_VTI_LINK]) {
-		unsigned int link = rta_getattr_u32(tb[IFLA_VTI_LINK]);
+		__u32 link = rta_getattr_u32(tb[IFLA_VTI_LINK]);
 
 		if (link) {
 			print_string(PRINT_ANY, "link", "dev %s ",
@@ -206,12 +211,6 @@ static void vti_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 				    "fwmark", "fwmark 0x%x ", fwmark);
 		}
 	}
-}
-
-static void vti_print_help(struct link_util *lu, int argc, char **argv,
-	FILE *f)
-{
-	print_usage(f);
 }
 
 struct link_util vti_link_util = {

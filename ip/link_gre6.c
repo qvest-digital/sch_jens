@@ -30,34 +30,40 @@
 
 #define DEFAULT_TNL_HOP_LIMIT	(64)
 
-static void print_usage(FILE *f)
+static void gre_print_help(struct link_util *lu, int argc, char **argv, FILE *f)
 {
 	fprintf(f,
-		"Usage: ... { ip6gre | ip6gretap | ip6erspan} [ remote ADDR ]\n"
-		"                                  [ local ADDR ]\n"
-		"                                  [ [i|o]seq ]\n"
-		"                                  [ [i|o]key KEY ]\n"
-		"                                  [ [i|o]csum ]\n"
-		"                                  [ hoplimit TTL ]\n"
-		"                                  [ encaplimit ELIM ]\n"
-		"                                  [ tclass TCLASS ]\n"
-		"                                  [ flowlabel FLOWLABEL ]\n"
-		"                                  [ dscp inherit ]\n"
-		"                                  [ fwmark MARK ]\n"
-		"                                  [ dev PHYS_DEV ]\n"
-		"                                  [ noencap ]\n"
-		"                                  [ encap { fou | gue | none } ]\n"
-		"                                  [ encap-sport PORT ]\n"
-		"                                  [ encap-dport PORT ]\n"
-		"                                  [ [no]encap-csum ]\n"
-		"                                  [ [no]encap-csum6 ]\n"
-		"                                  [ [no]encap-remcsum ]\n"
-		"                                  [ erspan_ver version ]\n"
-		"                                  [ erspan IDX ]\n"
-		"                                  [ erspan_dir { ingress | egress } ]\n"
-		"                                  [ erspan_hwid hwid ]\n"
-		"                                  [ external ]\n"
+		"Usage: ... %-9s [ remote ADDR ]\n",
+		lu->id
+	);
+	fprintf(f,
+		"                     [ local ADDR ]\n"
+		"                     [ [i|o]seq ]\n"
+		"                     [ [i|o]key KEY ]\n"
+		"                     [ [i|o]csum ]\n"
+		"                     [ hoplimit TTL ]\n"
+		"                     [ encaplimit ELIM ]\n"
+		"                     [ tclass TCLASS ]\n"
+		"                     [ flowlabel FLOWLABEL ]\n"
+		"                     [ dscp inherit ]\n"
+		"                     [ dev PHYS_DEV ]\n"
+		"                     [ fwmark MARK ]\n"
+		"                     [ [no]allow-localremote ]\n"
+		"                     [ external ]\n"
+		"                     [ noencap ]\n"
+		"                     [ encap { fou | gue | none } ]\n"
+		"                     [ encap-sport PORT ]\n"
+		"                     [ encap-dport PORT ]\n"
+		"                     [ [no]encap-csum ]\n"
+		"                     [ [no]encap-csum6 ]\n"
+		"                     [ [no]encap-remcsum ]\n"
+		"                     [ erspan_ver version ]\n"
+		"                     [ erspan IDX ]\n"
+		"                     [ erspan_dir { ingress | egress } ]\n"
+		"                     [ erspan_hwid hwid ]\n"
 		"\n"
+	);
+	fprintf(f,
 		"Where: ADDR      := IPV6_ADDRESS\n"
 		"       TTL       := { 0..255 } (default=%d)\n"
 		"       KEY       := { DOTTED_QUAD | NUMBER }\n"
@@ -69,17 +75,10 @@ static void print_usage(FILE *f)
 	);
 }
 
-static void usage(void) __attribute__((noreturn));
-static void usage(void)
-{
-	print_usage(stderr);
-	exit(-1);
-}
-
 static int gre_parse_opt(struct link_util *lu, int argc, char **argv,
 			 struct nlmsghdr *n)
 {
-	struct ifinfomsg *ifi = (struct ifinfomsg *)(n + 1);
+	struct ifinfomsg *ifi = NLMSG_DATA(n);
 	struct {
 		struct nlmsghdr n;
 		struct ifinfomsg i;
@@ -94,30 +93,34 @@ static int gre_parse_opt(struct link_util *lu, int argc, char **argv,
 	struct rtattr *tb[IFLA_MAX + 1];
 	struct rtattr *linkinfo[IFLA_INFO_MAX+1];
 	struct rtattr *greinfo[IFLA_GRE_MAX + 1];
+	int len;
 	__u16 iflags = 0;
 	__u16 oflags = 0;
 	__be32 ikey = 0;
 	__be32 okey = 0;
-	struct in6_addr raddr = IN6ADDR_ANY_INIT;
-	struct in6_addr laddr = IN6ADDR_ANY_INIT;
-	unsigned int link = 0;
-	unsigned int flowinfo = 0;
-	unsigned int flags = 0;
+	inet_prefix saddr, daddr;
 	__u8 hop_limit = DEFAULT_TNL_HOP_LIMIT;
 	__u8 encap_limit = IPV6_DEFAULT_TNL_ENCAP_LIMIT;
+	__u32 flowinfo = 0;
+	__u32 flags = 0;
+	__u32 link = 0;
 	__u16 encaptype = 0;
 	__u16 encapflags = TUNNEL_ENCAP_FLAG_CSUM6;
 	__u16 encapsport = 0;
 	__u16 encapdport = 0;
 	__u8 metadata = 0;
-	int len;
 	__u32 fwmark = 0;
 	__u32 erspan_idx = 0;
 	__u8 erspan_ver = 0;
 	__u8 erspan_dir = 0;
 	__u16 erspan_hwid = 0;
 
+	inet_prefix_reset(&saddr);
+	inet_prefix_reset(&daddr);
+
 	if (!(n->nlmsg_flags & NLM_F_CREATE)) {
+		const struct rtattr *rta;
+
 		if (rtnl_talk(&rth, &req.n, &answer) < 0) {
 get_failed:
 			fprintf(stderr,
@@ -143,6 +146,14 @@ get_failed:
 		parse_rtattr_nested(greinfo, IFLA_GRE_MAX,
 				    linkinfo[IFLA_INFO_DATA]);
 
+		rta = greinfo[IFLA_GRE_LOCAL];
+		if (rta && get_addr_rta(&saddr, rta, AF_INET6))
+			goto get_failed;
+
+		rta = greinfo[IFLA_GRE_REMOTE];
+		if (rta && get_addr_rta(&daddr, rta, AF_INET6))
+			goto get_failed;
+
 		if (greinfo[IFLA_GRE_IKEY])
 			ikey = rta_getattr_u32(greinfo[IFLA_GRE_IKEY]);
 
@@ -154,12 +165,6 @@ get_failed:
 
 		if (greinfo[IFLA_GRE_OFLAGS])
 			oflags = rta_getattr_u16(greinfo[IFLA_GRE_OFLAGS]);
-
-		if (greinfo[IFLA_GRE_LOCAL])
-			memcpy(&laddr, RTA_DATA(greinfo[IFLA_GRE_LOCAL]), sizeof(laddr));
-
-		if (greinfo[IFLA_GRE_REMOTE])
-			memcpy(&raddr, RTA_DATA(greinfo[IFLA_GRE_REMOTE]), sizeof(raddr));
 
 		if (greinfo[IFLA_GRE_TTL])
 			hop_limit = rta_getattr_u8(greinfo[IFLA_GRE_TTL]);
@@ -185,11 +190,11 @@ get_failed:
 		if (greinfo[IFLA_GRE_ENCAP_SPORT])
 			encapsport = rta_getattr_u16(greinfo[IFLA_GRE_ENCAP_SPORT]);
 
-		if (greinfo[IFLA_GRE_COLLECT_METADATA])
-			metadata = 1;
-
 		if (greinfo[IFLA_GRE_ENCAP_DPORT])
 			encapdport = rta_getattr_u16(greinfo[IFLA_GRE_ENCAP_DPORT]);
+
+		if (greinfo[IFLA_GRE_COLLECT_METADATA])
+			metadata = 1;
 
 		if (greinfo[IFLA_GRE_FWMARK])
 			fwmark = rta_getattr_u32(greinfo[IFLA_GRE_FWMARK]);
@@ -238,25 +243,16 @@ get_failed:
 		} else if (!matches(*argv, "ocsum")) {
 			oflags |= GRE_CSUM;
 		} else if (!matches(*argv, "remote")) {
-			inet_prefix addr;
-
 			NEXT_ARG();
-			get_addr(&addr, *argv, AF_INET6);
-			memcpy(&raddr, &addr.data, sizeof(raddr));
+			get_addr(&daddr, *argv, AF_INET6);
 		} else if (!matches(*argv, "local")) {
-			inet_prefix addr;
-
 			NEXT_ARG();
-			get_addr(&addr, *argv, AF_INET6);
-			memcpy(&laddr, &addr.data, sizeof(laddr));
+			get_addr(&saddr, *argv, AF_INET6);
 		} else if (!matches(*argv, "dev")) {
 			NEXT_ARG();
 			link = ll_name_to_index(*argv);
-			if (link == 0) {
-				fprintf(stderr, "Cannot find device \"%s\"\n",
-					*argv);
-				exit(-1);
-			}
+			if (!link)
+				exit(nodev(*argv));
 		} else if (!matches(*argv, "ttl") ||
 			   !matches(*argv, "hoplimit") ||
 			   !matches(*argv, "hlim")) {
@@ -348,6 +344,10 @@ get_failed:
 					invarg("invalid fwmark\n", *argv);
 				flags &= ~IP6_TNL_F_USE_ORIG_FWMARK;
 			}
+		} else if (strcmp(*argv, "allow-localremote") == 0) {
+			flags |= IP6_TNL_F_ALLOW_LOCAL_REMOTE;
+		} else if (strcmp(*argv, "noallow-localremote") == 0) {
+			flags &= ~IP6_TNL_F_ALLOW_LOCAL_REMOTE;
 		} else if (strcmp(*argv, "encaplimit") == 0) {
 			NEXT_ARG();
 			if (strcmp(*argv, "none") == 0) {
@@ -384,44 +384,46 @@ get_failed:
 			NEXT_ARG();
 			if (get_u16(&erspan_hwid, *argv, 0))
 				invarg("invalid erspan hwid\n", *argv);
-		} else
-			usage();
+		} else {
+			gre_print_help(lu, argc, argv, stderr);
+			return -1;
+		}
 		argc--; argv++;
 	}
 
-	if (!metadata) {
-		addattr32(n, 1024, IFLA_GRE_IKEY, ikey);
-		addattr32(n, 1024, IFLA_GRE_OKEY, okey);
-		addattr_l(n, 1024, IFLA_GRE_IFLAGS, &iflags, 2);
-		addattr_l(n, 1024, IFLA_GRE_OFLAGS, &oflags, 2);
-		addattr_l(n, 1024, IFLA_GRE_LOCAL, &laddr, sizeof(laddr));
-		addattr_l(n, 1024, IFLA_GRE_REMOTE, &raddr, sizeof(raddr));
-		if (link)
-			addattr32(n, 1024, IFLA_GRE_LINK, link);
-		addattr_l(n, 1024, IFLA_GRE_TTL, &hop_limit, 1);
-		addattr_l(n, 1024, IFLA_GRE_ENCAP_LIMIT, &encap_limit, 1);
-		addattr_l(n, 1024, IFLA_GRE_FLOWINFO, &flowinfo, 4);
-		addattr32(n, 1024, IFLA_GRE_FLAGS, flags);
-		addattr32(n, 1024, IFLA_GRE_FWMARK, fwmark);
-		if (erspan_ver) {
-			addattr8(n, 1024, IFLA_GRE_ERSPAN_VER, erspan_ver);
-			if (erspan_ver == 1 && erspan_idx != 0) {
-				addattr32(n, 1024,
-					  IFLA_GRE_ERSPAN_INDEX, erspan_idx);
-			} else if (erspan_ver == 2) {
-				addattr8(n, 1024,
-					 IFLA_GRE_ERSPAN_DIR, erspan_dir);
-				addattr16(n, 1024,
-					  IFLA_GRE_ERSPAN_HWID, erspan_hwid);
-			}
-		}
-		addattr16(n, 1024, IFLA_GRE_ENCAP_TYPE, encaptype);
-		addattr16(n, 1024, IFLA_GRE_ENCAP_FLAGS, encapflags);
-		addattr16(n, 1024, IFLA_GRE_ENCAP_SPORT, htons(encapsport));
-		addattr16(n, 1024, IFLA_GRE_ENCAP_DPORT, htons(encapdport));
-	} else {
+	if (metadata) {
 		addattr_l(n, 1024, IFLA_GRE_COLLECT_METADATA, NULL, 0);
+		return 0;
 	}
+
+	addattr32(n, 1024, IFLA_GRE_IKEY, ikey);
+	addattr32(n, 1024, IFLA_GRE_OKEY, okey);
+	addattr_l(n, 1024, IFLA_GRE_IFLAGS, &iflags, 2);
+	addattr_l(n, 1024, IFLA_GRE_OFLAGS, &oflags, 2);
+	if (is_addrtype_inet(&saddr))
+		addattr_l(n, 1024, IFLA_GRE_LOCAL, saddr.data, saddr.bytelen);
+	if (is_addrtype_inet(&daddr))
+		addattr_l(n, 1024, IFLA_GRE_REMOTE, daddr.data, daddr.bytelen);
+	if (link)
+		addattr32(n, 1024, IFLA_GRE_LINK, link);
+	addattr_l(n, 1024, IFLA_GRE_TTL, &hop_limit, 1);
+	addattr_l(n, 1024, IFLA_GRE_ENCAP_LIMIT, &encap_limit, 1);
+	addattr_l(n, 1024, IFLA_GRE_FLOWINFO, &flowinfo, 4);
+	addattr32(n, 1024, IFLA_GRE_FLAGS, flags);
+	addattr32(n, 1024, IFLA_GRE_FWMARK, fwmark);
+	if (erspan_ver) {
+		addattr8(n, 1024, IFLA_GRE_ERSPAN_VER, erspan_ver);
+		if (erspan_ver == 1 && erspan_idx != 0) {
+			addattr32(n, 1024, IFLA_GRE_ERSPAN_INDEX, erspan_idx);
+		} else if (erspan_ver == 2) {
+			addattr8(n, 1024, IFLA_GRE_ERSPAN_DIR, erspan_dir);
+			addattr16(n, 1024, IFLA_GRE_ERSPAN_HWID, erspan_hwid);
+		}
+	}
+	addattr16(n, 1024, IFLA_GRE_ENCAP_TYPE, encaptype);
+	addattr16(n, 1024, IFLA_GRE_ENCAP_FLAGS, encapflags);
+	addattr16(n, 1024, IFLA_GRE_ENCAP_SPORT, htons(encapsport));
+	addattr16(n, 1024, IFLA_GRE_ENCAP_DPORT, htons(encapdport));
 
 	return 0;
 }
@@ -429,9 +431,9 @@ get_failed:
 static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 {
 	char s2[64];
-	unsigned int iflags = 0;
-	unsigned int oflags = 0;
-	unsigned int flags = 0;
+	__u16 iflags = 0;
+	__u16 oflags = 0;
+	__u32 flags = 0;
 	__u32 flowinfo = 0;
 	__u8 ttl = 0;
 
@@ -453,7 +455,7 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 	tnl_print_endpoint("local", tb[IFLA_GRE_LOCAL], AF_INET6);
 
 	if (tb[IFLA_GRE_LINK]) {
-		unsigned int link = rta_getattr_u32(tb[IFLA_GRE_LINK]);
+		__u32 link = rta_getattr_u32(tb[IFLA_GRE_LINK]);
 
 		if (link) {
 			print_string(PRINT_ANY, "link", "dev %s ",
@@ -534,6 +536,12 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 	if (oflags & GRE_CSUM)
 		print_bool(PRINT_ANY, "ocsum", "ocsum ", true);
 
+	if (flags & IP6_TNL_F_ALLOW_LOCAL_REMOTE)
+		print_bool(PRINT_ANY,
+			   "ip6_tnl_f_allow_local_remote",
+			   "allow-localremote ",
+			   true);
+
 	if (flags & IP6_TNL_F_USE_ORIG_FWMARK) {
 		print_bool(PRINT_ANY,
 			   "ip6_tnl_f_use_orig_fwmark",
@@ -550,6 +558,7 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 
 	if (tb[IFLA_GRE_ERSPAN_INDEX]) {
 		__u32 erspan_idx = rta_getattr_u32(tb[IFLA_GRE_ERSPAN_INDEX]);
+
 		print_uint(PRINT_ANY,
 			   "erspan_index", "erspan_index %u ", erspan_idx);
 	}
@@ -557,7 +566,8 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 	if (tb[IFLA_GRE_ERSPAN_VER]) {
 		__u8 erspan_ver = rta_getattr_u8(tb[IFLA_GRE_ERSPAN_VER]);
 
-		print_uint(PRINT_ANY, "erspan_ver", "erspan_ver %u ", erspan_ver);
+		print_uint(PRINT_ANY,
+			   "erspan_ver", "erspan_ver %u ", erspan_ver);
 	}
 
 	if (tb[IFLA_GRE_ERSPAN_DIR]) {
@@ -574,7 +584,8 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 	if (tb[IFLA_GRE_ERSPAN_HWID]) {
 		__u16 erspan_hwid = rta_getattr_u16(tb[IFLA_GRE_ERSPAN_HWID]);
 
-		print_hex(PRINT_ANY, "erspan_hwid", "erspan_hwid 0x%x ", erspan_hwid);
+		print_0xhex(PRINT_ANY,
+			    "erspan_hwid", "erspan_hwid 0x%x ", erspan_hwid);
 	}
 
 	tnl_print_encap(tb,
@@ -582,12 +593,6 @@ static void gre_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 			IFLA_GRE_ENCAP_FLAGS,
 			IFLA_GRE_ENCAP_SPORT,
 			IFLA_GRE_ENCAP_DPORT);
-}
-
-static void gre_print_help(struct link_util *lu, int argc, char **argv,
-			   FILE *f)
-{
-	print_usage(f);
 }
 
 struct link_util ip6gre_link_util = {

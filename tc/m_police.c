@@ -232,8 +232,7 @@ action_ctrl_ok:
 		}
 	}
 
-	tail = NLMSG_TAIL(n);
-	addattr_l(n, MAX_MSG, tca_id, NULL, 0);
+	tail = addattr_nest(n, MAX_MSG, tca_id);
 	addattr_l(n, MAX_MSG, TCA_POLICE_TBF, &p, sizeof(p));
 	if (p.rate.rate)
 		addattr_l(n, MAX_MSG, TCA_POLICE_RATE, rtab, 1024);
@@ -244,7 +243,7 @@ action_ctrl_ok:
 	if (presult)
 		addattr32(n, MAX_MSG, TCA_POLICE_RESULT, presult);
 
-	tail->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail;
+	addattr_nest_end(n, tail);
 	res = 0;
 
 	*argc_p = argc;

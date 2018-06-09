@@ -12,6 +12,7 @@
 #include "libnetlink.h"
 #include "ll_map.h"
 #include "rtm_map.h"
+#include "json_print.h"
 
 extern int preferred_family;
 extern int human_readable;
@@ -23,6 +24,7 @@ extern int resolve_hosts;
 extern int oneline;
 extern int brief;
 extern int json;
+extern int pretty;
 extern int timestamp;
 extern int timestamp_short;
 extern const char * _SL_;
@@ -63,6 +65,11 @@ enum {
 	ADDRTYPE_INET_UNSPEC	= ADDRTYPE_INET | ADDRTYPE_UNSPEC,
 	ADDRTYPE_INET_MULTI	= ADDRTYPE_INET | ADDRTYPE_MULTI
 };
+
+static inline void inet_prefix_reset(inet_prefix *p)
+{
+	p->flags = 0;
+}
 
 static inline bool is_addrtype_inet(const inet_prefix *p)
 {
@@ -155,6 +162,10 @@ int af_byte_len(int af);
 
 const char *format_host_r(int af, int len, const void *addr,
 			       char *buf, int buflen);
+#define format_host_rta_r(af, rta, buf, buflen)	\
+	format_host_r(af, RTA_PAYLOAD(rta), RTA_DATA(rta), \
+		      buf, buflen)
+
 const char *format_host(int af, int lne, const void *addr);
 #define format_host_rta(af, rta) \
 	format_host(af, RTA_PAYLOAD(rta), RTA_DATA(rta))
@@ -171,8 +182,10 @@ void missarg(const char *) __attribute__((noreturn));
 void invarg(const char *, const char *) __attribute__((noreturn));
 void duparg(const char *, const char *) __attribute__((noreturn));
 void duparg2(const char *, const char *) __attribute__((noreturn));
+int nodev(const char *dev);
 int check_ifname(const char *);
 int get_ifname(char *, const char *);
+const char *get_ifname_rta(int ifindex, const struct rtattr *rta);
 int matches(const char *arg, const char *pattern);
 int inet_addr_match(const inet_prefix *a, const inet_prefix *b, int bits);
 int inet_addr_match_rta(const inet_prefix *m, const struct rtattr *rta);
@@ -239,6 +252,9 @@ void print_escape_buf(const __u8 *buf, size_t len, const char *escape);
 int print_timestamp(FILE *fp);
 void print_nlmsg_timestamp(FILE *fp, const struct nlmsghdr *n);
 
+unsigned int print_name_and_link(const char *fmt,
+				 const char *name, struct rtattr *tb[]);
+
 #define BIT(nr)                 (1UL << (nr))
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
@@ -272,16 +288,6 @@ extern int cmdlineno;
 ssize_t getcmdline(char **line, size_t *len, FILE *in);
 int makeargs(char *line, char *argv[], int maxargs);
 
-struct iplink_req {
-	struct nlmsghdr		n;
-	struct ifinfomsg	i;
-	char			buf[1024];
-};
-
-int iplink_parse(int argc, char **argv, struct iplink_req *req,
-		char **name, char **type, char **link, char **dev,
-		int *group, int *index);
-
 int do_each_netns(int (*func)(char *nsname, void *arg), void *arg,
 		bool show_label);
 
@@ -293,6 +299,9 @@ int cmd_exec(const char *cmd, char **argv, bool do_fork);
 int make_path(const char *path, mode_t mode);
 char *find_cgroup2_mount(void);
 int get_command_name(const char *pid, char *comm, size_t len);
+
+int get_rtnl_link_stats_rta(struct rtnl_link_stats64 *stats64,
+			    struct rtattr *tb[]);
 
 #ifdef NEED_STRLCPY
 size_t strlcpy(char *dst, const char *src, size_t size);

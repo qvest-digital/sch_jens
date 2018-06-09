@@ -169,19 +169,44 @@ static struct ematch_util *get_ematch_kind_num(__u16 kind)
 	return get_ematch_kind(name);
 }
 
+static int em_parse_call(struct nlmsghdr *n, struct tcf_ematch_hdr *hdr,
+			 struct ematch_util *e, struct ematch *t)
+{
+	if (e->parse_eopt_argv) {
+		int argc = 0, i = 0, ret;
+		struct bstr *args;
+		char **argv;
+
+		for (args = t->args; args; args = bstr_next(args))
+			argc++;
+		argv = calloc(argc, sizeof(char *));
+		if (!argv)
+			return -1;
+		for (args = t->args; args; args = bstr_next(args))
+			argv[i++] = args->data;
+
+		ret = e->parse_eopt_argv(n, hdr, argc, argv);
+
+		free(argv);
+		return ret;
+	}
+
+	return e->parse_eopt(n, hdr, t->args->next);
+}
+
 static int parse_tree(struct nlmsghdr *n, struct ematch *tree)
 {
 	int index = 1;
 	struct ematch *t;
 
 	for (t = tree; t; t = t->next) {
-		struct rtattr *tail = NLMSG_TAIL(n);
+		struct rtattr *tail;
 		struct tcf_ematch_hdr hdr = { .flags = t->relation };
 
 		if (t->inverted)
 			hdr.flags |= TCF_EM_INVERT;
 
-		addattr_l(n, MAX_MSG, index++, NULL, 0);
+		tail = addattr_nest(n, MAX_MSG, index++);
 
 		if (t->child) {
 			__u32 r = t->child_ref;
@@ -212,11 +237,11 @@ static int parse_tree(struct nlmsghdr *n, struct ematch *tree)
 			}
 
 			hdr.kind = num;
-			if (e->parse_eopt(n, &hdr, t->args->next) < 0)
+			if (em_parse_call(n, &hdr, e, t) < 0)
 				return -1;
 		}
 
-		tail->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail;
+		addattr_nest_end(n, tail);
 	}
 
 	return 0;
@@ -341,18 +366,16 @@ int parse_ematch(int *argc_p, char ***argv_p, int tca_id, struct nlmsghdr *n)
 			.progid = TCF_EM_PROG_TC
 		};
 
-		tail = NLMSG_TAIL(n);
-		addattr_l(n, MAX_MSG, tca_id, NULL, 0);
+		tail = addattr_nest(n, MAX_MSG, tca_id);
 		addattr_l(n, MAX_MSG, TCA_EMATCH_TREE_HDR, &hdr, sizeof(hdr));
 
-		tail_list = NLMSG_TAIL(n);
-		addattr_l(n, MAX_MSG, TCA_EMATCH_TREE_LIST, NULL, 0);
+		tail_list = addattr_nest(n, MAX_MSG, TCA_EMATCH_TREE_LIST);
 
 		if (parse_tree(n, ematch_root) < 0)
 			return -1;
 
-		tail_list->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail_list;
-		tail->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail;
+		addattr_nest_end(n, tail_list);
+		addattr_nest_end(n, tail);
 	}
 
 	*argc_p = ematch_argc;

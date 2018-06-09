@@ -33,7 +33,6 @@
 int show_stats;
 int show_details;
 int show_raw;
-int show_pretty;
 int show_graph;
 int timestamp;
 
@@ -42,6 +41,9 @@ int use_iec;
 int force;
 bool use_names;
 int json;
+int color;
+int oneline;
+const char *_SL_;
 
 static char *conf_file;
 
@@ -197,7 +199,7 @@ static void usage(void)
 		"       tc [-force] -batch filename\n"
 		"where  OBJECT := { qdisc | class | filter | action | monitor | exec }\n"
 		"       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[aw] |\n"
-		"                    -j[son] | -p[retty] |\n"
+		"                    -o[neline] | -j[son] | -p[retty] | -c[olor]\n"
 		"                    -b[atch] [filename] | -n[etns] name |\n"
 		"                    -nm | -nam[es] | { -cf | -conf } path }\n");
 }
@@ -458,7 +460,7 @@ int main(int argc, char **argv)
 		} else if (matches(argv[1], "-raw") == 0) {
 			++show_raw;
 		} else if (matches(argv[1], "-pretty") == 0) {
-			++show_pretty;
+			++pretty;
 		} else if (matches(argv[1], "-graph") == 0) {
 			show_graph = 1;
 		} else if (matches(argv[1], "-Version") == 0) {
@@ -487,6 +489,8 @@ int main(int argc, char **argv)
 				matches(argv[1], "-conf") == 0) {
 			NEXT_ARG();
 			conf_file = argv[1];
+		} else if (matches(argv[1], "-color") == 0) {
+			++color;
 		} else if (matches(argv[1], "-timestamp") == 0) {
 			timestamp++;
 		} else if (matches(argv[1], "-tshort") == 0) {
@@ -494,6 +498,8 @@ int main(int argc, char **argv)
 			++timestamp_short;
 		} else if (matches(argv[1], "-json") == 0) {
 			++json;
+		} else if (matches(argv[1], "-oneline") == 0) {
+			++oneline;
 		} else {
 			fprintf(stderr,
 				"Option \"%s\" is unknown, try \"tc -help\".\n",
@@ -502,6 +508,11 @@ int main(int argc, char **argv)
 		}
 		argc--;	argv++;
 	}
+
+	_SL_ = oneline ? "\\" : "\n";
+
+	if (color & !json)
+		enable_color();
 
 	if (batch_file)
 		return batch(batch_file);

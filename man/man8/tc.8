@@ -95,17 +95,19 @@ tc \- show / manipulate traffic control settings
 \fB[ \fB-n\fR[\fIetns\fR] name \fB] \fR|
 \fB[ \fB-nm \fR| \fB-nam\fR[\fIes\fR] \fB] \fR|
 \fB[ \fR{ \fB-cf \fR| \fB-c\fR[\fIonf\fR] \fR} \fB[ filename ] \fB] \fR
-\fB[ -t\fR[imestamp\fR] \fB\] \fR| \fB[ -t\fR[short\fR] \fB]\fR }
+\fB[ -t\fR[imestamp\fR] \fB\] \fR| \fB[ -t\fR[short\fR] \fR| \fB[
+-o\fR[neline\fR] \fB]\fR }
 
 .ti 8
 .IR FORMAT " := {"
 \fB\-s\fR[\fItatistics\fR] |
 \fB\-d\fR[\fIetails\fR] |
 \fB\-r\fR[\fIaw\fR] |
-\fB\-p\fR[\fIretty\fR] |
 \fB\-i\fR[\fIec\fR] |
 \fB\-g\fR[\fIraph\fR] |
-\fB\-j\fR[\fIjson\fR] }
+\fB\-j\fR[\fIjson\fR] |
+\fB\-p\fR[\fIretty\fR] |
+\fB\-col\fR[\fIor\fR] }
 
 .SH DESCRIPTION
 .B Tc
@@ -648,6 +650,18 @@ don't terminate tc on errors in batch mode.
 If there were any errors during execution of the commands, the application return code will be non zero.
 
 .TP
+.BR "\-o" , " \-oneline"
+output each record on a single line, replacing line feeds
+with the
+.B '\e'
+character. This is convenient when you want to count records
+with
+.BR wc (1)
+or to
+.BR grep (1)
+the output.
+
+.TP
 .BR "\-n" , " \-net" , " \-netns " <NETNS>
 switches
 .B tc
@@ -699,7 +713,8 @@ output raw hex values for handles.
 
 .TP
 .BR "\-p", " \-pretty"
-decode filter offset and mask values to equivalent filter commands based on TCP/IP.
+for u32 filter, decode offset and mask values to equivalent filter commands based on TCP/IP.
+In JSON output, add whitespace to improve readability.
 
 .TP
 .BR "\-iec"
@@ -712,6 +727,10 @@ shows classes as ASCII graph. Prints generic stats info under each class if
 option was specified. Classes can be filtered only by
 .BR "dev"
 option.
+
+.TP
+.BR "\ -color"
+Use color output.
 
 .TP
 .BR "\-j", " \-json"

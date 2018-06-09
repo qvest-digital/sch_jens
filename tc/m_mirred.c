@@ -194,10 +194,8 @@ parse_direction(struct action_util *a, int *argc_p, char ***argv_p,
 		ll_init_map(&rth);
 
 		idx = ll_name_to_index(d);
-		if (idx == 0) {
-			fprintf(stderr, "Cannot find device \"%s\"\n", d);
-			return -1;
-		}
+		if (!idx)
+			return nodev(d);
 
 		p.ifindex = idx;
 	}
@@ -224,10 +222,9 @@ parse_direction(struct action_util *a, int *argc_p, char ***argv_p,
 		}
 	}
 
-	tail = NLMSG_TAIL(n);
-	addattr_l(n, MAX_MSG, tca_id, NULL, 0);
+	tail = addattr_nest(n, MAX_MSG, tca_id);
 	addattr_l(n, MAX_MSG, TCA_MIRRED_PARMS, &p, sizeof(p));
-	tail->rta_len = (void *) NLMSG_TAIL(n) - (void *) tail;
+	addattr_nest_end(n, tail);
 
 	*argc_p = argc;
 	*argv_p = argv;

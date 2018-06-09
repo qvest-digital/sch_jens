@@ -22,6 +22,8 @@ bridge \- show / manipulate bridge addresses and devices
 \fB\-s\fR[\fItatistics\fR] |
 \fB\-n\fR[\fIetns\fR] name |
 \fB\-b\fR[\fIatch\fR] filename |
+\fB\-c\fR[\folor\fR] |
+\fB\-p\fR[\fIretty\fR] |
 \fB\-j\fR[\fIson\fR] }
 
 .ti -8
@@ -59,7 +61,7 @@ bridge \- show / manipulate bridge addresses and devices
 .B dev
 .IR DEV " { "
 .BR local " | " static " | " dynamic " } [ "
-.BR self " ] [ " master " ] [ " router " ] [ " use " ] [ "
+.BR self " ] [ " master " ] [ " router " ] [ " use " ] [ " extern_learn " ] [ "
 .B dst
 .IR IPADDR " ] [ "
 .B vni
@@ -168,8 +170,17 @@ If there were any errors during execution of the commands, the application
 return code will be non zero.
 
 .TP
-.BR "\-json"
-Display results in JSON format. Currently available for vlan and fdb.
+.BR "\-c" , " -color"
+Use color output.
+
+.TP
+.BR "\-j", " \-json"
+Output results in JavaScript Object Notation (JSON).
+
+.TP
+.BR "\-p", " \-pretty"
+When combined with -j generate a pretty JSON output.
+
 
 .SH BRIDGE - COMMAND SYNTAX
 
@@ -401,6 +412,12 @@ route shortcircuit enabled.
 .B use
 - the address is in use. User space can use this option to
 indicate to the kernel that the fdb entry is in use.
+.sp
+
+.B extern_learn
+- this entry was learned externally. This option can be used to
+indicate to the kernel that an entry was hardware or user-space
+controller learnt dynamic entry. Kernel will not age such an entry.
 .sp
 
 .in -8

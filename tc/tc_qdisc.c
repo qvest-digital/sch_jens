@@ -182,14 +182,13 @@ static int tc_qdisc_modify(int cmd, unsigned int flags, int argc, char **argv)
 			return -1;
 		}
 
-		tail = NLMSG_TAIL(&req.n);
-		addattr_l(&req.n, sizeof(req), TCA_STAB, NULL, 0);
+		tail = addattr_nest(&req.n, sizeof(req), TCA_STAB);
 		addattr_l(&req.n, sizeof(req), TCA_STAB_BASE, &stab.szopts,
 			  sizeof(stab.szopts));
 		if (stab.data)
 			addattr_l(&req.n, sizeof(req), TCA_STAB_DATA, stab.data,
 				  stab.szopts.tsize * sizeof(__u16));
-		tail->rta_len = (void *)NLMSG_TAIL(&req.n) - (void *)tail;
+		addattr_nest_end(&req.n, tail);
 		if (stab.data)
 			free(stab.data);
 	}
@@ -200,10 +199,8 @@ static int tc_qdisc_modify(int cmd, unsigned int flags, int argc, char **argv)
 		ll_init_map(&rth);
 
 		idx = ll_name_to_index(d);
-		if (idx == 0) {
-			fprintf(stderr, "Cannot find device \"%s\"\n", d);
-			return 1;
-		}
+		if (!idx)
+			return -nodev(d);
 		req.t.tcm_ifindex = idx;
 	}
 
@@ -271,8 +268,7 @@ int print_qdisc(const struct sockaddr_nl *who,
 	print_string(PRINT_FP, NULL, " ", NULL);
 
 	if (filter_ifindex == 0)
-		print_string(PRINT_ANY, "dev", "dev %s ",
-			     ll_index_to_name(t->tcm_ifindex));
+		print_devname(PRINT_ANY, t->tcm_ifindex);
 
 	if (t->tcm_parent == TC_H_ROOT)
 		print_bool(PRINT_ANY, "root", "root ", true);
@@ -380,10 +376,8 @@ static int tc_qdisc_list(int argc, char **argv)
 
 	if (d[0]) {
 		t.tcm_ifindex = ll_name_to_index(d);
-		if (t.tcm_ifindex == 0) {
-			fprintf(stderr, "Cannot find device \"%s\"\n", d);
-			return 1;
-		}
+		if (!t.tcm_ifindex)
+			return -nodev(d);
 		filter_ifindex = t.tcm_ifindex;
 	}
 

@@ -176,10 +176,15 @@ void jsonw_end_object(json_writer_t *self)
 void jsonw_start_array(json_writer_t *self)
 {
 	jsonw_begin(self, '[');
+	if (self->pretty)
+		putc(' ', self->out);
 }
 
 void jsonw_end_array(json_writer_t *self)
 {
+	if (self->pretty && self->sep)
+		putc(' ', self->out);
+	self->sep = '\0';
 	jsonw_end(self, ']');
 }
 
@@ -215,9 +220,24 @@ void jsonw_hu(json_writer_t *self, unsigned short num)
 	jsonw_printf(self, "%hu", num);
 }
 
-void jsonw_uint(json_writer_t *self, uint64_t num)
+void jsonw_uint(json_writer_t *self, unsigned int num)
+{
+	jsonw_printf(self, "%u", num);
+}
+
+void jsonw_u64(json_writer_t *self, uint64_t num)
 {
 	jsonw_printf(self, "%"PRIu64, num);
+}
+
+void jsonw_xint(json_writer_t *self, uint64_t num)
+{
+	jsonw_printf(self, "%"PRIx64, num);
+}
+
+void jsonw_luint(json_writer_t *self, unsigned long int num)
+{
+	jsonw_printf(self, "%lu", num);
 }
 
 void jsonw_lluint(json_writer_t *self, unsigned long long int num)
@@ -225,7 +245,12 @@ void jsonw_lluint(json_writer_t *self, unsigned long long int num)
 	jsonw_printf(self, "%llu", num);
 }
 
-void jsonw_int(json_writer_t *self, int64_t num)
+void jsonw_int(json_writer_t *self, int num)
+{
+	jsonw_printf(self, "%d", num);
+}
+
+void jsonw_s64(json_writer_t *self, int64_t num)
 {
 	jsonw_printf(self, "%"PRId64, num);
 }
@@ -258,16 +283,36 @@ void jsonw_float_field_fmt(json_writer_t *self,
 	jsonw_float_fmt(self, fmt, val);
 }
 
-void jsonw_uint_field(json_writer_t *self, const char *prop, uint64_t num)
+void jsonw_uint_field(json_writer_t *self, const char *prop, unsigned int num)
 {
 	jsonw_name(self, prop);
 	jsonw_uint(self, num);
+}
+
+void jsonw_u64_field(json_writer_t *self, const char *prop, uint64_t num)
+{
+	jsonw_name(self, prop);
+	jsonw_u64(self, num);
+}
+
+void jsonw_xint_field(json_writer_t *self, const char *prop, uint64_t num)
+{
+	jsonw_name(self, prop);
+	jsonw_xint(self, num);
 }
 
 void jsonw_hu_field(json_writer_t *self, const char *prop, unsigned short num)
 {
 	jsonw_name(self, prop);
 	jsonw_hu(self, num);
+}
+
+void jsonw_luint_field(json_writer_t *self,
+			const char *prop,
+			unsigned long int num)
+{
+	jsonw_name(self, prop);
+	jsonw_luint(self, num);
 }
 
 void jsonw_lluint_field(json_writer_t *self,
@@ -278,10 +323,16 @@ void jsonw_lluint_field(json_writer_t *self,
 	jsonw_lluint(self, num);
 }
 
-void jsonw_int_field(json_writer_t *self, const char *prop, int64_t num)
+void jsonw_int_field(json_writer_t *self, const char *prop, int num)
 {
 	jsonw_name(self, prop);
 	jsonw_int(self, num);
+}
+
+void jsonw_s64_field(json_writer_t *self, const char *prop, int64_t num)
+{
+	jsonw_name(self, prop);
+	jsonw_s64(self, num);
 }
 
 void jsonw_null_field(json_writer_t *self, const char *prop)

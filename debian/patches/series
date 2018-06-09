@@ -1,4 +1,2 @@
 0001-Add-moo-feature.patch
 0004-sync-iptables-header.patch
-0005-fix-drop-cap-inherit.patch
-0006-Do-not-reset-family-for-default-any-all-addres.patch

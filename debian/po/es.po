@@ -1,0 +1,91 @@
+# iproute2 po-debconf translation to Spanish.
+# Copyright (C) 2018 Software in the Public Interest
+# This file is distributed under the same license as the iproute2 package.
+#
+# - Initial translation
+# Jonathan Bustillos <jathanblackred@openmailbox.com>, 2018.
+#
+# Traductores, si no conocen el formato PO, merece la pena leer la
+# documentación de gettext, especialmente las secciones dedicadas a este
+# formato, por ejemplo ejecutando:
+# info -n '(gettext)PO Files'
+# info -n '(gettext)Header Entry'
+#
+# Equipo de traducción al español, por favor lean antes de traducir
+# los siguientes documentos:
+#
+# - El proyecto de traducción de Debian al español
+# http://www.debian.org/intl/spanish/
+# especialmente las notas y normas de traducción en
+# http://www.debian.org/intl/spanish/notas
+#
+# - La guía de traducción de po's de debconf:
+# /usr/share/doc/po-debconf/README-trans
+# o http://www.debian.org/intl/l10n/po-debconf/README-trans
+msgid ""
+msgstr ""
+"Project-Id-Version: iproute2\n"
+"Report-Msgid-Bugs-To: iproute2@packages.debian.org\n"
+"POT-Creation-Date: 2018-04-12 12:01+0100\n"
+"PO-Revision-Date: 2018-07-16 00:36+0200\n"
+"Last-Translator: Jonathan Bustillos <jathanblackred@openmailbox.com>\n"
+"Language-Team: Debian Spanish <debian-l10n-spanish@lists.debian.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Gtranslator 2.91.7\n"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid "Allow ordinary users to run ip vrf exec using capabilities?"
+msgstr ""
+"¿Permitir que los usuarios comunes ejecuten ip vrf exec usando capacidades?"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"iproute2 can be used to configure and use Virtual Routing and Forwarding "
+"(VRF) functionality in the  kernel. This normally requires root permissions, "
+"but sometimes it's useful to allow ordinary users to execute commands from "
+"inside a virtual routing and forwarding domain. E.g. ip vrf exec examplevrf "
+"ping 10.0.0.1"
+msgstr ""
+"iproute2 se puede usar para configurar y usar la funcionalidad Virtual "
+"Routing and Forwarding (VRF) en el kernel. Esto normalmente requiere "
+"privilegios de root, pero a veces es útil para permitir que los usuarios "
+"comunes ejecuten órdenes dentro de un dominio de enrutamiento y reenvío "
+"virtual. Por ejemplo. ip vrf exec examplevrf ping 10.0.0.1"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"The ip command supports dropping capabilities, making an exception for ip "
+"vrf exec. The drawback of setting the permissions is that if in the unlikely "
+"case of a security critical bug being found before the ip command has "
+"dropped capabilities then it could be used by an attacker to gain root "
+"permissions. It's up to you to decide about the trade-offs and select the "
+"best setting for your system. This will give cap_dac_override, cap_net_admin "
+"and cap_sys_admin to /bin/ip."
+msgstr ""
+"La orden ip admite caídas de capacidades, haciendo una excepción para ip vrf "
+"exec. El inconveniente de establecer los privilegios es que, en el caso "
+"improbable de que se encuentre un error crítico de seguridad antes de que la "
+"orden ip haya descartado las capacidades, un atacante podría usarlo para "
+"obtener privilegios de root. Depende de usted decidir sobre las "
+"compensaciones y seleccionar la mejor configuración para su sistema. Esto "
+"otorgará cap_dac_override, cap_net_admin y cap_sys_admin a /bin/ip."
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"More information about VRF can be found at: https://www.kernel.org/doc/"
+"Documentation/networking/vrf.txt"
+msgstr ""
+"Se puede encontrar más información sobre VRF en: https://www.kernel.org/doc/"
+"Documentation/networking/vrf.txt"

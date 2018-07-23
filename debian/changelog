@@ -3,6 +3,8 @@ iproute2 (4.17.0-3) UNRELEASED; urgency=medium
   * Add Brazilian Portuguese translation for Debconf template. Thanks
     Adriano Rafael Gomes!
     (Closes: #903355)
+  * Add Spanish translation for Debconf template. Thanks Jathan!
+    (Closes: #903864)
 
  -- Luca Boccassi <bluca@debian.org>  Mon, 09 Jul 2018 10:44:15 +0100
 

@@ -15,6 +15,7 @@
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
+#include <netinet/in.h>
 #include <libmnl/libmnl.h>
 #include <rdma/rdma_netlink.h>
 #include <rdma/rdma_user_cm.h>
@@ -55,6 +56,7 @@ struct rd {
 	char **argv;
 	char *filename;
 	bool show_details;
+	bool show_driver_details;
 	struct list_head dev_map_list;
 	uint32_t dev_idx;
 	uint32_t port_idx;
@@ -115,4 +117,14 @@ int rd_recv_msg(struct rd *rd, mnl_cb_t callback, void *data, uint32_t seq);
 void rd_prepare_msg(struct rd *rd, uint32_t cmd, uint32_t *seq, uint16_t flags);
 int rd_dev_init_cb(const struct nlmsghdr *nlh, void *data);
 int rd_attr_cb(const struct nlattr *attr, void *data);
+int rd_attr_check(const struct nlattr *attr, int *typep);
+
+/*
+ * Print helpers
+ */
+void print_driver_table(struct rd *rd, struct nlattr *tb);
+void newline(struct rd *rd);
+void newline_indent(struct rd *rd);
+#define MAX_LINE_LENGTH 80
+
 #endif /* _RDMA_TOOL_H_ */

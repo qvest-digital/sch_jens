@@ -49,9 +49,9 @@ static void usage(void) __attribute__((noreturn));
 
 static void usage(void)
 {
-	if (do_link) {
+	if (do_link)
 		iplink_usage();
-	}
+
 	fprintf(stderr, "Usage: ip address {add|change|replace} IFADDR dev IFNAME [ LIFETIME ]\n");
 	fprintf(stderr, "                                                      [ CONFFLAG-LIST ]\n");
 	fprintf(stderr, "       ip address del IFADDR dev IFNAME [mngtmpaddr]\n");
@@ -63,7 +63,7 @@ static void usage(void)
 	fprintf(stderr, "       ip address {showdump|restore}\n");
 	fprintf(stderr, "IFADDR := PREFIX | ADDR peer PREFIX\n");
 	fprintf(stderr, "          [ broadcast ADDR ] [ anycast ADDR ]\n");
-	fprintf(stderr, "          [ label IFNAME ] [ scope SCOPE-ID ]\n");
+	fprintf(stderr, "          [ label IFNAME ] [ scope SCOPE-ID ] [ metric METRIC ]\n");
 	fprintf(stderr, "SCOPE-ID := [ host | link | global | NUMBER ]\n");
 	fprintf(stderr, "FLAG-LIST := [ FLAG-LIST ] FLAG\n");
 	fprintf(stderr, "FLAG  := [ permanent | dynamic | secondary | primary |\n");
@@ -77,7 +77,7 @@ static void usage(void)
 	fprintf(stderr, "          bridge | bond | ipoib | ip6tnl | ipip | sit | vxlan | lowpan |\n");
 	fprintf(stderr, "          gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan | vti |\n");
 	fprintf(stderr, "          nlmon | can | bond_slave | ipvlan | geneve | bridge_slave |\n");
-	fprintf(stderr, "          hsr | macsec | netdevsim\n");
+	fprintf(stderr, "          hsr | macsec | netdevsim }\n");
 
 	exit(-1);
 }
@@ -837,10 +837,8 @@ int print_linkinfo(const struct sockaddr_nl *who,
 	if (!name)
 		return -1;
 
-	if (filter.label &&
-	    (!filter.family || filter.family == AF_PACKET) &&
-	    fnmatch(filter.label, name, 0))
-		return -1;
+	if (filter.label)
+		return 0;
 
 	if (tb[IFLA_GROUP]) {
 		int group = rta_getattr_u32(tb[IFLA_GROUP]);
@@ -1349,6 +1347,10 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 							   rta_tb[IFA_ADDRESS]));
 		}
 		print_int(PRINT_ANY, "prefixlen", "/%d ", ifa->ifa_prefixlen);
+
+		if (rta_tb[IFA_RT_PRIORITY])
+			print_uint(PRINT_ANY, "metric", "metric %u ",
+				   rta_getattr_u32(rta_tb[IFA_RT_PRIORITY]));
 	}
 
 	if (brief)
@@ -1918,7 +1920,7 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 			exit(1);
 		}
 		delete_json_obj();
-		exit(0);
+		goto out;
 	}
 
 	if (filter.family != AF_PACKET) {
@@ -2061,6 +2063,16 @@ static bool ipaddr_is_multicast(inet_prefix *a)
 		return false;
 }
 
+static bool is_valid_label(const char *dev, const char *label)
+{
+	size_t len = strlen(dev);
+
+	if (strncmp(label, dev, len) != 0)
+		return false;
+
+	return label[len] == '\0' || label[len] == ':';
+}
+
 static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 {
 	struct {
@@ -2146,6 +2158,15 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 			NEXT_ARG();
 			l = *argv;
 			addattr_l(&req.n, sizeof(req), IFA_LABEL, l, strlen(l)+1);
+		} else if (matches(*argv, "metric") == 0 ||
+			   matches(*argv, "priority") == 0 ||
+			   matches(*argv, "preference") == 0) {
+			__u32 metric;
+
+			NEXT_ARG();
+			if (get_u32(&metric, *argv, 0))
+				invarg("\"metric\" value is invalid\n", *argv);
+			addattr32(&req.n, sizeof(req), IFA_RT_PRIORITY, metric);
 		} else if (matches(*argv, "valid_lft") == 0) {
 			if (valid_lftp)
 				duparg("valid_lft", *argv);
@@ -2195,8 +2216,10 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 		fprintf(stderr, "Not enough information: \"dev\" argument is required.\n");
 		return -1;
 	}
-	if (l && matches(d, l) != 0) {
-		fprintf(stderr, "\"dev\" (%s) must match \"label\" (%s).\n", d, l);
+	if (l && !is_valid_label(d, l)) {
+		fprintf(stderr,
+			"\"label\" (%s) must match \"dev\" (%s) or be prefixed by \"dev\" with a colon.\n",
+			l, d);
 		return -1;
 	}
 

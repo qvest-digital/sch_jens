@@ -1,4 +1,5 @@
 etc/
+usr/include/iproute2/
 sbin/arpd /usr/sbin
 sbin/bridge
 sbin/devlink

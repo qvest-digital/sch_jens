@@ -9,6 +9,12 @@ else
 	CROSS := CC=$(DEB_HOST_GNU_TYPE)-gcc HOSTCC=gcc PKG_CONFIG=$(DEB_HOST_GNU_TYPE)-pkg-config
 endif
 
+ifneq (,$(findstring terse,$(DEB_BUILD_OPTIONS)))
+VERBOSE=0
+else
+VERBOSE=1
+endif
+
 %:
 	dh $@
 
@@ -24,4 +30,4 @@ override_dh_auto_configure:
 	$(CROSS) dh_auto_configure
 
 override_dh_auto_build:
-	$(MAKE) KERNEL_INCLUDE=./include $(CROSS)
+	$(MAKE) V=$(VERBOSE) KERNEL_INCLUDE=./include $(CROSS)

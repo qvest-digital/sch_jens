@@ -1,3 +1,16 @@
+iproute2 (4.18.0-2) unstable; urgency=medium
+
+  * Ship installed headers in the iproute2 package.
+    At the moment this inludes a single iproute2/bpf_elf.h header.
+    (Closes: #904122)
+  * Add "terse" DEB_BUILD_OPTIONS as per policy 4.2.0.
+    Build with make V=1 by default as the new policy requests.
+  * Set Rules-Requires-Root: no.
+  * Bump debhelper compat level to 10.
+  * Bump Standards-Version to 4.2.0.
+
+ -- Luca Boccassi <bluca@debian.org>  Tue, 28 Aug 2018 16:55:44 +0100
+
 iproute2 (4.18.0-1) experimental; urgency=medium
 
   * Add Brazilian Portuguese translation for Debconf template. Thanks

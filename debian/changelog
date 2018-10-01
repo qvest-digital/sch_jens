@@ -1,3 +1,9 @@
+iproute2 (4.18.0-3) UNRELEASED; urgency=medium
+
+  * d/changelog: Remove trailing whitespaces
+
+ -- Ondřej Nový <onovy@debian.org>  Mon, 01 Oct 2018 10:29:24 +0200
+
 iproute2 (4.18.0-2) unstable; urgency=medium
 
   * Ship installed headers in the iproute2 package.
@@ -257,7 +263,7 @@ iproute2 (4.1.1-1) unstable; urgency=medium
 iproute2 (4.0.0-1) unstable; urgency=medium
 
   * [6dd90fb] Imported Upstream version 4.0.0
-  * [03b830b] Remove obsolete patch 
+  * [03b830b] Remove obsolete patch
               0003-ip-link-Remove-unnecessary-device-checking
   * [8c27170] Refresh patches
   * [0c99cce] Bump standards version (no changes)
@@ -692,7 +698,7 @@ iproute (20110107-1) experimental; urgency=low
 iproute (20100519-3) unstable; urgency=low
 
   [ Alexander Wirt ]
-  * Add README.source 
+  * Add README.source
 
   [ Andreas Henriksson ]
   * tc: make symbols loaded from tc action modules global. (Closes: #584898)
@@ -810,7 +816,7 @@ iproute (20091226-1) unstable; urgency=low
       (Closes: #149897)
     - avoid segfault on incorrect lladdr. (Closes: #526329)
     - fix manpage typo. (Closes: #539830)
-    - support xtables >= 1.4.5 api. (Closes: #532727, #559022) 
+    - support xtables >= 1.4.5 api. (Closes: #532727, #559022)
     - ss help to stdout (Closes: #545008)
     - add -fPIC to lib/Makefile (Closes: #547602)
     - fix parsing of interfaces for mroute. (Closes: #550097)
@@ -866,7 +872,7 @@ iproute (20080725-1) unstable; urgency=low
   * Fix syntax errors in ip(8) manpage.
 
   [ Alexander Wirt ]
-  * bump standards version (no changes) 
+  * bump standards version (no changes)
 
  -- Alexander Wirt <formorer@debian.org>  Sun, 27 Jul 2008 14:02:50 +0200
 
@@ -1003,7 +1009,7 @@ iproute (20070313-1) unstable; urgency=low
 
 iproute (20061002-4) unstable; urgency=low
 
-  * Add distribution tables (used by netem). 
+  * Add distribution tables (used by netem).
     (Closes: #408313)
 
  -- Alexander Wirt <formorer@debian.org>  Wed, 24 Jan 2007 22:55:26 +0100
@@ -1017,7 +1023,7 @@ iproute (20061002-3) unstable; urgency=low
 
 iproute (20061002-2) unstable; urgency=medium
 
-  * Add manpage for ss, rtmon  and lnstat (Thanks to Michael Prokop for that) 
+  * Add manpage for ss, rtmon  and lnstat (Thanks to Michael Prokop for that)
   * Fix metric output of iproute (backported from git)
     (http://bugs.archlinux.org/task/5669)
   * medium as this bug breaks other packages such as vpnc
@@ -1029,7 +1035,7 @@ iproute (20061002-1) unstable; urgency=low
   * New upstream release
     - This fixes the xfrm monitor mode (Closes: #383133)
   * Fix typos in manpages (Closes: #387082, #387083)
-  * Split docs in a seperate package 
+  * Split docs in a seperate package
 
  -- Alexander Wirt <formorer@debian.org>  Sun, 15 Oct 2006 16:40:34 +0200
 
@@ -1043,13 +1049,13 @@ iproute (20060323-1) unstable; urgency=low
   * Add src option to ip_route usage (Closes: #226142)
   * Prevent users from renaming an interface to "" (Closes: #241904)
   * Added timout for ip a f (Closes: #386288)
-  
+
  -- Alexander Wirt <formorer@debian.org>  Fri,  8 Sep 2006 16:43:20 +0200
 
 iproute (20051007-4) unstable; urgency=low
 
   * Moved *stat binaries to /usr/bin/ (Closes: #350703)
-  * Fixed some manpage typos 
+  * Fixed some manpage typos
     (Closes: #350671, #350672, #350673, #350674, #350675)
   * Conflicts with arpd
   * Fixes u32 bucket hashing calucation. (Closes: #351751)
@@ -1080,7 +1086,7 @@ iproute (20051007-3) unstable; urgency=low
 
 iproute (20051007-2) experimental; urgency=low
 
-  * Added flex to build-deps 
+  * Added flex to build-deps
 
  -- Alexander Wirt <formorer@debian.org>  Sun, 20 Nov 2005 10:46:39 +0100
 
@@ -1090,7 +1096,7 @@ iproute (20051007-1) experimental; urgency=low
     + New upstream release
     + New maintainer
     + Fix netbug script
-    + Reenable short iproute commands 
+    + Reenable short iproute commands
 
  -- Alexander Wirt <formorer@debian.org>  Tue,  1 Nov 2005 10:22:05 +0100
 

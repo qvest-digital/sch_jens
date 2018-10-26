@@ -41,6 +41,8 @@ void close_json_object(void);
 void open_json_array(enum output_type type, const char *delim);
 void close_json_array(enum output_type type, const char *delim);
 
+void print_nl(void);
+
 #define _PRINT_FUNC(type_name, type)					\
 	void print_color_##type_name(enum output_type t,		\
 				     enum color_attr color,		\
@@ -64,7 +66,7 @@ _PRINT_FUNC(uint, unsigned int);
 _PRINT_FUNC(u64, uint64_t);
 _PRINT_FUNC(hu, unsigned short);
 _PRINT_FUNC(hex, unsigned int);
-_PRINT_FUNC(0xhex, unsigned int);
+_PRINT_FUNC(0xhex, unsigned long long int);
 _PRINT_FUNC(luint, unsigned long int);
 _PRINT_FUNC(lluint, unsigned long long int);
 _PRINT_FUNC(float, double);

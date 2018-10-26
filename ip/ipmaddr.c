@@ -240,7 +240,7 @@ static void print_mlist(FILE *fp, struct ma_info *list)
 			print_uint(PRINT_ANY, "ifindex", "%d:", list->index);
 			print_color_string(PRINT_ANY, COLOR_IFNAME,
 					   "ifname", "\t%s", list->name);
-			print_string(PRINT_FP, NULL, "%s", _SL_);
+			print_nl();
 			cur_index = list->index;
 
 			open_json_array(PRINT_JSON, "maddr");
@@ -289,6 +289,7 @@ static int multiaddr_list(int argc, char **argv)
 static int multiaddr_modify(int cmd, int argc, char **argv)
 {
 	struct ifreq ifr = {};
+	int family;
 	int fd;
 
 	if (cmd == RTM_NEWADDR)
@@ -324,7 +325,17 @@ static int multiaddr_modify(int cmd, int argc, char **argv)
 		exit(-1);
 	}
 
-	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	switch (preferred_family) {
+	case AF_INET6:
+	case AF_PACKET:
+	case AF_INET:
+		family = preferred_family;
+		break;
+	default:
+		family = AF_INET;
+	}
+
+	fd = socket(family, SOCK_DGRAM, 0);
 	if (fd < 0) {
 		perror("Cannot create socket");
 		exit(1);

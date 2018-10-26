@@ -240,7 +240,7 @@ static void print_linktype(FILE *fp, struct rtattr *tb)
 		const char *kind
 			= rta_getattr_str(linkinfo[IFLA_INFO_KIND]);
 
-		print_string(PRINT_FP, NULL, "%s", _SL_);
+		print_nl();
 		print_string(PRINT_ANY, "info_kind", "    %s ", kind);
 
 		lu = get_link_kind(kind);
@@ -269,7 +269,7 @@ static void print_linktype(FILE *fp, struct rtattr *tb)
 		const char *slave_kind
 			= rta_getattr_str(linkinfo[IFLA_INFO_SLAVE_KIND]);
 
-		print_string(PRINT_FP, NULL, "%s", _SL_);
+		print_nl();
 		print_string(PRINT_ANY,
 			     "info_slave_kind",
 			     "    %s_slave ",
@@ -562,6 +562,9 @@ static void print_vf_stats64(FILE *fp, struct rtattr *vfstats)
 			   rta_getattr_u64(vf[IFLA_VF_STATS_MULTICAST]));
 		print_u64(PRINT_JSON, "broadcast", NULL,
 			   rta_getattr_u64(vf[IFLA_VF_STATS_BROADCAST]));
+		if (vf[IFLA_VF_STATS_RX_DROPPED])
+			print_u64(PRINT_JSON, "dropped", NULL,
+				  rta_getattr_u64(vf[IFLA_VF_STATS_RX_DROPPED]));
 		close_json_object();
 
 		/* TX stats */
@@ -570,26 +573,39 @@ static void print_vf_stats64(FILE *fp, struct rtattr *vfstats)
 			   rta_getattr_u64(vf[IFLA_VF_STATS_TX_BYTES]));
 		print_u64(PRINT_JSON, "tx_packets", NULL,
 			   rta_getattr_u64(vf[IFLA_VF_STATS_TX_PACKETS]));
+		if (vf[IFLA_VF_STATS_TX_DROPPED])
+			print_u64(PRINT_JSON, "dropped", NULL,
+				  rta_getattr_u64(vf[IFLA_VF_STATS_TX_DROPPED]));
 		close_json_object();
 		close_json_object();
 	} else {
 		/* RX stats */
 		fprintf(fp, "%s", _SL_);
-		fprintf(fp, "    RX: bytes  packets  mcast   bcast %s", _SL_);
+		fprintf(fp, "    RX: bytes  packets  mcast   bcast ");
+		if (vf[IFLA_VF_STATS_RX_DROPPED])
+			fprintf(fp, "  dropped ");
+		fprintf(fp, "%s", _SL_);
 		fprintf(fp, "    ");
 
 		print_num(fp, 10, rta_getattr_u64(vf[IFLA_VF_STATS_RX_BYTES]));
 		print_num(fp, 8, rta_getattr_u64(vf[IFLA_VF_STATS_RX_PACKETS]));
 		print_num(fp, 7, rta_getattr_u64(vf[IFLA_VF_STATS_MULTICAST]));
 		print_num(fp, 7, rta_getattr_u64(vf[IFLA_VF_STATS_BROADCAST]));
+		if (vf[IFLA_VF_STATS_RX_DROPPED])
+			print_num(fp, 8, rta_getattr_u64(vf[IFLA_VF_STATS_RX_DROPPED]));
 
 		/* TX stats */
 		fprintf(fp, "%s", _SL_);
-		fprintf(fp, "    TX: bytes  packets %s", _SL_);
+		fprintf(fp, "    TX: bytes  packets ");
+		if (vf[IFLA_VF_STATS_TX_DROPPED])
+			fprintf(fp, "  dropped ");
+		fprintf(fp, "%s", _SL_);
 		fprintf(fp, "    ");
 
 		print_num(fp, 10, rta_getattr_u64(vf[IFLA_VF_STATS_TX_BYTES]));
 		print_num(fp, 8, rta_getattr_u64(vf[IFLA_VF_STATS_TX_PACKETS]));
+		if (vf[IFLA_VF_STATS_TX_DROPPED])
+			print_num(fp, 8, rta_getattr_u64(vf[IFLA_VF_STATS_TX_DROPPED]));
 	}
 }
 
@@ -749,7 +765,7 @@ static void print_link_stats(FILE *fp, struct nlmsghdr *n)
 	parse_rtattr(tb, IFLA_MAX, IFLA_RTA(ifi),
 		     n->nlmsg_len - NLMSG_LENGTH(sizeof(*ifi)));
 	__print_link_stats(fp, tb);
-	fprintf(fp, "%s", _SL_);
+	print_nl();
 }
 
 static int print_linkinfo_brief(FILE *fp, const char *name,
@@ -913,7 +929,7 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		print_link_event(fp, rta_getattr_u32(tb[IFLA_EVENT]));
 
 	if (!filter.family || filter.family == AF_PACKET || show_details) {
-		print_string(PRINT_FP, NULL, "%s", _SL_);
+		print_nl();
 		print_string(PRINT_ANY,
 			     "link_type",
 			     "    link/%s ",
@@ -996,6 +1012,16 @@ int print_linkinfo(const struct sockaddr_nl *who,
 				   " promiscuity %u ",
 				   rta_getattr_u32(tb[IFLA_PROMISCUITY]));
 
+		if (tb[IFLA_MIN_MTU])
+			print_uint(PRINT_ANY,
+				   "min_mtu", "minmtu %u ",
+				   rta_getattr_u32(tb[IFLA_MIN_MTU]));
+
+		if (tb[IFLA_MAX_MTU])
+			print_uint(PRINT_ANY,
+				   "max_mtu", "maxmtu %u ",
+				   rta_getattr_u32(tb[IFLA_MAX_MTU]));
+
 		if (tb[IFLA_LINKINFO])
 			print_linktype(fp, tb[IFLA_LINKINFO]);
 
@@ -1064,7 +1090,7 @@ int print_linkinfo(const struct sockaddr_nl *who,
 		xdp_dump(fp, tb[IFLA_XDP], true, true);
 
 	if (do_link && show_stats) {
-		print_string(PRINT_FP, NULL, "%s", _SL_);
+		print_nl();
 		__print_link_stats(fp, tb);
 	}
 
@@ -1392,7 +1418,7 @@ int print_addrinfo(const struct sockaddr_nl *who, struct nlmsghdr *n,
 	if (rta_tb[IFA_CACHEINFO]) {
 		struct ifa_cacheinfo *ci = RTA_DATA(rta_tb[IFA_CACHEINFO]);
 
-		print_string(PRINT_FP, NULL, "%s", _SL_);
+		print_nl();
 		print_string(PRINT_FP, NULL, "       valid_lft ", NULL);
 
 		if (ci->ifa_valid == INFINITY_LIFE_TIME) {

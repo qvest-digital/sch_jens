@@ -43,7 +43,6 @@ bool use_names;
 int json;
 int color;
 int oneline;
-const char *_SL_;
 
 static char *conf_file;
 
@@ -197,7 +196,8 @@ static void usage(void)
 	fprintf(stderr,
 		"Usage: tc [ OPTIONS ] OBJECT { COMMAND | help }\n"
 		"       tc [-force] -batch filename\n"
-		"where  OBJECT := { qdisc | class | filter | action | monitor | exec }\n"
+		"where  OBJECT := { qdisc | class | filter | chain |\n"
+		"                   action | monitor | exec }\n"
 		"       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[aw] |\n"
 		"                    -o[neline] | -j[son] | -p[retty] | -c[olor]\n"
 		"                    -b[atch] [filename] | -n[etns] name |\n"
@@ -212,6 +212,8 @@ static int do_cmd(int argc, char **argv, void *buf, size_t buflen)
 		return do_class(argc-1, argv+1);
 	if (matches(*argv, "filter") == 0)
 		return do_filter(argc-1, argv+1, buf, buflen);
+	if (matches(*argv, "chain") == 0)
+		return do_chain(argc-1, argv+1, buf, buflen);
 	if (matches(*argv, "actions") == 0)
 		return do_action(argc-1, argv+1, buf, buflen);
 	if (matches(*argv, "monitor") == 0)
@@ -323,11 +325,11 @@ static int batch(const char *name)
 	struct batch_buf *head = NULL, *tail = NULL, *buf_pool = NULL;
 	char *largv[100], *largv_next[100];
 	char *line, *line_next = NULL;
-	bool bs_enabled_next = false;
 	bool bs_enabled = false;
 	bool lastline = false;
 	int largc, largc_next;
 	bool bs_enabled_saved;
+	bool bs_enabled_next;
 	int batchsize = 0;
 	size_t len = 0;
 	int ret = 0;
@@ -356,7 +358,6 @@ static int batch(const char *name)
 		goto Exit;
 	largc = makeargs(line, largv, 100);
 	bs_enabled = batchsize_enabled(largc, largv);
-	bs_enabled_saved = bs_enabled;
 	do {
 		if (getcmdline(&line_next, &len, stdin) == -1)
 			lastline = true;
@@ -392,7 +393,6 @@ static int batch(const char *name)
 		len = 0;
 		bs_enabled_saved = bs_enabled;
 		bs_enabled = bs_enabled_next;
-		bs_enabled_next = false;
 
 		if (largc == 0) {
 			largc = largc_next;
@@ -493,8 +493,7 @@ int main(int argc, char **argv)
 				matches(argv[1], "-conf") == 0) {
 			NEXT_ARG();
 			conf_file = argv[1];
-		} else if (matches(argv[1], "-color") == 0) {
-			++color;
+		} else if (matches_color(argv[1], &color)) {
 		} else if (matches(argv[1], "-timestamp") == 0) {
 			timestamp++;
 		} else if (matches(argv[1], "-tshort") == 0) {
@@ -515,8 +514,7 @@ int main(int argc, char **argv)
 
 	_SL_ = oneline ? "\\" : "\n";
 
-	if (color & !json)
-		enable_color();
+	check_enable_color(color, json);
 
 	if (batch_file)
 		return batch(batch_file);

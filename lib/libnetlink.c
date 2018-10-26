@@ -617,7 +617,6 @@ static int __rtnl_talk_iov(struct rtnl_handle *rtnl, struct iovec *iov,
 	msg.msg_iovlen = 1;
 	i = 0;
 	while (1) {
-next:
 		status = rtnl_recvmsg(rtnl->fd, &msg, &buf);
 		++i;
 
@@ -657,31 +656,31 @@ next:
 
 			if (h->nlmsg_type == NLMSG_ERROR) {
 				struct nlmsgerr *err = (struct nlmsgerr *)NLMSG_DATA(h);
+				int error = err->error;
 
 				if (l < sizeof(struct nlmsgerr)) {
 					fprintf(stderr, "ERROR truncated\n");
-				} else if (!err->error) {
-					/* check messages from kernel */
-					nl_dump_ext_ack(h, errfn);
-
-					if (answer)
-						*answer = (struct nlmsghdr *)buf;
-					else
-						free(buf);
-					if (h->nlmsg_seq == seq)
-						return 0;
-					else if (i < iovlen)
-						goto next;
-					return 0;
+					free(buf);
+					return -1;
 				}
 
-				if (rtnl->proto != NETLINK_SOCK_DIAG &&
-				    show_rtnl_err)
-					rtnl_talk_error(h, err, errfn);
+				if (!error) {
+					/* check messages from kernel */
+					nl_dump_ext_ack(h, errfn);
+				} else {
+					errno = -error;
 
-				errno = -err->error;
-				free(buf);
-				return -i;
+					if (rtnl->proto != NETLINK_SOCK_DIAG &&
+					    show_rtnl_err)
+						rtnl_talk_error(h, err, errfn);
+				}
+
+				if (answer)
+					*answer = (struct nlmsghdr *)buf;
+				else
+					free(buf);
+
+				return error ? -i : 0;
 			}
 
 			if (answer) {

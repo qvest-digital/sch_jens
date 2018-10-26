@@ -82,6 +82,7 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 	__u64 attrs = 0;
 	bool set_op = (n->nlmsg_type == RTM_NEWLINK &&
 		       !(n->nlmsg_flags & NLM_F_CREATE));
+	bool selected_family = false;
 
 	saddr.family = daddr.family = AF_UNSPEC;
 
@@ -144,7 +145,7 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 			NEXT_ARG();
 			check_duparg(&attrs, IFLA_VXLAN_TTL, "ttl", *argv);
 			if (strcmp(*argv, "inherit") == 0) {
-				addattr_l(n, 1024, IFLA_VXLAN_TTL_INHERIT, NULL, 0);
+				addattr(n, 1024, IFLA_VXLAN_TTL_INHERIT);
 			} else if (strcmp(*argv, "auto") == 0) {
 				addattr8(n, 1024, IFLA_VXLAN_TTL, ttl);
 			} else {
@@ -356,12 +357,26 @@ static int vxlan_parse_opt(struct link_util *lu, int argc, char **argv,
 		int type = (saddr.family == AF_INET) ? IFLA_VXLAN_LOCAL
 						     : IFLA_VXLAN_LOCAL6;
 		addattr_l(n, 1024, type, saddr.data, saddr.bytelen);
+		selected_family = true;
 	}
 
 	if (is_addrtype_inet(&daddr)) {
 		int type = (daddr.family == AF_INET) ? IFLA_VXLAN_GROUP
 						     : IFLA_VXLAN_GROUP6;
 		addattr_l(n, 1024, type, daddr.data, daddr.bytelen);
+		selected_family = true;
+	}
+
+	if (!selected_family) {
+		if (preferred_family == AF_INET) {
+			get_addr(&daddr, "default", AF_INET);
+			addattr_l(n, 1024, IFLA_VXLAN_GROUP,
+				  daddr.data, daddr.bytelen);
+		} else if (preferred_family == AF_INET6) {
+			get_addr(&daddr, "default", AF_INET6);
+			addattr_l(n, 1024, IFLA_VXLAN_GROUP6,
+				  daddr.data, daddr.bytelen);
+		}
 	}
 
 	if (!set_op || VXLAN_ATTRSET(attrs, IFLA_VXLAN_LEARNING))
@@ -512,12 +527,16 @@ static void vxlan_print_opt(struct link_util *lu, FILE *f, struct rtattr *tb[])
 			print_string(PRINT_FP, NULL, "tos %s ", "inherit");
 	}
 
-	if (tb[IFLA_VXLAN_TTL])
-		ttl = rta_getattr_u8(tb[IFLA_VXLAN_TTL]);
-	if (is_json_context() || ttl)
-		print_uint(PRINT_ANY, "ttl", "ttl %u ", ttl);
-	else
+	if (tb[IFLA_VXLAN_TTL_INHERIT] &&
+	    rta_getattr_u8(tb[IFLA_VXLAN_TTL_INHERIT])) {
 		print_string(PRINT_FP, NULL, "ttl %s ", "inherit");
+	} else if (tb[IFLA_VXLAN_TTL]) {
+		ttl = rta_getattr_u8(tb[IFLA_VXLAN_TTL]);
+		if (is_json_context() || ttl)
+			print_uint(PRINT_ANY, "ttl", "ttl %u ", ttl);
+		else
+			print_string(PRINT_FP, NULL, "ttl %s ", "auto");
+	}
 
 	if (tb[IFLA_VXLAN_LABEL]) {
 		__u32 label = rta_getattr_u32(tb[IFLA_VXLAN_LABEL]);

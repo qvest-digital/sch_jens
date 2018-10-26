@@ -31,3 +31,6 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	$(MAKE) V=$(VERBOSE) KERNEL_INCLUDE=./include $(CROSS)
+
+override_dh_auto_test:
+	# upstream test suite needs root and leaves machine unclean, skip it

@@ -60,6 +60,22 @@ tc \- show / manipulate traffic control settings
 
 .B tc
 .RI "[ " OPTIONS " ]"
+.B chain [ add | delete | get ] dev
+\fIDEV\fR
+.B [ parent
+\fIqdisc-id\fR
+.B | root ]\fR filtertype
+[ filtertype specific parameters ]
+
+.B tc
+.RI "[ " OPTIONS " ]"
+.B chain [ add | delete | get ] block
+\fIBLOCK_INDEX\fR filtertype
+[ filtertype specific parameters ]
+
+
+.B tc
+.RI "[ " OPTIONS " ]"
 .RI "[ " FORMAT " ]"
 .B qdisc show [ dev
 \fIDEV\fR
@@ -79,6 +95,16 @@ tc \- show / manipulate traffic control settings
 .B tc
 .RI "[ " OPTIONS " ]"
 .B filter show block
+\fIBLOCK_INDEX\fR
+.P
+.B tc
+.RI "[ " OPTIONS " ]"
+.B chain show dev
+\fIDEV\fR
+.P
+.B tc
+.RI "[ " OPTIONS " ]"
+.B chain show block
 \fIBLOCK_INDEX\fR
 
 .P
@@ -729,8 +755,17 @@ option was specified. Classes can be filtered only by
 option.
 
 .TP
-.BR "\ -color"
-Use color output.
+.BR \-c [ color ][ = { always | auto | never }
+Configure color output. If parameter is omitted or
+.BR always ,
+color output is enabled regardless of stdout state. If parameter is
+.BR auto ,
+stdout is checked to be a terminal before enabling color output. If parameter is
+.BR never ,
+color output is disabled. If specified multiple times, the last one takes
+precedence. This flag is ignored if
+.B \-json
+is also given.
 
 .TP
 .BR "\-j", " \-json"
@@ -795,6 +830,7 @@ was written by Alexey N. Kuznetsov and added in Linux 2.2.
 .BR tc-basic (8),
 .BR tc-bfifo (8),
 .BR tc-bpf (8),
+.BR tc-cake (8),
 .BR tc-cbq (8),
 .BR tc-cgroup (8),
 .BR tc-choke (8),

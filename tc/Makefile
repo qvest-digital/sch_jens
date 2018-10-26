@@ -12,6 +12,7 @@ TCMODULES += q_fifo.o
 TCMODULES += q_sfq.o
 TCMODULES += q_red.o
 TCMODULES += q_prio.o
+TCMODULES += q_skbprio.o
 TCMODULES += q_tbf.o
 TCMODULES += q_cbq.o
 TCMODULES += q_rr.o
@@ -66,11 +67,13 @@ TCMODULES += q_codel.o
 TCMODULES += q_fq_codel.o
 TCMODULES += q_fq.o
 TCMODULES += q_pie.o
+TCMODULES += q_cake.o
 TCMODULES += q_hhf.o
 TCMODULES += q_clsact.o
 TCMODULES += e_bpf.o
 TCMODULES += f_matchall.o
 TCMODULES += q_cbs.o
+TCMODULES += q_etf.o
 
 TCSO :=
 ifeq ($(TC_CONFIG_ATM),y)

@@ -100,6 +100,7 @@ void close_json_array(enum output_type type, const char *str)
  * functions handling different types
  */
 #define _PRINT_FUNC(type_name, type)					\
+	__attribute__((format(printf, 4, 0)))				\
 	void print_color_##type_name(enum output_type t,		\
 				     enum color_attr color,		\
 				     const char *key,			\
@@ -171,12 +172,12 @@ void print_color_0xhex(enum output_type type,
 		       enum color_attr color,
 		       const char *key,
 		       const char *fmt,
-		       unsigned int hex)
+		       unsigned long long hex)
 {
 	if (_IS_JSON_CONTEXT(type)) {
 		SPRINT_BUF(b1);
 
-		snprintf(b1, sizeof(b1), "%#x", hex);
+		snprintf(b1, sizeof(b1), "%#llx", hex);
 		print_string(PRINT_JSON, key, NULL, b1);
 	} else if (_IS_FP_CONTEXT(type)) {
 		color_fprintf(stdout, color, fmt, hex);
@@ -220,4 +221,11 @@ void print_color_null(enum output_type type,
 	} else if (_IS_FP_CONTEXT(type)) {
 		color_fprintf(stdout, color, fmt, value);
 	}
+}
+
+/* Print line seperator (if not in JSON mode) */
+void print_nl(void)
+{
+	if (!_jw)
+		printf("%s", _SL_);
 }

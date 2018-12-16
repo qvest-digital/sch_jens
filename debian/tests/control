@@ -2,4 +2,4 @@
 # therefore do not run as build time tests
 Tests: testsuite.sh
 Restrictions: allow-stderr, isolation-machine, needs-root, breaks-testbed, rw-build-tree
-Depends: build-essential, dpkg-dev, @builddeps@
+Depends: build-essential, dpkg-dev, sudo, kmod, @builddeps@

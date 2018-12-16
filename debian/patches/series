@@ -3,3 +3,7 @@
 0005-testsuite-build-generate_nlmsg-with-QUIET_CC.patch
 0006-Pass-CPPFLAGS-to-the-compiler.patch
 0007-testsuite-correctly-use-CC-macros-for-generate_nlmsg.patch
+0008-Makefile-have-check-target-depend-on-all.patch
+0009-testsuite-declare-dependency-between-TESTS-and-gener.patch
+0010-testsuite-delete-dummy-interface-after-default-route-tes.patch
+0011-testsuite-remove-gre-kmods-if-the-test-loads-them.patch

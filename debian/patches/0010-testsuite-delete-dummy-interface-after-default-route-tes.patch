@@ -1,0 +1,23 @@
+From 36d8f811555f60b7ba7c72acb6e5f2ea7a321eac Mon Sep 17 00:00:00 2001
+From: Luca Boccassi <bluca@debian.org>
+Date: Sat, 15 Dec 2018 11:38:31 +0000
+Subject: [PATCH 3/4] testsuite: delete dummy interface after default route test
+
+Signed-off-by: Luca Boccassi <bluca@debian.org>
+---
+ testsuite/tests/ip/route/add_default_route.t | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/testsuite/tests/ip/route/add_default_route.t b/testsuite/tests/ip/route/add_default_route.t
+index 569ba1f8..c536e35f 100755
+--- a/testsuite/tests/ip/route/add_default_route.t
++++ b/testsuite/tests/ip/route/add_default_route.t
+@@ -31,3 +31,5 @@ ts_ip "$0" "Add another IPv6 route dst cafe:babe::/64" -6 route add cafe:babe::/
+ ts_ip "$0" "Show IPv6 default route" -6 route show default
+ test_on "default via dead:beef::2 dev $DEV"
+ test_lines_count 1
++
++ts_ip "$0" "Del $DEV dummy interface"  link del dev $DEV
+-- 
+2.19.2
+

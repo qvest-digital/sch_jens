@@ -1,9 +1,6 @@
 #!/bin/sh
 set -uxe
 
-# same build deps as the package
-apt-get build-dep -y iproute2
-
 # copy built-tree to tmp test dir to gurantee no files are left behind
 dir=$(mktemp -d)
 cp -a . "${dir}"

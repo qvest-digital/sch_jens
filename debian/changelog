@@ -1,3 +1,22 @@
+iproute2 (4.19.0-2) unstable; urgency=medium
+
+  * Simplify debian/rules, just use dh tools.
+  * Set CBUILD_CFLAGS for dpkg-buildflags-missing
+  * Add gitlab-ci.yml for Salsa's CI
+  * Backport patches to let build use dpkg-buildpkg's CPPFLAGS.
+  * Backport patches to fix testsuite cleanup.
+    0008-Makefile-have-check-target-depend-on-all.patch
+    0009-testsuite-declare-dependency-between-TESTS-and-gener.patch
+    0010-testsuite-delete-dummy-interface-after-default-route-tes.patch
+    0011-testsuite-remove-gre-kmods-if-the-test-loads-them.patch
+  * autopkgtest: use built-in macro to install build-depends
+  * autopkgtest: simplify test script by just running make check
+  * autopkgtest: install kmod and sudo, needed by upstream tests
+  * autopkgtest: remove breaks-testbed tag
+  * Bump Standards-Version to 4.3.0, no changes.
+
+ -- Luca Boccassi <bluca@debian.org>  Mon, 24 Dec 2018 15:29:30 +0100
+
 iproute2 (4.19.0-1) experimental; urgency=medium
 
   [ Ondřej Nový ]

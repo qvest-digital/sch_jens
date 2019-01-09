@@ -46,19 +46,37 @@ int rtnl_open_byproto(struct rtnl_handle *rth, unsigned int subscriptions,
 	__attribute__((warn_unused_result));
 
 void rtnl_close(struct rtnl_handle *rth);
-int rtnl_wilddump_request(struct rtnl_handle *rth, int fam, int type)
+
+int rtnl_addrdump_req(struct rtnl_handle *rth, int family)
 	__attribute__((warn_unused_result));
-int rtnl_wilddump_req_filter(struct rtnl_handle *rth, int fam, int type,
-				    __u32 filt_mask)
+int rtnl_addrlbldump_req(struct rtnl_handle *rth, int family)
+	__attribute__((warn_unused_result));
+int rtnl_routedump_req(struct rtnl_handle *rth, int family)
+	__attribute__((warn_unused_result));
+int rtnl_ruledump_req(struct rtnl_handle *rth, int family)
+	__attribute__((warn_unused_result));
+int rtnl_neighdump_req(struct rtnl_handle *rth, int family)
+	__attribute__((warn_unused_result));
+int rtnl_neightbldump_req(struct rtnl_handle *rth, int family)
+	__attribute__((warn_unused_result));
+int rtnl_mdbdump_req(struct rtnl_handle *rth, int family)
+	__attribute__((warn_unused_result));
+int rtnl_netconfdump_req(struct rtnl_handle *rth, int family)
+	__attribute__((warn_unused_result));
+int rtnl_nsiddump_req(struct rtnl_handle *rth, int family)
+	__attribute__((warn_unused_result));
+
+int rtnl_linkdump_req(struct rtnl_handle *rth, int fam)
+	__attribute__((warn_unused_result));
+int rtnl_linkdump_req_filter(struct rtnl_handle *rth, int fam, __u32 filt_mask)
 	__attribute__((warn_unused_result));
 
 typedef int (*req_filter_fn_t)(struct nlmsghdr *nlh, int reqlen);
 
-int rtnl_wilddump_req_filter_fn(struct rtnl_handle *rth, int fam, int type,
+int rtnl_linkdump_req_filter_fn(struct rtnl_handle *rth, int fam,
 				req_filter_fn_t fn)
 	__attribute__((warn_unused_result));
-int rtnl_wilddump_stats_req_filter(struct rtnl_handle *rth, int fam, int type,
-				   __u32 filt_mask)
+int rtnl_statsdump_req_filter(struct rtnl_handle *rth, int fam, __u32 filt_mask)
 	__attribute__((warn_unused_result));
 int rtnl_dump_request(struct rtnl_handle *rth, int type, void *req,
 			     int len)
@@ -70,11 +88,9 @@ struct rtnl_ctrl_data {
 	int	nsid;
 };
 
-typedef int (*rtnl_filter_t)(const struct sockaddr_nl *,
-			     struct nlmsghdr *n, void *);
+typedef int (*rtnl_filter_t)(struct nlmsghdr *n, void *);
 
-typedef int (*rtnl_listen_filter_t)(const struct sockaddr_nl *,
-				    struct rtnl_ctrl_data *,
+typedef int (*rtnl_listen_filter_t)(struct rtnl_ctrl_data *,
 				    struct nlmsghdr *n, void *);
 
 typedef int (*nl_ext_ack_fn_t)(const char *errmsg, uint32_t off,
@@ -86,8 +102,6 @@ struct rtnl_dump_filter_arg {
 	__u16 nc_flags;
 };
 
-int rtnl_dump_filter_l(struct rtnl_handle *rth,
-			      const struct rtnl_dump_filter_arg *arg);
 int rtnl_dump_filter_nc(struct rtnl_handle *rth,
 			rtnl_filter_t filter,
 			void *arg, __u16 nc_flags);
@@ -98,9 +112,6 @@ int rtnl_talk(struct rtnl_handle *rtnl, struct nlmsghdr *n,
 	__attribute__((warn_unused_result));
 int rtnl_talk_iov(struct rtnl_handle *rtnl, struct iovec *iovec, size_t iovlen,
 		  struct nlmsghdr **answer)
-	__attribute__((warn_unused_result));
-int rtnl_talk_extack(struct rtnl_handle *rtnl, struct nlmsghdr *n,
-	      struct nlmsghdr **answer, nl_ext_ack_fn_t errfn)
 	__attribute__((warn_unused_result));
 int rtnl_talk_suppress_rtnl_errmsg(struct rtnl_handle *rtnl, struct nlmsghdr *n,
 				   struct nlmsghdr **answer)
@@ -136,8 +147,6 @@ int rta_addattr_l(struct rtattr *rta, int maxlen, int type,
 int parse_rtattr(struct rtattr *tb[], int max, struct rtattr *rta, int len);
 int parse_rtattr_flags(struct rtattr *tb[], int max, struct rtattr *rta,
 			      int len, unsigned short flags);
-int parse_rtattr_byindex(struct rtattr *tb[], int max,
-			 struct rtattr *rta, int len);
 struct rtattr *parse_rtattr_one(int type, struct rtattr *rta, int len);
 int __parse_rtattr_nested_compat(struct rtattr *tb[], int max, struct rtattr *rta, int len);
 
@@ -183,6 +192,17 @@ static inline __u64 rta_getattr_u64(const struct rtattr *rta)
 	__u64 tmp;
 
 	memcpy(&tmp, RTA_DATA(rta), sizeof(__u64));
+	return tmp;
+}
+static inline __s32 rta_getattr_s32(const struct rtattr *rta)
+{
+	return *(__s32 *)RTA_DATA(rta);
+}
+static inline __s64 rta_getattr_s64(const struct rtattr *rta)
+{
+	__s64 tmp;
+
+	memcpy(&tmp, RTA_DATA(rta), sizeof(tmp));
 	return tmp;
 }
 static inline const char *rta_getattr_str(const struct rtattr *rta)

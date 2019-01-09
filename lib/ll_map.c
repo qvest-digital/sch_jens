@@ -77,8 +77,7 @@ static struct ll_cache *ll_get_by_name(const char *name)
 	return NULL;
 }
 
-int ll_remember_index(const struct sockaddr_nl *who,
-		      struct nlmsghdr *n, void *arg)
+int ll_remember_index(struct nlmsghdr *n, void *arg)
 {
 	unsigned int h;
 	const char *ifname;
@@ -144,7 +143,7 @@ const char *ll_idx_n2a(unsigned int idx)
 	return buf;
 }
 
-unsigned int ll_idx_a2n(const char *name)
+static unsigned int ll_idx_a2n(const char *name)
 {
 	unsigned int idx;
 
@@ -218,7 +217,7 @@ void ll_init_map(struct rtnl_handle *rth)
 	if (initialized)
 		return;
 
-	if (rtnl_wilddump_request(rth, AF_UNSPEC, RTM_GETLINK) < 0) {
+	if (rtnl_linkdump_req(rth, AF_UNSPEC) < 0) {
 		perror("Cannot send dump request");
 		exit(1);
 	}

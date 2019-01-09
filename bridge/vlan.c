@@ -347,9 +347,7 @@ static void print_vlan_tunnel_info(FILE *fp, struct rtattr *tb, int ifindex)
 		close_vlan_port();
 }
 
-static int print_vlan_tunnel(const struct sockaddr_nl *who,
-			     struct nlmsghdr *n,
-			     void *arg)
+static int print_vlan_tunnel(struct nlmsghdr *n, void *arg)
 {
 	struct ifinfomsg *ifm = NLMSG_DATA(n);
 	struct rtattr *tb[IFLA_MAX+1];
@@ -392,9 +390,7 @@ static int print_vlan_tunnel(const struct sockaddr_nl *who,
 	return 0;
 }
 
-static int print_vlan(const struct sockaddr_nl *who,
-		      struct nlmsghdr *n,
-		      void *arg)
+static int print_vlan(struct nlmsghdr *n, void *arg)
 {
 	FILE *fp = arg;
 	struct ifinfomsg *ifm = NLMSG_DATA(n);
@@ -488,7 +484,7 @@ static void print_vlan_stats_attr(struct rtattr *attr, int ifindex)
 	rem = RTA_PAYLOAD(list);
 
 	ifname = ll_index_to_name(ifindex);
-	open_json_object(ifname);
+	open_vlan_port(ifindex);
 
 	print_color_string(PRINT_FP, COLOR_IFNAME,
 			   NULL, "%-16s", ifname);
@@ -509,13 +505,10 @@ static void print_vlan_stats_attr(struct rtattr *attr, int ifindex)
 
 		print_one_vlan_stats(vstats);
 	}
-	close_json_object();
-
+	close_vlan_port();
 }
 
-static int print_vlan_stats(const struct sockaddr_nl *who,
-			    struct nlmsghdr *n,
-			    void *arg)
+static int print_vlan_stats(struct nlmsghdr *n, void *arg)
 {
 	struct if_stats_msg *ifsm = NLMSG_DATA(n);
 	struct rtattr *tb[IFLA_STATS_MAX+1];
@@ -575,7 +568,7 @@ static int vlan_show(int argc, char **argv)
 	new_json_obj(json);
 
 	if (!show_stats) {
-		if (rtnl_wilddump_req_filter(&rth, PF_BRIDGE, RTM_GETLINK,
+		if (rtnl_linkdump_req_filter(&rth, PF_BRIDGE,
 					     (compress_vlans ?
 					      RTEXT_FILTER_BRVLAN_COMPRESSED :
 					      RTEXT_FILTER_BRVLAN)) < 0) {
@@ -603,9 +596,7 @@ static int vlan_show(int argc, char **argv)
 		__u32 filt_mask;
 
 		filt_mask = IFLA_STATS_FILTER_BIT(IFLA_STATS_LINK_XSTATS);
-		if (rtnl_wilddump_stats_req_filter(&rth, AF_UNSPEC,
-						   RTM_GETSTATS,
-						   filt_mask) < 0) {
+		if (rtnl_statsdump_req_filter(&rth, AF_UNSPEC, filt_mask) < 0) {
 			perror("Cannont send dump request");
 			exit(1);
 		}
@@ -619,9 +610,7 @@ static int vlan_show(int argc, char **argv)
 		}
 
 		filt_mask = IFLA_STATS_FILTER_BIT(IFLA_STATS_LINK_XSTATS_SLAVE);
-		if (rtnl_wilddump_stats_req_filter(&rth, AF_UNSPEC,
-						   RTM_GETSTATS,
-						   filt_mask) < 0) {
+		if (rtnl_statsdump_req_filter(&rth, AF_UNSPEC, filt_mask) < 0) {
 			perror("Cannont send slave dump request");
 			exit(1);
 		}

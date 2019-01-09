@@ -190,7 +190,7 @@ static const struct rate_suffix {
 	{ NULL }
 };
 
-int parse_percent_rate(char *rate, const char *str, const char *dev)
+static int parse_percent_rate(char *rate, const char *str, const char *dev)
 {
 	long dev_mbit;
 	int ret;
@@ -334,52 +334,6 @@ char *sprint_rate(__u64 rate, char *buf)
 	return buf;
 }
 
-int get_time(unsigned int *time, const char *str)
-{
-	double t;
-	char *p;
-
-	t = strtod(str, &p);
-	if (p == str)
-		return -1;
-
-	if (*p) {
-		if (strcasecmp(p, "s") == 0 || strcasecmp(p, "sec") == 0 ||
-		    strcasecmp(p, "secs") == 0)
-			t *= TIME_UNITS_PER_SEC;
-		else if (strcasecmp(p, "ms") == 0 || strcasecmp(p, "msec") == 0 ||
-			 strcasecmp(p, "msecs") == 0)
-			t *= TIME_UNITS_PER_SEC/1000;
-		else if (strcasecmp(p, "us") == 0 || strcasecmp(p, "usec") == 0 ||
-			 strcasecmp(p, "usecs") == 0)
-			t *= TIME_UNITS_PER_SEC/1000000;
-		else
-			return -1;
-	}
-
-	*time = t;
-	return 0;
-}
-
-
-void print_time(char *buf, int len, __u32 time)
-{
-	double tmp = time;
-
-	if (tmp >= TIME_UNITS_PER_SEC)
-		snprintf(buf, len, "%.1fs", tmp/TIME_UNITS_PER_SEC);
-	else if (tmp >= TIME_UNITS_PER_SEC/1000)
-		snprintf(buf, len, "%.1fms", tmp/(TIME_UNITS_PER_SEC/1000));
-	else
-		snprintf(buf, len, "%uus", time);
-}
-
-char *sprint_time(__u32 time, char *buf)
-{
-	print_time(buf, SPRINT_BSIZE-1, time);
-	return buf;
-}
-
 char *sprint_ticks(__u32 ticks, char *buf)
 {
 	return sprint_time(tc_core_tick2time(ticks), buf);
@@ -455,7 +409,7 @@ void print_devname(enum output_type type, int ifindex)
 			   "dev", "%s ", ifname);
 }
 
-void print_size(char *buf, int len, __u32 sz)
+static void print_size(char *buf, int len, __u32 sz)
 {
 	double tmp = sz;
 
@@ -470,17 +424,6 @@ void print_size(char *buf, int len, __u32 sz)
 char *sprint_size(__u32 size, char *buf)
 {
 	print_size(buf, SPRINT_BSIZE-1, size);
-	return buf;
-}
-
-void print_qdisc_handle(char *buf, int len, __u32 h)
-{
-	snprintf(buf, len, "%x:", TC_H_MAJ(h)>>16);
-}
-
-char *sprint_qdisc_handle(__u32 h, char *buf)
-{
-	print_qdisc_handle(buf, SPRINT_BSIZE-1, h);
 	return buf;
 }
 
@@ -755,7 +698,7 @@ int get_linklayer(unsigned int *val, const char *arg)
 	return 0;
 }
 
-void print_linklayer(char *buf, int len, unsigned int linklayer)
+static void print_linklayer(char *buf, int len, unsigned int linklayer)
 {
 	switch (linklayer) {
 	case LINKLAYER_UNSPEC:
@@ -800,6 +743,44 @@ void print_tm(FILE *f, const struct tcf_t *tm)
 	}
 }
 
+static void print_tcstats_basic_hw(struct rtattr **tbs, char *prefix)
+{
+	struct gnet_stats_basic bs_hw;
+
+	if (!tbs[TCA_STATS_BASIC_HW])
+		return;
+
+	memcpy(&bs_hw, RTA_DATA(tbs[TCA_STATS_BASIC_HW]),
+	       MIN(RTA_PAYLOAD(tbs[TCA_STATS_BASIC_HW]), sizeof(bs_hw)));
+
+	if (bs_hw.bytes == 0 && bs_hw.packets == 0)
+		return;
+
+	if (tbs[TCA_STATS_BASIC]) {
+		struct gnet_stats_basic bs;
+
+		memcpy(&bs, RTA_DATA(tbs[TCA_STATS_BASIC]),
+		       MIN(RTA_PAYLOAD(tbs[TCA_STATS_BASIC]),
+			   sizeof(bs)));
+
+		if (bs.bytes >= bs_hw.bytes && bs.packets >= bs_hw.packets) {
+			print_string(PRINT_FP, NULL, "%s", _SL_);
+			print_string(PRINT_FP, NULL, "%s", prefix);
+			print_lluint(PRINT_ANY, "sw_bytes",
+				     "Sent software %llu bytes",
+				     bs.bytes - bs_hw.bytes);
+			print_uint(PRINT_ANY, "sw_packets", " %u pkt",
+				   bs.packets - bs_hw.packets);
+		}
+	}
+
+	print_string(PRINT_FP, NULL, "%s", _SL_);
+	print_string(PRINT_FP, NULL, "%s", prefix);
+	print_lluint(PRINT_ANY, "hw_bytes", "Sent hardware %llu bytes",
+		     bs_hw.bytes);
+	print_uint(PRINT_ANY, "hw_packets", " %u pkt", bs_hw.packets);
+}
+
 void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtattr **xstats)
 {
 	SPRINT_BUF(b1);
@@ -825,6 +806,9 @@ void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtat
 			   q.overlimits);
 		print_uint(PRINT_ANY, "requeues", " requeues %u) ", q.requeues);
 	}
+
+	if (tbs[TCA_STATS_BASIC_HW])
+		print_tcstats_basic_hw(tbs, prefix);
 
 	if (tbs[TCA_STATS_RATE_EST64]) {
 		struct gnet_stats_rate_est64 re = {0};
@@ -854,8 +838,9 @@ void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtat
 
 		memcpy(&q, RTA_DATA(tbs[TCA_STATS_QUEUE]), MIN(RTA_PAYLOAD(tbs[TCA_STATS_QUEUE]), sizeof(q)));
 		if (!tbs[TCA_STATS_RATE_EST])
-			print_string(PRINT_FP, NULL, "\n%s", prefix);
+			print_string(PRINT_FP, NULL, "\n", "");
 		print_uint(PRINT_JSON, "backlog", NULL, q.backlog);
+		print_string(PRINT_FP, NULL, "%s", prefix);
 		print_string(PRINT_FP, NULL, "backlog %s",
 			     sprint_size(q.backlog, b1));
 		print_uint(PRINT_ANY, "qlen", " %up", q.qlen);

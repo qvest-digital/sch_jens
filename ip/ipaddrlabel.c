@@ -54,7 +54,7 @@ static void usage(void)
 	exit(-1);
 }
 
-int print_addrlabel(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+int print_addrlabel(struct nlmsghdr *n, void *arg)
 {
 	struct ifaddrlblmsg *ifal = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
@@ -118,7 +118,7 @@ static int ipaddrlabel_list(int argc, char **argv)
 		return -1;
 	}
 
-	if (rtnl_wilddump_request(&rth, af, RTM_GETADDRLABEL) < 0) {
+	if (rtnl_addrlbldump_req(&rth, af) < 0) {
 		perror("Cannot send dump request");
 		return 1;
 	}
@@ -196,7 +196,7 @@ static int ipaddrlabel_modify(int cmd, int argc, char **argv)
 }
 
 
-static int flush_addrlabel(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+static int flush_addrlabel(struct nlmsghdr *n, void *arg)
 {
 	struct rtnl_handle rth2;
 	struct rtmsg *r = NLMSG_DATA(n);
@@ -237,7 +237,7 @@ static int ipaddrlabel_flush(int argc, char **argv)
 		return -1;
 	}
 
-	if (rtnl_wilddump_request(&rth, af, RTM_GETADDRLABEL) < 0) {
+	if (rtnl_addrlbldump_req(&rth, af) < 0) {
 		perror("Cannot send dump request");
 		return -1;
 	}

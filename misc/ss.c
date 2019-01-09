@@ -96,20 +96,20 @@ static int security_get_initial_context(char *name,  char **context)
 }
 #endif
 
-int resolve_services = 1;
+static int resolve_services = 1;
 int preferred_family = AF_UNSPEC;
-int show_options;
+static int show_options;
 int show_details;
-int show_users;
-int show_mem;
-int show_tcpinfo;
-int show_bpf;
-int show_proc_ctx;
-int show_sock_ctx;
-int show_header = 1;
-int follow_events;
-int sctp_ino;
-int show_tipcinfo;
+static int show_users;
+static int show_mem;
+static int show_tcpinfo;
+static int show_bpf;
+static int show_proc_ctx;
+static int show_sock_ctx;
+static int show_header = 1;
+static int follow_events;
+static int sctp_ino;
+static int show_tipcinfo;
 
 enum col_id {
 	COL_NETID,
@@ -494,7 +494,7 @@ struct user_ent {
 };
 
 #define USER_ENT_HASH_SIZE	256
-struct user_ent *user_ent_hash[USER_ENT_HASH_SIZE];
+static struct user_ent *user_ent_hash[USER_ENT_HASH_SIZE];
 
 static int user_ent_hashfn(unsigned int ino)
 {
@@ -817,6 +817,10 @@ struct tcpstat {
 	unsigned int	    fackets;
 	unsigned int	    reordering;
 	unsigned int	    not_sent;
+	unsigned int	    delivered;
+	unsigned int	    delivered_ce;
+	unsigned int	    dsack_dups;
+	unsigned int	    reord_seen;
 	double		    rcv_rtt;
 	double		    min_rtt;
 	int		    rcv_space;
@@ -824,6 +828,8 @@ struct tcpstat {
 	unsigned long long  busy_time;
 	unsigned long long  rwnd_limited;
 	unsigned long long  sndbuf_limited;
+	unsigned long long  bytes_sent;
+	unsigned long long  bytes_retrans;
 	bool		    has_ts_opt;
 	bool		    has_sack_opt;
 	bool		    has_ecn_opt;
@@ -1260,7 +1266,7 @@ static void render(void)
 	while (token) {
 		/* Print left delimiter only if we already started a line */
 		if (line_started++)
-			printed = printf("%s", current_field->ldelim);
+			printed = printf("%s", f->ldelim);
 		else
 			printed = 0;
 
@@ -1404,7 +1410,7 @@ struct scache {
 	const char *proto;
 };
 
-struct scache *rlist;
+static struct scache *rlist;
 
 static void init_service_resolver(void)
 {
@@ -2424,6 +2430,10 @@ static void tcp_stats_print(struct tcpstat *s)
 	if (s->ssthresh)
 		out(" ssthresh:%d", s->ssthresh);
 
+	if (s->bytes_sent)
+		out(" bytes_sent:%llu", s->bytes_sent);
+	if (s->bytes_retrans)
+		out(" bytes_retrans:%llu", s->bytes_retrans);
 	if (s->bytes_acked)
 		out(" bytes_acked:%llu", s->bytes_acked);
 	if (s->bytes_received)
@@ -2483,6 +2493,10 @@ static void tcp_stats_print(struct tcpstat *s)
 
 	if (s->delivery_rate)
 		out(" delivery_rate %sbps", sprint_bw(b1, s->delivery_rate));
+	if (s->delivered)
+		out(" delivered:%u", s->delivered);
+	if (s->delivered_ce)
+		out(" delivered_ce:%u", s->delivered_ce);
 	if (s->app_limited)
 		out(" app_limited");
 
@@ -2506,10 +2520,14 @@ static void tcp_stats_print(struct tcpstat *s)
 		out(" lost:%u", s->lost);
 	if (s->sacked && s->ss.state != SS_LISTEN)
 		out(" sacked:%u", s->sacked);
+	if (s->dsack_dups)
+		out(" dsack_dups:%u", s->dsack_dups);
 	if (s->fackets)
 		out(" fackets:%u", s->fackets);
 	if (s->reordering != 3)
 		out(" reordering:%d", s->reordering);
+	if (s->reord_seen)
+		out(" reord_seen:%d", s->reord_seen);
 	if (s->rcv_rtt)
 		out(" rcv_rtt:%g", s->rcv_rtt);
 	if (s->rcv_space)
@@ -2829,6 +2847,12 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
 		s.busy_time = info->tcpi_busy_time;
 		s.rwnd_limited = info->tcpi_rwnd_limited;
 		s.sndbuf_limited = info->tcpi_sndbuf_limited;
+		s.delivered = info->tcpi_delivered;
+		s.delivered_ce = info->tcpi_delivered_ce;
+		s.dsack_dups = info->tcpi_dsack_dups;
+		s.reord_seen = info->tcpi_reord_seen;
+		s.bytes_sent = info->tcpi_bytes_sent;
+		s.bytes_retrans = info->tcpi_bytes_retrans;
 		tcp_stats_print(&s);
 		free(s.dctcp);
 		free(s.bbr_info);
@@ -3156,8 +3180,7 @@ static int kill_inet_sock(struct nlmsghdr *h, void *arg, struct sockstat *s)
 	return rtnl_talk(rth, &req.nlh, NULL);
 }
 
-static int show_one_inet_sock(const struct sockaddr_nl *addr,
-		struct nlmsghdr *h, void *arg)
+static int show_one_inet_sock(struct nlmsghdr *h, void *arg)
 {
 	int err;
 	struct inet_diag_arg *diag_arg = arg;
@@ -3548,8 +3571,7 @@ static void unix_stats_print(struct sockstat *s, struct filter *f)
 	proc_ctx_print(s);
 }
 
-static int unix_show_sock(const struct sockaddr_nl *addr, struct nlmsghdr *nlh,
-		void *arg)
+static int unix_show_sock(struct nlmsghdr *nlh, void *arg)
 {
 	struct filter *f = (struct filter *)arg;
 	struct unix_diag_msg *r = NLMSG_DATA(nlh);
@@ -3843,8 +3865,7 @@ static void packet_show_ring(struct packet_diag_ring *ring)
 	out(",features:0x%x", ring->pdr_features);
 }
 
-static int packet_show_sock(const struct sockaddr_nl *addr,
-		struct nlmsghdr *nlh, void *arg)
+static int packet_show_sock(struct nlmsghdr *nlh, void *arg)
 {
 	const struct filter *f = arg;
 	struct packet_diag_msg *r = NLMSG_DATA(nlh);
@@ -4133,8 +4154,7 @@ static int netlink_show_one(struct filter *f,
 	return 0;
 }
 
-static int netlink_show_sock(const struct sockaddr_nl *addr,
-		struct nlmsghdr *nlh, void *arg)
+static int netlink_show_sock(struct nlmsghdr *nlh, void *arg)
 {
 	struct filter *f = (struct filter *)arg;
 	struct netlink_diag_msg *r = NLMSG_DATA(nlh);
@@ -4257,8 +4277,7 @@ static void vsock_stats_print(struct sockstat *s, struct filter *f)
 	proc_ctx_print(s);
 }
 
-static int vsock_show_sock(const struct sockaddr_nl *addr,
-			   struct nlmsghdr *nlh, void *arg)
+static int vsock_show_sock(struct nlmsghdr *nlh, void *arg)
 {
 	struct filter *f = (struct filter *)arg;
 	struct vsock_diag_msg *r = NLMSG_DATA(nlh);
@@ -4311,8 +4330,7 @@ static void tipc_sock_addr_print(struct rtattr *net_addr, struct rtattr *id)
 
 }
 
-static int tipc_show_sock(const struct sockaddr_nl *addr, struct nlmsghdr *nlh,
-			  void *arg)
+static int tipc_show_sock(struct nlmsghdr *nlh, void *arg)
 {
 	struct rtattr *stat[TIPC_NLA_SOCK_STAT_MAX + 1] = {};
 	struct rtattr *attrs[TIPC_NLA_SOCK_MAX + 1] = {};
@@ -4400,8 +4418,7 @@ struct sock_diag_msg {
 	__u8 sdiag_family;
 };
 
-static int generic_show_sock(const struct sockaddr_nl *addr,
-		struct nlmsghdr *nlh, void *arg)
+static int generic_show_sock(struct nlmsghdr *nlh, void *arg)
 {
 	struct sock_diag_msg *r = NLMSG_DATA(nlh);
 	struct inet_diag_arg inet_arg = { .f = arg, .protocol = IPPROTO_MAX };
@@ -4411,19 +4428,19 @@ static int generic_show_sock(const struct sockaddr_nl *addr,
 	case AF_INET:
 	case AF_INET6:
 		inet_arg.rth = inet_arg.f->rth_for_killing;
-		ret = show_one_inet_sock(addr, nlh, &inet_arg);
+		ret = show_one_inet_sock(nlh, &inet_arg);
 		break;
 	case AF_UNIX:
-		ret = unix_show_sock(addr, nlh, arg);
+		ret = unix_show_sock(nlh, arg);
 		break;
 	case AF_PACKET:
-		ret = packet_show_sock(addr, nlh, arg);
+		ret = packet_show_sock(nlh, arg);
 		break;
 	case AF_NETLINK:
-		ret = netlink_show_sock(addr, nlh, arg);
+		ret = netlink_show_sock(nlh, arg);
 		break;
 	case AF_VSOCK:
-		ret = vsock_show_sock(addr, nlh, arg);
+		ret = vsock_show_sock(nlh, arg);
 		break;
 	default:
 		ret = -1;

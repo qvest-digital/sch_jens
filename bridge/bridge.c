@@ -23,12 +23,11 @@ int preferred_family = AF_UNSPEC;
 int oneline;
 int show_stats;
 int show_details;
-int show_pretty;
-int color;
+static int color;
 int compress_vlans;
 int json;
 int timestamp;
-char *batch_file;
+static const char *batch_file;
 int force;
 
 static void usage(void) __attribute__((noreturn));
@@ -172,9 +171,9 @@ main(int argc, char **argv)
 			NEXT_ARG();
 			if (netns_switch(argv[1]))
 				exit(-1);
-		} else if (matches_color(opt, &color)) {
 		} else if (matches(opt, "-compressvlans") == 0) {
 			++compress_vlans;
+		} else if (matches_color(opt, &color)) {
 		} else if (matches(opt, "-force") == 0) {
 			++force;
 		} else if (matches(opt, "-json") == 0) {

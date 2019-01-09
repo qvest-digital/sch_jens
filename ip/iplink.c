@@ -120,8 +120,8 @@ void iplink_usage(void)
 			"TYPE := { vlan | veth | vcan | vxcan | dummy | ifb | macvlan | macvtap |\n"
 			"          bridge | bond | team | ipoib | ip6tnl | ipip | sit | vxlan |\n"
 			"          gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan |\n"
-			"          vti | nlmon | team_slave | bond_slave | ipvlan | geneve |\n"
-			"          bridge_slave | vrf | macsec | netdevsim | rmnet }\n");
+			"          vti | nlmon | team_slave | bond_slave | bridge_slave |\n"
+			"          ipvlan | ipvtap | geneve | vrf | macsec | netdevsim | rmnet }\n");
 	}
 	exit(-1);
 }
@@ -199,8 +199,7 @@ static int get_addr_gen_mode(const char *mode)
 #if IPLINK_IOCTL_COMPAT
 static int have_rtnl_newlink = -1;
 
-static int accept_msg(const struct sockaddr_nl *who,
-		      struct rtnl_ctrl_data *ctrl,
+static int accept_msg(struct rtnl_ctrl_data *ctrl,
 		      struct nlmsghdr *n, void *arg)
 {
 	struct nlmsgerr *err = (struct nlmsgerr *)NLMSG_DATA(n);
@@ -1087,11 +1086,11 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 	return 0;
 }
 
-int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
+int iplink_get(char *name, __u32 filt_mask)
 {
 	struct iplink_req req = {
 		.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)),
-		.n.nlmsg_flags = NLM_F_REQUEST | flags,
+		.n.nlmsg_flags = NLM_F_REQUEST,
 		.n.nlmsg_type = RTM_GETLINK,
 		.i.ifi_family = preferred_family,
 	};
@@ -1107,7 +1106,7 @@ int iplink_get(unsigned int flags, char *name, __u32 filt_mask)
 		return -2;
 
 	open_json_object(NULL);
-	print_linkinfo(NULL, answer, stdout);
+	print_linkinfo(answer, stdout);
 	close_json_object();
 
 	free(answer);
@@ -1536,9 +1535,7 @@ struct af_stats_ctx {
 	int ifindex;
 };
 
-static int print_af_stats(const struct sockaddr_nl *who,
-			  struct nlmsghdr *n,
-			  void *arg)
+static int print_af_stats(struct nlmsghdr *n, void *arg)
 {
 	struct if_stats_msg *ifsm = NLMSG_DATA(n);
 	struct rtattr *tb[IFLA_STATS_MAX+1];
@@ -1601,9 +1598,7 @@ static int iplink_afstats(int argc, char **argv)
 		}
 	}
 
-	if (rtnl_wilddump_stats_req_filter(&rth, AF_UNSPEC,
-					   RTM_GETSTATS,
-					   filt_mask) < 0) {
+	if (rtnl_statsdump_req_filter(&rth, AF_UNSPEC, filt_mask) < 0) {
 		perror("Cannont send dump request");
 		return 1;
 	}

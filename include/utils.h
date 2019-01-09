@@ -9,6 +9,10 @@
 #include <stdbool.h>
 #include <time.h>
 
+#ifdef HAVE_LIBBSD
+#include <bsd/string.h>
+#endif
+
 #include "libnetlink.h"
 #include "ll_map.h"
 #include "rtm_map.h"
@@ -45,6 +49,11 @@ void incomplete_command(void) __attribute__((noreturn));
 #define NEXT_ARG_OK() (argc - 1 > 0)
 #define NEXT_ARG_FWD() do { argv++; argc--; } while(0)
 #define PREV_ARG() do { argv--; argc++; } while(0)
+
+#define TIME_UNITS_PER_SEC	1000000
+#define NSEC_PER_USEC 1000
+#define NSEC_PER_MSEC 1000000
+#define NSEC_PER_SEC 1000000000LL
 
 typedef struct
 {
@@ -121,6 +130,10 @@ struct ipx_addr {
 #define IPPROTO_MPLS	137
 #endif
 
+#ifndef CLOCK_TAI
+# define CLOCK_TAI 11
+#endif
+
 __u32 get_addr32(const char *name);
 int get_addr_1(inet_prefix *dst, const char *arg, int family);
 int get_prefix_1(inet_prefix *dst, char *arg, int family);
@@ -139,13 +152,12 @@ int get_time_rtt(unsigned *val, const char *arg, int *raw);
 #define get_byte get_u8
 #define get_ushort get_u16
 #define get_short get_s16
+int get_s64(__s64 *val, const char *arg, int base);
 int get_u64(__u64 *val, const char *arg, int base);
 int get_u32(__u32 *val, const char *arg, int base);
 int get_s32(__s32 *val, const char *arg, int base);
 int get_u16(__u16 *val, const char *arg, int base);
-int get_s16(__s16 *val, const char *arg, int base);
 int get_u8(__u8 *val, const char *arg, int base);
-int get_s8(__s8 *val, const char *arg, int base);
 int get_be64(__be64 *val, const char *arg, int base);
 int get_be32(__be32 *val, const char *arg, int base);
 int get_be16(__be16 *val, const char *arg, int base);
@@ -158,7 +170,6 @@ __u8 *hexstring_a2n(const char *str, __u8 *buf, int blen, unsigned int *len);
 int addr64_n2a(__u64 addr, char *buff, size_t len);
 
 int af_bit_len(int af);
-int af_byte_len(int af);
 
 const char *format_host_r(int af, int len, const void *addr,
 			       char *buf, int buflen);
@@ -309,5 +320,10 @@ size_t strlcat(char *dst, const char *src, size_t size);
 #endif
 
 void drop_cap(void);
+
+int get_time(unsigned int *time, const char *str);
+int get_time64(__s64 *time, const char *str);
+char *sprint_time(__u32 time, char *buf);
+char *sprint_time64(__s64 time, char *buf);
 
 #endif /* __UTILS_H__ */

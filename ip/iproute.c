@@ -346,7 +346,7 @@ static void print_rtax_features(FILE *fp, unsigned int features)
 
 	if (features)
 		print_0xhex(PRINT_ANY,
-			    "features", "0x%x ", of);
+			    "features", "%#llx ", of);
 }
 
 static void print_rt_flags(FILE *fp, unsigned int flags)
@@ -483,10 +483,10 @@ static void print_rta_cacheinfo(FILE *fp, const struct rta_cacheinfo *ci)
 	}
 	if (ci->rta_id)
 		print_0xhex(PRINT_ANY, "ipid",
-			    "ipid 0x%04x ", ci->rta_id);
+			    "ipid 0x%04llx ", ci->rta_id);
 	if (ci->rta_ts || ci->rta_tsage) {
 		print_0xhex(PRINT_ANY, "ts",
-			    "ts 0x%x", ci->rta_ts);
+			    "ts 0x%llx", ci->rta_ts);
 		print_uint(PRINT_ANY, "tsage",
 			   "tsage %usec ", ci->rta_tsage);
 	}
@@ -708,7 +708,7 @@ static void print_rta_multipath(FILE *fp, const struct rtmsg *r,
 	}
 }
 
-int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+int print_route(struct nlmsghdr *n, void *arg)
 {
 	FILE *fp = (FILE *)arg;
 	struct rtmsg *r = NLMSG_DATA(n);
@@ -885,7 +885,7 @@ int print_route(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				print_uint(PRINT_JSON, "mark", NULL, mark);
 			else if (mark >= 16)
 				print_0xhex(PRINT_FP, NULL,
-					    "mark 0x%x ", mark);
+					    "mark 0x%llx ", mark);
 			else
 				print_uint(PRINT_FP, NULL,
 					   "mark %u ", mark);
@@ -1580,8 +1580,7 @@ static int iproute_flush_cache(void)
 
 static __u32 route_dump_magic = 0x45311224;
 
-static int save_route(const struct sockaddr_nl *who, struct nlmsghdr *n,
-		      void *arg)
+static int save_route(struct nlmsghdr *n, void *arg)
 {
 	int ret;
 	int len = n->nlmsg_len;
@@ -1645,7 +1644,7 @@ static int iproute_flush(int do_ipv6, rtnl_filter_t filter_fn)
 	filter.flushe = sizeof(flushb);
 
 	for (;;) {
-		if (rtnl_wilddump_request(&rth, do_ipv6, RTM_GETROUTE) < 0) {
+		if (rtnl_routedump_req(&rth, do_ipv6) < 0) {
 			perror("Cannot send dump request");
 			return -2;
 		}
@@ -1891,7 +1890,7 @@ static int iproute_list_flush_or_save(int argc, char **argv, int action)
 		return iproute_flush(do_ipv6, filter_fn);
 
 	if (!filter.cloned) {
-		if (rtnl_wilddump_request(&rth, do_ipv6, RTM_GETROUTE) < 0) {
+		if (rtnl_routedump_req(&rth, do_ipv6) < 0) {
 			perror("Cannot send dump request");
 			return -2;
 		}
@@ -2082,7 +2081,7 @@ static int iproute_get(int argc, char **argv)
 		int len = answer->nlmsg_len;
 		struct rtattr *tb[RTA_MAX+1];
 
-		if (print_route(NULL, answer, (void *)stdout) < 0) {
+		if (print_route(answer, (void *)stdout) < 0) {
 			fprintf(stderr, "An error :-)\n");
 			free(answer);
 			return -1;
@@ -2126,7 +2125,7 @@ static int iproute_get(int argc, char **argv)
 			return -2;
 	}
 
-	if (print_route(NULL, answer, (void *)stdout) < 0) {
+	if (print_route(answer, (void *)stdout) < 0) {
 		fprintf(stderr, "An error :-)\n");
 		free(answer);
 		return -1;
@@ -2144,8 +2143,7 @@ static int rtattr_cmp(const struct rtattr *rta1, const struct rtattr *rta2)
 	return memcmp(RTA_DATA(rta1), RTA_DATA(rta2), RTA_PAYLOAD(rta1));
 }
 
-static int restore_handler(const struct sockaddr_nl *nl,
-			   struct rtnl_ctrl_data *ctrl,
+static int restore_handler(struct rtnl_ctrl_data *ctrl,
 			   struct nlmsghdr *n, void *arg)
 {
 	struct rtmsg *r = NLMSG_DATA(n);
@@ -2231,11 +2229,10 @@ static int iproute_restore(void)
 	return 0;
 }
 
-static int show_handler(const struct sockaddr_nl *nl,
-			struct rtnl_ctrl_data *ctrl,
+static int show_handler(struct rtnl_ctrl_data *ctrl,
 			struct nlmsghdr *n, void *arg)
 {
-	print_route(nl, n, stdout);
+	print_route(n, stdout);
 	return 0;
 }
 

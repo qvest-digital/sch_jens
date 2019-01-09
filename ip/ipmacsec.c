@@ -640,9 +640,11 @@ static void print_attrs(struct rtattr *attrs[])
 	}
 }
 
-static __u64 getattr_u64(struct rtattr *stat)
+static __u64 getattr_u64(const struct rtattr *stat)
 {
-	switch (RTA_PAYLOAD(stat)) {
+	size_t len = RTA_PAYLOAD(stat);
+
+	switch (len) {
 	case sizeof(__u64):
 		return rta_getattr_u64(stat);
 	case sizeof(__u32):
@@ -652,8 +654,8 @@ static __u64 getattr_u64(struct rtattr *stat)
 	case sizeof(__u8):
 		return rta_getattr_u8(stat);
 	default:
-		fprintf(stderr, "invalid attribute length %lu\n",
-			RTA_PAYLOAD(stat));
+		fprintf(stderr, "invalid attribute length %zu\n",
+			len);
 		exit(-1);
 	}
 }
@@ -929,8 +931,7 @@ static void print_rxsc_list(struct rtattr *sc)
 	close_json_array(PRINT_JSON, NULL);
 }
 
-static int process(const struct sockaddr_nl *who, struct nlmsghdr *n,
-		   void *arg)
+static int process(struct nlmsghdr *n, void *arg)
 {
 	struct genlmsghdr *ghdr;
 	struct rtattr *attrs[MACSEC_ATTR_MAX + 1];

@@ -90,7 +90,7 @@ static void print_hwmode(__u16 mode)
 {
 	if (mode >= ARRAY_SIZE(hw_mode))
 		print_0xhex(PRINT_ANY, "hwmode",
-			    "hwmode %#hx ", mode);
+			    "hwmode %#llx ", mode);
 	else
 		print_string(PRINT_ANY, "hwmode",
 			     "hwmode %s ", hw_mode[mode]);
@@ -152,6 +152,16 @@ static void print_protinfo(FILE *fp, struct rtattr *attr)
 		if (prtb[IFLA_BRPORT_VLAN_TUNNEL])
 			print_onoff(fp, "vlan_tunnel",
 				    rta_getattr_u8(prtb[IFLA_BRPORT_VLAN_TUNNEL]));
+
+		if (prtb[IFLA_BRPORT_BACKUP_PORT]) {
+			int ifidx;
+
+			ifidx = rta_getattr_u32(prtb[IFLA_BRPORT_BACKUP_PORT]);
+			print_string(PRINT_ANY,
+				     "backup_port", "backup_port %s ",
+				     ll_index_to_name(ifidx));
+		}
+
 		if (prtb[IFLA_BRPORT_ISOLATED])
 			print_onoff(fp, "isolated",
 				    rta_getattr_u8(prtb[IFLA_BRPORT_ISOLATED]));
@@ -180,8 +190,7 @@ static void print_af_spec(struct rtattr *attr, int ifindex)
 		print_vlan_info(aftb[IFLA_BRIDGE_VLAN_INFO], ifindex);
 }
 
-int print_linkinfo(const struct sockaddr_nl *who,
-		   struct nlmsghdr *n, void *arg)
+int print_linkinfo(struct nlmsghdr *n, void *arg)
 {
 	FILE *fp = arg;
 	struct ifinfomsg *ifi = NLMSG_DATA(n);
@@ -255,6 +264,7 @@ static void usage(void)
 	fprintf(stderr,	"                               [ vlan_tunnel {on | off} ]\n");
 	fprintf(stderr,	"                               [ isolated {on | off} ]\n");
 	fprintf(stderr, "                               [ hwmode {vepa | veb} ]\n");
+	fprintf(stderr,	"                               [ backup_port DEVICE ] [ nobackup_port ]\n");
 	fprintf(stderr, "                               [ self ] [ master ]\n");
 	fprintf(stderr, "       bridge link show [dev DEV]\n");
 	exit(-1);
@@ -289,6 +299,7 @@ static int brlink_modify(int argc, char **argv)
 		.ifm.ifi_family = PF_BRIDGE,
 	};
 	char *d = NULL;
+	int backup_port_idx = -1;
 	__s8 neigh_suppress = -1;
 	__s8 learning = -1;
 	__s8 learning_sync = -1;
@@ -395,6 +406,16 @@ static int brlink_modify(int argc, char **argv)
 			NEXT_ARG();
 			if (!on_off("isolated", &isolated, *argv))
 				return -1;
+		} else if (strcmp(*argv, "backup_port") == 0) {
+			NEXT_ARG();
+			backup_port_idx = ll_name_to_index(*argv);
+			if (!backup_port_idx) {
+				fprintf(stderr, "Error: device %s does not exist\n",
+					*argv);
+				return -1;
+			}
+		} else if (strcmp(*argv, "nobackup_port") == 0) {
+			backup_port_idx = 0;
 		} else {
 			usage();
 		}
@@ -456,6 +477,10 @@ static int brlink_modify(int argc, char **argv)
 	if (isolated != -1)
 		addattr8(&req.n, sizeof(req), IFLA_BRPORT_ISOLATED, isolated);
 
+	if (backup_port_idx != -1)
+		addattr32(&req.n, sizeof(req), IFLA_BRPORT_BACKUP_PORT,
+			  backup_port_idx);
+
 	addattr_nest_end(&req.n, nest);
 
 	/* IFLA_AF_SPEC nested attribute. Contains IFLA_BRIDGE_FLAGS that
@@ -502,7 +527,7 @@ static int brlink_show(int argc, char **argv)
 	}
 
 	if (show_details) {
-		if (rtnl_wilddump_req_filter(&rth, PF_BRIDGE, RTM_GETLINK,
+		if (rtnl_linkdump_req_filter(&rth, PF_BRIDGE,
 					     (compress_vlans ?
 					      RTEXT_FILTER_BRVLAN_COMPRESSED :
 					      RTEXT_FILTER_BRVLAN)) < 0) {
@@ -510,7 +535,7 @@ static int brlink_show(int argc, char **argv)
 			exit(1);
 		}
 	} else {
-		if (rtnl_wilddump_request(&rth, PF_BRIDGE, RTM_GETLINK) < 0) {
+		if (rtnl_linkdump_req(&rth, PF_BRIDGE) < 0) {
 			perror("Cannon send dump request");
 			exit(1);
 		}

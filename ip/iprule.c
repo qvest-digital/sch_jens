@@ -71,6 +71,7 @@ static struct
 	unsigned int tos, tosmask;
 	unsigned int pref, prefmask;
 	unsigned int fwmark, fwmask;
+	uint64_t tun_id;
 	char iif[IFNAMSIZ];
 	char oif[IFNAMSIZ];
 	struct fib_rule_uid_range range;
@@ -174,6 +175,18 @@ static bool filter_nlmsg(struct nlmsghdr *n, struct rtattr **tb, int host_len)
 			return false;
 	}
 
+	if (filter.tun_id) {
+		__u64 tun_id = 0;
+
+		if (tb[FRA_TUN_ID]) {
+			tun_id = ntohll(rta_getattr_u64(tb[FRA_TUN_ID]));
+			if (filter.tun_id != tun_id)
+				return false;
+		} else {
+			return false;
+		}
+	}
+
 	table = frh_get_table(frh, tb);
 	if (filter.tb > 0 && filter.tb ^ table)
 		return false;
@@ -181,7 +194,7 @@ static bool filter_nlmsg(struct nlmsghdr *n, struct rtattr **tb, int host_len)
 	return true;
 }
 
-int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+int print_rule(struct nlmsghdr *n, void *arg)
 {
 	FILE *fp = arg;
 	struct fib_rule_hdr *frh = NLMSG_DATA(n);
@@ -263,10 +276,10 @@ int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 
 		if (tb[FRA_FWMASK] &&
 		    (mask = rta_getattr_u32(tb[FRA_FWMASK])) != 0xFFFFFFFF) {
-			print_0xhex(PRINT_ANY, "fwmark", "fwmark 0x%x", mark);
-			print_0xhex(PRINT_ANY, "fwmask", "/0x%x ", mask);
+			print_0xhex(PRINT_ANY, "fwmark", "fwmark %#llx", mark);
+			print_0xhex(PRINT_ANY, "fwmask", "/%#llx ", mask);
 		} else {
-			print_0xhex(PRINT_ANY, "fwmark", "fwmark 0x%x ", mark);
+			print_0xhex(PRINT_ANY, "fwmark", "fwmark %#llx ", mark);
 		}
 	}
 
@@ -338,6 +351,12 @@ int print_rule(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				   r->start);
 			print_uint(PRINT_ANY, "dport_end", "-%u ", r->end);
 		}
+	}
+
+	if (tb[FRA_TUN_ID]) {
+		__u64 tun_id = ntohll(rta_getattr_u64(tb[FRA_TUN_ID]));
+
+		print_u64(PRINT_ANY, "tun_id", "tun_id %llu ", tun_id);
 	}
 
 	table = frh_get_table(frh, tb);
@@ -442,8 +461,7 @@ static int save_rule_prep(void)
 	return 0;
 }
 
-static int save_rule(const struct sockaddr_nl *who,
-		     struct nlmsghdr *n, void *arg)
+static int save_rule(struct nlmsghdr *n, void *arg)
 {
 	int ret;
 
@@ -456,19 +474,23 @@ static int save_rule(const struct sockaddr_nl *who,
 	return ret == n->nlmsg_len ? 0 : ret;
 }
 
-static int flush_rule(const struct sockaddr_nl *who, struct nlmsghdr *n,
-		      void *arg)
+static int flush_rule(struct nlmsghdr *n, void *arg)
 {
 	struct rtnl_handle rth2;
 	struct fib_rule_hdr *frh = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
 	struct rtattr *tb[FRA_MAX+1];
+	int host_len = -1;
 
 	len -= NLMSG_LENGTH(sizeof(*frh));
 	if (len < 0)
 		return -1;
 
 	parse_rtattr(tb, FRA_MAX, RTM_RTA(frh), len);
+
+	host_len = af_bit_len(frh->family);
+	if (!filter_nlmsg(n, tb, host_len))
+		return 0;
 
 	if (tb[FRA_PROTOCOL]) {
 		__u8 protocol = rta_getattr_u8(tb[FRA_PROTOCOL]);
@@ -580,6 +602,13 @@ static int iprule_list_flush_or_save(int argc, char **argv, int action)
 				   &filter.range.end) != 2)
 				invarg("invalid UID range\n", *argv);
 
+		} else if (matches(*argv, "tun_id") == 0) {
+			__u64 tun_id;
+
+			NEXT_ARG();
+			if (get_u64(&tun_id, *argv, 0))
+				invarg("\"tun_id\" value is invalid\n", *argv);
+			filter.tun_id = tun_id;
 		} else if (matches(*argv, "lookup") == 0 ||
 			   matches(*argv, "table") == 0) {
 			__u32 tid;
@@ -615,7 +644,7 @@ static int iprule_list_flush_or_save(int argc, char **argv, int action)
 		argc--; argv++;
 	}
 
-	if (rtnl_wilddump_request(&rth, af, RTM_GETRULE) < 0) {
+	if (rtnl_ruledump_req(&rth, af) < 0) {
 		perror("Cannot send dump request");
 		return 1;
 	}
@@ -650,8 +679,7 @@ static int rule_dump_check_magic(void)
 	return 0;
 }
 
-static int restore_handler(const struct sockaddr_nl *nl,
-			   struct rtnl_ctrl_data *ctrl,
+static int restore_handler(struct rtnl_ctrl_data *ctrl,
 			   struct nlmsghdr *n, void *arg)
 {
 	int ret;
@@ -694,6 +722,11 @@ static int iprule_modify(int cmd, int argc, char **argv)
 	};
 
 	if (cmd == RTM_NEWRULE) {
+		if (argc == 0) {
+			fprintf(stderr,
+				"\"ip rule add\" requires arguments.\n");
+			return -1;
+		}
 		req.n.nlmsg_flags |= NLM_F_CREATE|NLM_F_EXCL;
 		req.frh.action = FR_ACT_TO_TBL;
 	}
@@ -772,6 +805,13 @@ static int iprule_modify(int cmd, int argc, char **argv)
 			if (rtnl_rtprot_a2n(&proto, *argv))
 				invarg("\"protocol\" value is invalid\n", *argv);
 			addattr8(&req.n, sizeof(req), FRA_PROTOCOL, proto);
+		} else if (matches(*argv, "tun_id") == 0) {
+			__u64 tun_id;
+
+			NEXT_ARG();
+			if (get_be64(&tun_id, *argv, 0))
+				invarg("\"tun_id\" value is invalid\n", *argv);
+			addattr64(&req.n, sizeof(req), FRA_TUN_ID, tun_id);
 		} else if (matches(*argv, "table") == 0 ||
 			   strcmp(*argv, "lookup") == 0) {
 			NEXT_ARG();

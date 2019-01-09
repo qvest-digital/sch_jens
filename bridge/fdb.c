@@ -37,8 +37,8 @@ static void usage(void)
 	fprintf(stderr,
 		"Usage: bridge fdb { add | append | del | replace } ADDR dev DEV\n"
 		"              [ self ] [ master ] [ use ] [ router ] [ extern_learn ]\n"
-		"              [ local | static | dynamic ] [ dst IPADDR ] [ vlan VID ]\n"
-		"              [ port PORT] [ vni VNI ] [ via DEV ]\n"
+		"              [ sticky ] [ local | static | dynamic ] [ dst IPADDR ]\n"
+		"              [ vlan VID ] [ port PORT] [ vni VNI ] [ via DEV ]\n"
 		"       bridge fdb [ show [ br BRDEV ] [ brport DEV ] [ vlan VID ] [ state STATE ] ]\n");
 	exit(-1);
 }
@@ -101,6 +101,9 @@ static void fdb_print_flags(FILE *fp, unsigned int flags)
 	if (flags & NTF_MASTER)
 		print_string(PRINT_ANY, NULL, "%s ", "master");
 
+	if (flags & NTF_STICKY)
+		print_string(PRINT_ANY, NULL, "%s ", "sticky");
+
 	close_json_array(PRINT_JSON, NULL);
 }
 
@@ -123,7 +126,7 @@ static void fdb_print_stats(FILE *fp, const struct nda_cacheinfo *ci)
 	}
 }
 
-int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+int print_fdb(struct nlmsghdr *n, void *arg)
 {
 	FILE *fp = arg;
 	struct ndmsg *r = NLMSG_DATA(n);
@@ -178,13 +181,10 @@ int print_fdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
 				   "mac", "%s ", lladdr);
 	}
 
-	if (!filter_index && r->ndm_ifindex) {
-		if (!is_json_context())
-			fprintf(fp, "dev ");
+	if (!filter_index && r->ndm_ifindex)
 		print_color_string(PRINT_ANY, COLOR_IFNAME,
 				   "ifname", "dev %s ",
 				   ll_index_to_name(r->ndm_ifindex));
-	}
 
 	if (tb[NDA_DST]) {
 		int family = AF_INET;
@@ -414,6 +414,8 @@ static int fdb_modify(int cmd, int flags, int argc, char **argv)
 			req.ndm.ndm_flags |= NTF_USE;
 		} else if (matches(*argv, "extern_learn") == 0) {
 			req.ndm.ndm_flags |= NTF_EXT_LEARNED;
+		} else if (matches(*argv, "sticky") == 0) {
+			req.ndm.ndm_flags |= NTF_STICKY;
 		} else {
 			if (strcmp(*argv, "to") == 0)
 				NEXT_ARG();

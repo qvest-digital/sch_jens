@@ -225,7 +225,7 @@ static void print_router_entries(FILE *fp, struct nlmsghdr *n,
 	close_json_array(PRINT_JSON, NULL);
 }
 
-int print_mdb(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+int print_mdb(struct nlmsghdr *n, void *arg)
 {
 	FILE *fp = arg;
 	struct br_port_msg *r = NLMSG_DATA(n);
@@ -293,7 +293,7 @@ static int mdb_show(int argc, char **argv)
 	new_json_obj(json);
 
 	/* get mdb entries*/
-	if (rtnl_wilddump_request(&rth, PF_BRIDGE, RTM_GETMDB) < 0) {
+	if (rtnl_mdbdump_req(&rth, PF_BRIDGE) < 0) {
 		perror("Cannot send dump request");
 		return -1;
 	}

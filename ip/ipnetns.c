@@ -35,6 +35,7 @@ static int usage(void)
 	fprintf(stderr, "       ip [-all] netns exec [NAME] cmd ...\n");
 	fprintf(stderr, "       ip netns monitor\n");
 	fprintf(stderr, "       ip netns list-id\n");
+	fprintf(stderr, "NETNSID := auto | POSITIVE-INT\n");
 	exit(-1);
 }
 
@@ -43,8 +44,7 @@ static struct rtnl_handle rtnsh = { .fd = -1 };
 
 static int have_rtnl_getnsid = -1;
 
-static int ipnetns_accept_msg(const struct sockaddr_nl *who,
-			      struct rtnl_ctrl_data *ctrl,
+static int ipnetns_accept_msg(struct rtnl_ctrl_data *ctrl,
 			      struct nlmsghdr *n, void *arg)
 {
 	struct nlmsgerr *err = (struct nlmsgerr *)NLMSG_DATA(n);
@@ -284,7 +284,7 @@ static int netns_get_name(int nsid, char *name)
 	return -ENOENT;
 }
 
-int print_nsid(const struct sockaddr_nl *who, struct nlmsghdr *n, void *arg)
+int print_nsid(struct nlmsghdr *n, void *arg)
 {
 	struct rtgenmsg *rthdr = NLMSG_DATA(n);
 	struct rtattr *tb[NETNSA_MAX+1];
@@ -346,7 +346,7 @@ static int netns_list_id(int argc, char **argv)
 		return -ENOTSUP;
 	}
 
-	if (rtnl_wilddump_request(&rth, AF_UNSPEC, RTM_GETNSID) < 0) {
+	if (rtnl_nsiddump_req(&rth, AF_UNSPEC) < 0) {
 		perror("Cannot send dump request");
 		exit(1);
 	}
@@ -740,8 +740,7 @@ static int netns_set(int argc, char **argv)
 {
 	char netns_path[PATH_MAX];
 	const char *name;
-	unsigned int nsid;
-	int netns;
+	int netns, nsid;
 
 	if (argc < 1) {
 		fprintf(stderr, "No netns name specified\n");
@@ -755,8 +754,10 @@ static int netns_set(int argc, char **argv)
 	/* If a negative nsid is specified the kernel will select the nsid. */
 	if (strcmp(argv[1], "auto") == 0)
 		nsid = -1;
-	else if (get_unsigned(&nsid, argv[1], 0))
+	else if (get_integer(&nsid, argv[1], 0))
 		invarg("Invalid \"netnsid\" value\n", argv[1]);
+	else if (nsid < 0)
+		invarg("\"netnsid\" value should be >= 0\n", argv[1]);
 
 	snprintf(netns_path, sizeof(netns_path), "%s/%s", NETNS_RUN_DIR, name);
 	netns = open(netns_path, O_RDONLY | O_CLOEXEC);

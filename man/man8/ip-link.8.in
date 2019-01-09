@@ -215,6 +215,7 @@ ip-link \- network device configuration
 .BR vti " |"
 .BR nlmon " |"
 .BR ipvlan " |"
+.BR ipvtap " |"
 .BR lowpan " |"
 .BR geneve " |"
 .BR vrf " |"
@@ -328,6 +329,9 @@ Link types:
 .sp
 .BR ipvlan
 - Interface for L3 (IPv6/IPv4) based VLANs
+.sp
+.BR ipvtap
+- Interface for L3 (IPv6/IPv4) based VLANs and TAP
 .sp
 .BR lowpan
 - Interface for 6LoWPAN (IPv6) over IEEE 802.15.4 / Bluetooth
@@ -1186,7 +1190,9 @@ the following additional arguments are supported:
 
 .sp
 .BI ttl " TTL"
-- specifies the TTL value to use in outgoing packets.
+- specifies the TTL value to use in outgoing packets. "0" or "auto" means
+use whatever default value, "inherit" means inherit the inner protocol's
+ttl. Default option is "0".
 
 .sp
 .BI tos " TOS"
@@ -2072,7 +2078,11 @@ the following additional arguments are supported:
 ] [
 .BR vlan_tunnel " { " on " | " off " }"
 ] [
-.BR isolated " { " on " | " off " } ]"
+.BR isolated " { " on " | " off " }"
+] [
+.BR backup_port " DEVICE"
+] [
+.BR nobackup_port " ]"
 
 .in +8
 .sp
@@ -2154,7 +2164,13 @@ option above.
 - controls whether neigh discovery (arp and nd) proxy and suppression is enabled on the port. By default this flag is off.
 
 .BR vlan_tunnel " { " on " | " off " }"
-- Controls whether vlan to tunnel mapping is enabled on the port. By default this flag is off.
+- controls whether vlan to tunnel mapping is enabled on the port. By default this flag is off.
+
+.BI backup_port " DEVICE"
+- if the port loses carrier all traffic will be redirected to the configured backup port
+
+.BR nobackup_port
+- removes the currently configured backup port
 
 .in -8
 

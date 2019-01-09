@@ -74,6 +74,7 @@ TCMODULES += e_bpf.o
 TCMODULES += f_matchall.o
 TCMODULES += q_cbs.o
 TCMODULES += q_etf.o
+TCMODULES += q_taprio.o
 
 TCSO :=
 ifeq ($(TC_CONFIG_ATM),y)
@@ -127,7 +128,7 @@ CFLAGS += -DYY_NO_INPUT
 MODDESTDIR := $(DESTDIR)$(LIBDIR)/tc
 
 %.so: %.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic $< -o $@
+	$(QUIET_CC)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fpic $< -o $@
 
 
 all: tc $(TCSO)
@@ -157,20 +158,20 @@ clean:
 	rm -f emp_ematch.yacc.*
 
 q_atm.so: q_atm.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o q_atm.so q_atm.c -latm
+	$(QUIET_CC)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fpic -o q_atm.so q_atm.c -latm
 
 m_xt.so: m_xt.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o m_xt.so m_xt.c $$($(PKG_CONFIG) xtables --cflags --libs)
+	$(QUIET_CC)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fpic -o m_xt.so m_xt.c $$($(PKG_CONFIG) xtables --cflags --libs)
 
 m_xt_old.so: m_xt_old.c
-	$(QUIET_CC)$(CC) $(CFLAGS) $(LDFLAGS) -shared -fpic -o m_xt_old.so m_xt_old.c $$($(PKG_CONFIG) xtables --cflags --libs)
+	$(QUIET_CC)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fpic -o m_xt_old.so m_xt_old.c $$($(PKG_CONFIG) xtables --cflags --libs)
 
 em_ipset.o: CFLAGS += $$($(PKG_CONFIG) xtables --cflags)
 
 em_ipt.o: CFLAGS += $$($(PKG_CONFIG) xtables --cflags)
 
 ifeq ($(TC_CONFIG_XT),y)
-  LDFLAGS += $$($(PKG_CONFIG) xtables --libs)
+  LDLIBS += $$($(PKG_CONFIG) xtables --libs)
 endif
 
 %.yacc.c: %.y

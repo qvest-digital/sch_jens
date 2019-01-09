@@ -102,11 +102,6 @@ static const struct bpf_prog_meta __bpf_prog_meta[] = {
 	},
 };
 
-static bool bpf_map_offload_neutral(enum bpf_map_type type)
-{
-	return type == BPF_MAP_TYPE_PERF_EVENT_ARRAY;
-}
-
 static const char *bpf_prog_to_subdir(enum bpf_prog_type type)
 {
 	assert(type < ARRAY_SIZE(__bpf_prog_meta) &&
@@ -1610,6 +1605,11 @@ static bool bpf_is_map_in_map_type(const struct bpf_elf_map *map)
 	       map->type == BPF_MAP_TYPE_HASH_OF_MAPS;
 }
 
+static bool bpf_map_offload_neutral(enum bpf_map_type type)
+{
+	return type == BPF_MAP_TYPE_PERF_EVENT_ARRAY;
+}
+
 static int bpf_map_attach(const char *name, struct bpf_elf_ctx *ctx,
 			  const struct bpf_elf_map *map, struct bpf_map_ext *ext,
 			  int *have_map_in_map)
@@ -1758,11 +1758,14 @@ static const char *bpf_map_fetch_name(struct bpf_elf_ctx *ctx, int which)
 	int i;
 
 	for (i = 0; i < ctx->sym_num; i++) {
+		int type;
+
 		if (gelf_getsym(ctx->sym_tab, i, &sym) != &sym)
 			continue;
 
+		type = GELF_ST_TYPE(sym.st_info);
 		if (GELF_ST_BIND(sym.st_info) != STB_GLOBAL ||
-		    GELF_ST_TYPE(sym.st_info) != STT_NOTYPE ||
+		    (type != STT_NOTYPE && type != STT_OBJECT) ||
 		    sym.st_shndx != ctx->sec_maps ||
 		    sym.st_value / ctx->map_len != which)
 			continue;
@@ -1849,11 +1852,14 @@ static int bpf_map_num_sym(struct bpf_elf_ctx *ctx)
 	GElf_Sym sym;
 
 	for (i = 0; i < ctx->sym_num; i++) {
+		int type;
+
 		if (gelf_getsym(ctx->sym_tab, i, &sym) != &sym)
 			continue;
 
+		type = GELF_ST_TYPE(sym.st_info);
 		if (GELF_ST_BIND(sym.st_info) != STB_GLOBAL ||
-		    GELF_ST_TYPE(sym.st_info) != STT_NOTYPE ||
+		    (type != STT_NOTYPE && type != STT_OBJECT) ||
 		    sym.st_shndx != ctx->sec_maps)
 			continue;
 		num++;
@@ -1927,10 +1933,14 @@ static int bpf_map_verify_all_offs(struct bpf_elf_ctx *ctx, int end)
 		 * the table again.
 		 */
 		for (i = 0; i < ctx->sym_num; i++) {
+			int type;
+
 			if (gelf_getsym(ctx->sym_tab, i, &sym) != &sym)
 				continue;
+
+			type = GELF_ST_TYPE(sym.st_info);
 			if (GELF_ST_BIND(sym.st_info) != STB_GLOBAL ||
-			    GELF_ST_TYPE(sym.st_info) != STT_NOTYPE ||
+			    (type != STT_NOTYPE && type != STT_OBJECT) ||
 			    sym.st_shndx != ctx->sec_maps)
 				continue;
 			if (sym.st_value == off)

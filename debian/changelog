@@ -1,9 +1,9 @@
-iproute2 (4.20.0-1) UNRELEASED; urgency=medium
+iproute2 (4.20.0-1) experimental; urgency=medium
 
   * Merge tag 'upstream/4.20.0'
   * Drop patches merged upstream in v4.20.0.
 
- -- Luca Boccassi <bluca@debian.org>  Wed, 09 Jan 2019 14:54:11 +0000
+ -- Luca Boccassi <bluca@debian.org>  Wed, 09 Jan 2019 15:31:15 +0000
 
 iproute2 (4.19.0-2) unstable; urgency=medium
 

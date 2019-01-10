@@ -1,3 +1,9 @@
+iproute2 (4.20.0-2) unstable; urgency=medium
+
+  * Upload to unstable.
+
+ -- Luca Boccassi <bluca@debian.org>  Thu, 10 Jan 2019 20:04:14 +0000
+
 iproute2 (4.20.0-1) experimental; urgency=medium
 
   * Merge tag 'upstream/4.20.0'

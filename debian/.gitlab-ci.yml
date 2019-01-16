@@ -12,6 +12,9 @@ lintian:
 autopkgtest:
     extends: .test-autopkgtest
 
+blhc:
+    extends: .test-blhc
+
 piuparts:
     extends: .test-piuparts
 

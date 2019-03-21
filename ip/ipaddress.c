@@ -174,7 +174,9 @@ static void print_queuelen(FILE *f, struct rtattr *tb[IFLA_MAX + 1])
 
 		strcpy(ifr.ifr_name, rta_getattr_str(tb[IFLA_IFNAME]));
 		if (ioctl(s, SIOCGIFTXQLEN, &ifr) < 0) {
-			fprintf(f, "ioctl(SIOCGIFTXQLEN) failed: %s\n", strerror(errno));
+			fprintf(stderr,
+				"ioctl(SIOCGIFTXQLEN) failed: %s\n",
+				strerror(errno));
 			close(s);
 			return;
 		}
@@ -547,7 +549,7 @@ static void print_vf_stats64(FILE *fp, struct rtattr *vfstats)
 		return;
 	}
 
-	parse_rtattr_nested(vf, IFLA_VF_MAX, vfstats);
+	parse_rtattr_nested(vf, IFLA_VF_STATS_MAX, vfstats);
 
 	if (is_json_context()) {
 		open_json_object("stats");
@@ -1679,6 +1681,15 @@ static void ipaddr_filter(struct nlmsg_chain *linfo, struct nlmsg_chain *ainfo)
 	}
 }
 
+static int ipaddr_dump_filter(struct nlmsghdr *nlh, int reqlen)
+{
+	struct ifaddrmsg *ifa = NLMSG_DATA(nlh);
+
+	ifa->ifa_index = filter.ifindex;
+
+	return 0;
+}
+
 static int ipaddr_flush(void)
 {
 	int round = 0;
@@ -1689,7 +1700,8 @@ static int ipaddr_flush(void)
 	filter.flushe = sizeof(flushb);
 
 	while ((max_flush_loops == 0) || (round < max_flush_loops)) {
-		if (rtnl_addrdump_req(&rth, filter.family) < 0) {
+		if (rtnl_addrdump_req(&rth, filter.family,
+				      ipaddr_dump_filter) < 0) {
 			perror("Cannot send dump request");
 			exit(1);
 		}
@@ -1762,12 +1774,41 @@ static int iplink_filter_req(struct nlmsghdr *nlh, int reqlen)
 	return 0;
 }
 
+static int ipaddr_link_get(int index, struct nlmsg_chain *linfo)
+{
+	struct iplink_req req = {
+		.n.nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg)),
+		.n.nlmsg_flags = NLM_F_REQUEST,
+		.n.nlmsg_type = RTM_GETLINK,
+		.i.ifi_family = filter.family,
+		.i.ifi_index = index,
+	};
+	__u32 filt_mask = RTEXT_FILTER_VF;
+	struct nlmsghdr *answer;
+
+	if (!show_stats)
+		filt_mask |= RTEXT_FILTER_SKIP_STATS;
+
+	addattr32(&req.n, sizeof(req), IFLA_EXT_MASK, filt_mask);
+
+	if (rtnl_talk(&rth, &req.n, &answer) < 0) {
+		perror("Cannot send link request");
+		return 1;
+	}
+
+	if (store_nlmsg(answer, linfo) < 0) {
+		fprintf(stderr, "Failed to process link information\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 /* fills in linfo with link data and optionally ainfo with address info
  * caller can walk lists as desired and must call free_nlmsg_chain for
  * both when done
  */
-int ip_linkaddr_list(int family, req_filter_fn_t filter_fn,
-		     struct nlmsg_chain *linfo, struct nlmsg_chain *ainfo)
+int ip_link_list(req_filter_fn_t filter_fn, struct nlmsg_chain *linfo)
 {
 	if (rtnl_linkdump_req_filter_fn(&rth, preferred_family,
 					filter_fn) < 0) {
@@ -1780,16 +1821,19 @@ int ip_linkaddr_list(int family, req_filter_fn_t filter_fn,
 		return 1;
 	}
 
-	if (ainfo) {
-		if (rtnl_addrdump_req(&rth, family) < 0) {
-			perror("Cannot send dump request");
-			return 1;
-		}
+	return 0;
+}
 
-		if (rtnl_dump_filter(&rth, store_nlmsg, ainfo) < 0) {
-			fprintf(stderr, "Dump terminated\n");
-			return 1;
-		}
+static int ip_addr_list(struct nlmsg_chain *ainfo)
+{
+	if (rtnl_addrdump_req(&rth, filter.family, ipaddr_dump_filter) < 0) {
+		perror("Cannot send dump request");
+		return 1;
+	}
+
+	if (rtnl_dump_filter(&rth, store_nlmsg, ainfo) < 0) {
+		fprintf(stderr, "Dump terminated\n");
+		return 1;
 	}
 
 	return 0;
@@ -1798,7 +1842,7 @@ int ip_linkaddr_list(int family, req_filter_fn_t filter_fn,
 static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 {
 	struct nlmsg_chain linfo = { NULL, NULL};
-	struct nlmsg_chain _ainfo = { NULL, NULL}, *ainfo = NULL;
+	struct nlmsg_chain _ainfo = { NULL, NULL}, *ainfo = &_ainfo;
 	struct nlmsg_list *l;
 	char *filter_dev = NULL;
 	int no_link = 0;
@@ -1906,7 +1950,8 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 		if (ipadd_save_prep())
 			exit(1);
 
-		if (rtnl_addrdump_req(&rth, preferred_family) < 0) {
+		if (rtnl_addrdump_req(&rth, preferred_family,
+				      ipaddr_dump_filter) < 0) {
 			perror("Cannot send dump request");
 			exit(1);
 		}
@@ -1940,19 +1985,23 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 		goto out;
 	}
 
-	if (filter.family != AF_PACKET) {
-		ainfo = &_ainfo;
-
-		if (filter.oneline)
-			no_link = 1;
+	if (filter.ifindex) {
+		if (ipaddr_link_get(filter.ifindex, &linfo) != 0)
+			goto out;
+	} else {
+		if (ip_link_list(iplink_filter_req, &linfo) != 0)
+			goto out;
 	}
 
-	if (ip_linkaddr_list(filter.family, iplink_filter_req,
-			     &linfo, ainfo) != 0)
-		goto out;
+	if (filter.family != AF_PACKET) {
+		if (filter.oneline)
+			no_link = 1;
 
-	if (filter.family != AF_PACKET)
+		if (ip_addr_list(ainfo) != 0)
+			goto out;
+
 		ipaddr_filter(&linfo, ainfo);
+	}
 
 	for (l = linfo.head; l; l = l->next) {
 		struct nlmsghdr *n = &l->h;
@@ -1971,8 +2020,7 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	fflush(stdout);
 
 out:
-	if (ainfo)
-		free_nlmsg_chain(ainfo);
+	free_nlmsg_chain(ainfo);
 	free_nlmsg_chain(&linfo);
 	delete_json_obj();
 	return 0;

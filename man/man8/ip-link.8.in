@@ -496,6 +496,8 @@ the following additional arguments are supported:
 ] [
 .BI tos " TOS "
 ] [
+.BI df " DF "
+] [
 .BI flowlabel " FLOWLABEL "
 ] [
 .BI dstport " PORT "
@@ -564,6 +566,18 @@ parameter.
 .sp
 .BI tos " TOS"
 - specifies the TOS value to use in outgoing packets.
+
+.sp
+.BI df " DF"
+- specifies the usage of the Don't Fragment flag (DF) bit in outgoing packets
+with IPv4 headers. The value
+.B inherit
+causes the bit to be copied from the original IP header. The values
+.B unset
+and
+.B set
+cause the bit to be always unset or always set, respectively. By default, the
+bit is not set.
 
 .sp
 .BI flowlabel " FLOWLABEL"
@@ -1166,6 +1180,8 @@ the following additional arguments are supported:
 ] [
 .BI tos " TOS "
 ] [
+.BI df " DF "
+] [
 .BI flowlabel " FLOWLABEL "
 ] [
 .BI dstport " PORT"
@@ -1197,6 +1213,18 @@ ttl. Default option is "0".
 .sp
 .BI tos " TOS"
 - specifies the TOS value to use in outgoing packets.
+
+.sp
+.BI df " DF"
+- specifies the usage of the Don't Fragment flag (DF) bit in outgoing packets
+with IPv4 headers. The value
+.B inherit
+causes the bit to be copied from the original IP header. The values
+.B unset
+and
+.B set
+cause the bit to be always unset or always set, respectively. By default, the
+bit is not set.
 
 .sp
 .BI flowlabel " FLOWLABEL"
@@ -2155,7 +2183,7 @@ queries.
 option above.
 
 .BR mcast_flood " { " on " | " off " }"
-- controls whether a given port will be flooded with multicast traffic for which there is no MDB entry.
+- controls whether a given port will flood multicast traffic for which there is no MDB entry.
 
 .BI group_fwd_mask " MASK "
 - set the group forward mask. This is the bitmask that is applied to decide whether to forward incoming frames destined to link-local addresses, ie addresses of the form 01:80:C2:00:00:0X (defaults to 0, ie the bridge does not forward any link-local frames coming on this port).

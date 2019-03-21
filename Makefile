@@ -40,12 +40,6 @@ DEFINES+=-DCONFDIR=\"$(CONFDIR)\" \
          -DNETNS_RUN_DIR=\"$(NETNS_RUN_DIR)\" \
          -DNETNS_ETC_DIR=\"$(NETNS_ETC_DIR)\"
 
-#options for decnet
-ADDLIB+=dnet_ntop.o dnet_pton.o
-
-#options for ipx
-ADDLIB+=ipx_ntop.o ipx_pton.o
-
 #options for mpls
 ADDLIB+=mpls_ntop.o mpls_pton.o
 
@@ -121,6 +115,12 @@ distclean: clobber
 
 check: all
 	cd testsuite && $(MAKE) && $(MAKE) alltests
+	@if command -v man >/dev/null 2>&1; then \
+		echo "Checking manpages for syntax errors..."; \
+		$(MAKE) -C man check; \
+	else \
+		echo "man not installed, skipping checks for syntax errors."; \
+	fi
 
 cscope:
 	cscope -b -q -R -Iinclude -sip -slib -smisc -snetem -stc

@@ -83,7 +83,7 @@ static void usage(void)
 		"INFO_SPEC := NH OPTIONS FLAGS [ nexthop NH ]...\n"
 		"NH := [ encap ENCAPTYPE ENCAPHDR ] [ via [ FAMILY ] ADDRESS ]\n"
 		"	    [ dev STRING ] [ weight NUMBER ] NHFLAGS\n"
-		"FAMILY := [ inet | inet6 | ipx | dnet | mpls | bridge | link ]\n"
+		"FAMILY := [ inet | inet6 | mpls | bridge | link ]\n"
 		"OPTIONS := FLAGS [ mtu NUMBER ] [ advmss NUMBER ] [ as [ to ] ADDRESS ]\n"
 		"           [ rtt TIME ] [ rttvar TIME ] [ reordering NUMBER ]\n"
 		"           [ window NUMBER ] [ cwnd NUMBER ] [ initcwnd NUMBER ]\n"
@@ -450,10 +450,8 @@ static void print_cache_flags(FILE *fp, __u32 flags)
 	if (flags)
 		print_hex(PRINT_ANY, "flags", "%x>", flags);
 
-	if (jw) {
+	if (jw)
 		jsonw_end_array(jw);
-		jsonw_destroy(&jw);
-	}
 }
 
 static void print_rta_cacheinfo(FILE *fp, const struct rta_cacheinfo *ci)
@@ -766,7 +764,7 @@ int print_route(struct nlmsghdr *n, void *arg)
 
 	if ((r->rtm_type != RTN_UNICAST || show_details > 0) &&
 	    (!filter.typemask || (filter.typemask & (1 << r->rtm_type))))
-		print_string(PRINT_ANY, NULL, "%s ",
+		print_string(PRINT_ANY, "type", "%s ",
 			     rtnl_rtntype_n2a(r->rtm_type, b1, sizeof(b1)));
 
 	color = COLOR_NONE;
@@ -1535,24 +1533,6 @@ static int iproute_modify(int cmd, unsigned int flags, int argc, char **argv)
 	return 0;
 }
 
-static int rtnl_rtcache_request(struct rtnl_handle *rth, int family)
-{
-	struct {
-		struct nlmsghdr nlh;
-		struct rtmsg rtm;
-	} req = {
-		.nlh.nlmsg_len = sizeof(req),
-		.nlh.nlmsg_type = RTM_GETROUTE,
-		.nlh.nlmsg_flags = NLM_F_ROOT | NLM_F_REQUEST,
-		.nlh.nlmsg_seq = rth->dump = ++rth->seq,
-		.rtm.rtm_family = family,
-		.rtm.rtm_flags = RTM_F_CLONED,
-	};
-	struct sockaddr_nl nladdr = { .nl_family = AF_NETLINK };
-
-	return sendto(rth->fd, (void *)&req, sizeof(req), 0, (struct sockaddr *)&nladdr, sizeof(nladdr));
-}
-
 static int iproute_flush_cache(void)
 {
 #define ROUTE_FLUSH_PATH "/proc/sys/net/ipv4/route/flush"
@@ -1622,7 +1602,7 @@ static int save_route_prep(void)
 	return 0;
 }
 
-static int iproute_flush(int do_ipv6, rtnl_filter_t filter_fn)
+static int iproute_flush(int family, rtnl_filter_t filter_fn)
 {
 	time_t start = time(0);
 	char flushb[4096-512];
@@ -1630,12 +1610,12 @@ static int iproute_flush(int do_ipv6, rtnl_filter_t filter_fn)
 	int ret;
 
 	if (filter.cloned) {
-		if (do_ipv6 != AF_INET6) {
+		if (family != AF_INET6) {
 			iproute_flush_cache();
 			if (show_stats)
 				printf("*** IPv4 routing cache is flushed.\n");
 		}
-		if (do_ipv6 == AF_INET)
+		if (family == AF_INET)
 			return 0;
 	}
 
@@ -1644,7 +1624,7 @@ static int iproute_flush(int do_ipv6, rtnl_filter_t filter_fn)
 	filter.flushe = sizeof(flushb);
 
 	for (;;) {
-		if (rtnl_routedump_req(&rth, do_ipv6) < 0) {
+		if (rtnl_routedump_req(&rth, family, NULL) < 0) {
 			perror("Cannot send dump request");
 			return -2;
 		}
@@ -1656,7 +1636,7 @@ static int iproute_flush(int do_ipv6, rtnl_filter_t filter_fn)
 		if (filter.flushed == 0) {
 			if (show_stats) {
 				if (round == 0 &&
-				    (!filter.cloned || do_ipv6 == AF_INET6))
+				    (!filter.cloned || family == AF_INET6))
 					printf("Nothing to flush.\n");
 				else
 					printf("*** Flush is complete after %d round%s ***\n",
@@ -1684,9 +1664,33 @@ static int iproute_flush(int do_ipv6, rtnl_filter_t filter_fn)
 	}
 }
 
+static int iproute_dump_filter(struct nlmsghdr *nlh, int reqlen)
+{
+	struct rtmsg *rtm = NLMSG_DATA(nlh);
+	int err;
+
+	rtm->rtm_protocol = filter.protocol;
+	if (filter.cloned)
+		rtm->rtm_flags |= RTM_F_CLONED;
+
+	if (filter.tb) {
+		err = addattr32(nlh, reqlen, RTA_TABLE, filter.tb);
+		if (err)
+			return err;
+	}
+
+	if (filter.oif) {
+		err = addattr32(nlh, reqlen, RTA_OIF, filter.oif);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
 static int iproute_list_flush_or_save(int argc, char **argv, int action)
 {
-	int do_ipv6 = preferred_family;
+	int dump_family = preferred_family;
 	char *id = NULL;
 	char *od = NULL;
 	unsigned int mark = 0;
@@ -1805,13 +1809,13 @@ static int iproute_list_flush_or_save(int argc, char **argv, int action)
 			NEXT_ARG();
 			family = read_family(*argv);
 			if (family == AF_UNSPEC)
-				family = do_ipv6;
+				family = dump_family;
 			else
 				NEXT_ARG();
 			get_prefix(&filter.rvia, *argv, family);
 		} else if (strcmp(*argv, "src") == 0) {
 			NEXT_ARG();
-			get_prefix(&filter.rprefsrc, *argv, do_ipv6);
+			get_prefix(&filter.rprefsrc, *argv, dump_family);
 		} else if (matches(*argv, "realms") == 0) {
 			__u32 realm;
 
@@ -1831,15 +1835,15 @@ static int iproute_list_flush_or_save(int argc, char **argv, int action)
 			NEXT_ARG();
 			if (matches(*argv, "root") == 0) {
 				NEXT_ARG();
-				get_prefix(&filter.rsrc, *argv, do_ipv6);
+				get_prefix(&filter.rsrc, *argv, dump_family);
 			} else if (matches(*argv, "match") == 0) {
 				NEXT_ARG();
-				get_prefix(&filter.msrc, *argv, do_ipv6);
+				get_prefix(&filter.msrc, *argv, dump_family);
 			} else {
 				if (matches(*argv, "exact") == 0) {
 					NEXT_ARG();
 				}
-				get_prefix(&filter.msrc, *argv, do_ipv6);
+				get_prefix(&filter.msrc, *argv, dump_family);
 				filter.rsrc = filter.msrc;
 			}
 		} else {
@@ -1848,23 +1852,23 @@ static int iproute_list_flush_or_save(int argc, char **argv, int action)
 			}
 			if (matches(*argv, "root") == 0) {
 				NEXT_ARG();
-				get_prefix(&filter.rdst, *argv, do_ipv6);
+				get_prefix(&filter.rdst, *argv, dump_family);
 			} else if (matches(*argv, "match") == 0) {
 				NEXT_ARG();
-				get_prefix(&filter.mdst, *argv, do_ipv6);
+				get_prefix(&filter.mdst, *argv, dump_family);
 			} else {
 				if (matches(*argv, "exact") == 0) {
 					NEXT_ARG();
 				}
-				get_prefix(&filter.mdst, *argv, do_ipv6);
+				get_prefix(&filter.mdst, *argv, dump_family);
 				filter.rdst = filter.mdst;
 			}
 		}
 		argc--; argv++;
 	}
 
-	if (do_ipv6 == AF_UNSPEC && filter.tb)
-		do_ipv6 = AF_INET;
+	if (dump_family == AF_UNSPEC && filter.tb)
+		dump_family = AF_INET;
 
 	if (id || od)  {
 		int idx;
@@ -1887,18 +1891,11 @@ static int iproute_list_flush_or_save(int argc, char **argv, int action)
 	filter.mark = mark;
 
 	if (action == IPROUTE_FLUSH)
-		return iproute_flush(do_ipv6, filter_fn);
+		return iproute_flush(dump_family, filter_fn);
 
-	if (!filter.cloned) {
-		if (rtnl_routedump_req(&rth, do_ipv6) < 0) {
-			perror("Cannot send dump request");
-			return -2;
-		}
-	} else {
-		if (rtnl_rtcache_request(&rth, do_ipv6) < 0) {
-			perror("Cannot send dump request");
-			return -2;
-		}
+	if (rtnl_routedump_req(&rth, dump_family, iproute_dump_filter) < 0) {
+		perror("Cannot send dump request");
+		return -2;
 	}
 
 	new_json_obj(json);
@@ -1933,6 +1930,7 @@ static int iproute_get(int argc, char **argv)
 	int fib_match = 0;
 	int from_ok = 0;
 	unsigned int mark = 0;
+	bool address_found = false;
 
 	iproute_reset_filter(0);
 	filter.cloned = 2;
@@ -2038,11 +2036,12 @@ static int iproute_get(int argc, char **argv)
 				addattr_l(&req.n, sizeof(req),
 					  RTA_DST, &addr.data, addr.bytelen);
 			req.r.rtm_dst_len = addr.bitlen;
+			address_found = true;
 		}
 		argc--; argv++;
 	}
 
-	if (req.r.rtm_dst_len == 0) {
+	if (!address_found) {
 		fprintf(stderr, "need at least a destination address\n");
 		return -1;
 	}
@@ -2069,12 +2068,16 @@ static int iproute_get(int argc, char **argv)
 	if (req.r.rtm_family == AF_UNSPEC)
 		req.r.rtm_family = AF_INET;
 
-	req.r.rtm_flags |= RTM_F_LOOKUP_TABLE;
+	/* Only IPv4 supports the RTM_F_LOOKUP_TABLE flag */
+	if (req.r.rtm_family == AF_INET)
+		req.r.rtm_flags |= RTM_F_LOOKUP_TABLE;
 	if (fib_match)
 		req.r.rtm_flags |= RTM_F_FIB_MATCH;
 
 	if (rtnl_talk(&rth, &req.n, &answer) < 0)
 		return -2;
+
+	new_json_obj(json);
 
 	if (connected && !from_ok) {
 		struct rtmsg *r = NLMSG_DATA(answer);
@@ -2120,6 +2123,7 @@ static int iproute_get(int argc, char **argv)
 		req.n.nlmsg_flags = NLM_F_REQUEST;
 		req.n.nlmsg_type = RTM_GETROUTE;
 
+		delete_json_obj();
 		free(answer);
 		if (rtnl_talk(&rth, &req.n, &answer) < 0)
 			return -2;
@@ -2131,6 +2135,7 @@ static int iproute_get(int argc, char **argv)
 		return -1;
 	}
 
+	delete_json_obj();
 	free(answer);
 	return 0;
 }

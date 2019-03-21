@@ -89,11 +89,17 @@ an uuid of the socket
 Show socket memory usage. The output format is:
 .RS
 .P
-skmem:(r<rmem_alloc>,rb<rcv_buf>,t<wmem_alloc>,tb<snd_buf>,f<fwd_alloc>,
+skmem:(r<rmem_alloc>,rb<rcv_buf>,t<wmem_alloc>,tb<snd_buf>,
 .br
 .RS
 .RS
-w<wmem_queued>,o<opt_mem>,bl<back_log>)
+f<fwd_alloc>,w<wmem_queued>,
+.RE
+.RE
+.br
+.RS
+.RS
+o<opt_mem>,bl<back_log>)
 .RE
 .RE
 .P
@@ -236,6 +242,23 @@ the pacing rate and max pacing rate
 .TP
 .B rcv_space:<rcv_space>
 a helper variable for TCP internal auto tuning socket receive buffer
+.RE
+.TP
+.B \-\-tos
+Show ToS and priority information. Below fields may appear:
+.RS
+.P
+.TP
+.B tos
+IPv4 Type-of-Service byte
+.P
+.TP
+.B tclass
+IPv6 Traffic Class byte
+.P
+.TP
+.B class_id
+Class id set by net_cls cgroup. If class is zero this shows priority set by SO_PRIORITY.
 .RE
 .TP
 .B \-K, \-\-kill

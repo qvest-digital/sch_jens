@@ -107,7 +107,7 @@ replace " } "
 
 .ti -8
 .IR FAMILY " := [ "
-.BR inet " | " inet6 " | " ipx " | " dnet " | " mpls " | " bridge " | " link " ]"
+.BR inet " | " inet6 " | " mpls " | " bridge " | " link " ]"
 
 .ti -8
 .IR OPTIONS " := " FLAGS " [ "
@@ -737,7 +737,8 @@ is a set of encapsulation attributes specific to the
 .B tos
 .IR TOS " ] ["
 .B  ttl
-.IR TTL " ]"
+.IR TTL " ] [ "
+.BR key " ] [" csum " ] [ " seq " ] "
 .in -2
 .sp
 

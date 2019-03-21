@@ -1,3 +1,12 @@
+iproute2 (5.0.0-1) experimental; urgency=medium
+
+  * Update upstream source from tag 'upstream/5.0.0'
+  * Add build flags check to Gitlab CI.
+  * Build-depend on libbsd-dev, to avoid using internal strlcpy.
+  * autopkgtest: build-depend on locales-all for manpage test
+
+ -- Luca Boccassi <bluca@debian.org>  Thu, 21 Mar 2019 12:14:41 +0000
+
 iproute2 (4.20.0-2) unstable; urgency=medium
 
   * Upload to unstable.

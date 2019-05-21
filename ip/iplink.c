@@ -121,7 +121,8 @@ void iplink_usage(void)
 			"          bridge | bond | team | ipoib | ip6tnl | ipip | sit | vxlan |\n"
 			"          gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan |\n"
 			"          vti | nlmon | team_slave | bond_slave | bridge_slave |\n"
-			"          ipvlan | ipvtap | geneve | vrf | macsec | netdevsim | rmnet }\n");
+			"          ipvlan | ipvtap | geneve | vrf | macsec | netdevsim | rmnet |\n"
+			"          xfrm }\n");
 	}
 	exit(-1);
 }
@@ -1082,6 +1083,9 @@ static int iplink_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 	if (rtnl_talk(&rth, &req.n, NULL) < 0)
 		return -2;
+
+	/* remove device from cache; next use can refresh with new data */
+	ll_drop_by_index(req.i.ifi_index);
 
 	return 0;
 }

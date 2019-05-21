@@ -62,10 +62,13 @@ static void usage(void)
 	fprintf(stderr, "        [ coa ADDR[/PLEN] ] [ ctx CTX ] [ extra-flag EXTRA-FLAG-LIST ]\n");
 	fprintf(stderr, "        [ offload [dev DEV] dir DIR ]\n");
 	fprintf(stderr, "        [ output-mark OUTPUT-MARK ]\n");
++	fprintf(stderr, "        [ if_id IF_ID ]\n");
 	fprintf(stderr, "Usage: ip xfrm state allocspi ID [ mode MODE ] [ mark MARK [ mask MASK ] ]\n");
 	fprintf(stderr, "        [ reqid REQID ] [ seq SEQ ] [ min SPI max SPI ]\n");
 	fprintf(stderr, "Usage: ip xfrm state { delete | get } ID [ mark MARK [ mask MASK ] ]\n");
-	fprintf(stderr, "Usage: ip xfrm state { deleteall | list } [ ID ] [ mode MODE ] [ reqid REQID ]\n");
+	fprintf(stderr, "Usage: ip xfrm state deleteall [ ID ] [ mode MODE ] [ reqid REQID ]\n");
+	fprintf(stderr, "        [ flag FLAG-LIST ]\n");
+	fprintf(stderr, "Usage: ip xfrm state list [ nokeys ] [ ID ] [ mode MODE ] [ reqid REQID ]\n");
 	fprintf(stderr, "        [ flag FLAG-LIST ]\n");
 	fprintf(stderr, "Usage: ip xfrm state flush [ proto XFRM-PROTO ]\n");
 	fprintf(stderr, "Usage: ip xfrm state count\n");
@@ -324,6 +327,8 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 		char    str[CTX_BUF_SIZE];
 	} ctx = {};
 	__u32 output_mark = 0;
+	bool is_if_id_set = false;
+	__u32 if_id = 0;
 
 	while (argc > 0) {
 		if (strcmp(*argv, "mode") == 0) {
@@ -443,6 +448,11 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 			NEXT_ARG();
 			if (get_u32(&output_mark, *argv, 0))
 				invarg("value after \"output-mark\" is invalid", *argv);
+		} else if (strcmp(*argv, "if_id") == 0) {
+			NEXT_ARG();
+			if (get_u32(&if_id, *argv, 0))
+				invarg("value after \"if_id\" is invalid", *argv);
+			is_if_id_set = true;
 		} else {
 			/* try to assume ALGO */
 			int type = xfrm_algotype_getbyname(*argv);
@@ -624,6 +634,9 @@ static int xfrm_state_modify(int cmd, unsigned int flags, int argc, char **argv)
 			exit(1);
 		}
 	}
+
+	if (is_if_id_set)
+		addattr32(&req.n, sizeof(req.buf), XFRMA_IF_ID, if_id);
 
 	if (xfrm_xfrmproto_is_ipsec(req.xsinfo.id.proto)) {
 		switch (req.xsinfo.mode) {
@@ -885,6 +898,10 @@ static int xfrm_state_filter_match(struct xfrm_usersa_info *xsinfo)
 	if (!filter.use)
 		return 1;
 
+	if (filter.xsinfo.family != AF_UNSPEC &&
+	    filter.xsinfo.family != xsinfo->family)
+		return 0;
+
 	if (filter.id_src_mask)
 		if (xfrm_addr_match(&xsinfo->saddr, &filter.xsinfo.saddr,
 				    filter.id_src_mask))
@@ -908,7 +925,7 @@ static int xfrm_state_filter_match(struct xfrm_usersa_info *xsinfo)
 	return 1;
 }
 
-int xfrm_state_print(struct nlmsghdr *n, void *arg)
+static int __do_xfrm_state_print(struct nlmsghdr *n, void *arg, bool nokeys)
 {
 	FILE *fp = (FILE *)arg;
 	struct rtattr *tb[XFRMA_MAX+1];
@@ -979,7 +996,7 @@ int xfrm_state_print(struct nlmsghdr *n, void *arg)
 		xsinfo = RTA_DATA(tb[XFRMA_SA]);
 	}
 
-	xfrm_state_info_print(xsinfo, tb, fp, NULL, NULL);
+	xfrm_state_info_print(xsinfo, tb, fp, NULL, NULL, nokeys);
 
 	if (n->nlmsg_type == XFRM_MSG_EXPIRE) {
 		fprintf(fp, "\t");
@@ -992,6 +1009,16 @@ int xfrm_state_print(struct nlmsghdr *n, void *arg)
 	fflush(fp);
 
 	return 0;
+}
+
+int xfrm_state_print(struct nlmsghdr *n, void *arg)
+{
+	return __do_xfrm_state_print(n, arg, false);
+}
+
+int xfrm_state_print_nokeys(struct nlmsghdr *n, void *arg)
+{
+	return __do_xfrm_state_print(n, arg, true);
 }
 
 static int xfrm_state_get_or_delete(int argc, char **argv, int delete)
@@ -1145,13 +1172,16 @@ static int xfrm_state_list_or_deleteall(int argc, char **argv, int deleteall)
 {
 	char *idp = NULL;
 	struct rtnl_handle rth;
+	bool nokeys = false;
 
-	if (argc > 0)
+	if (argc > 0 || preferred_family != AF_UNSPEC)
 		filter.use = 1;
 	filter.xsinfo.family = preferred_family;
 
 	while (argc > 0) {
-		if (strcmp(*argv, "mode") == 0) {
+		if (strcmp(*argv, "nokeys") == 0) {
+			nokeys = true;
+		} else if (strcmp(*argv, "mode") == 0) {
 			NEXT_ARG();
 			xfrm_mode_parse(&filter.xsinfo.mode, &argc, &argv);
 
@@ -1267,7 +1297,9 @@ static int xfrm_state_list_or_deleteall(int argc, char **argv, int deleteall)
 			exit(1);
 		}
 
-		if (rtnl_dump_filter(&rth, xfrm_state_print, stdout) < 0) {
+		rtnl_filter_t filter = nokeys ?
+				xfrm_state_print_nokeys : xfrm_state_print;
+		if (rtnl_dump_filter(&rth, filter, stdout) < 0) {
 			fprintf(stderr, "Dump terminated\n");
 			exit(1);
 		}

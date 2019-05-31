@@ -21,6 +21,7 @@ export VERBOSE=1
 endif
 
 export KERNEL_INCLUDE=./include
+export NETNS_RUN_DIR=/run/netns
 
 %:
 	dh $@

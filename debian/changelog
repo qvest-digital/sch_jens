@@ -1,3 +1,14 @@
+iproute2 (5.2.0-1) unstable; urgency=medium
+
+  * Use /run/netns rather than /var/run/netns. Allows to manage namespaces
+    early at boot in case /var is on a different filesystem. (Closes:
+    #929774)
+  * Update upstream source from tag 'upstream/5.2.0'
+  * Refresh 0004-sync-iptables-header.patch, most of it has been merged
+    upstream.
+
+ -- Luca Boccassi <bluca@debian.org>  Tue, 09 Jul 2019 20:52:47 +0100
+
 iproute2 (5.1.0-1) experimental; urgency=medium
 
   * Update upstream source from tag 'upstream/5.1.0'

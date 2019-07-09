@@ -8,66 +8,7 @@ Author: Cyril Brulebois <cyril@debamax.com>
 Last-Update: 2017-11-22
 --- a/include/xtables.h
 +++ b/include/xtables.h
-@@ -205,9 +205,24 @@ enum xtables_ext_flags {
- 	XTABLES_EXT_ALIAS = 1 << 0,
- };
- 
-+struct xt_xlate;
-+
-+struct xt_xlate_mt_params {
-+	const void			*ip;
-+	const struct xt_entry_match	*match;
-+	int				numeric;
-+	bool				escape_quotes;
-+};
-+
-+struct xt_xlate_tg_params {
-+	const void			*ip;
-+	const struct xt_entry_target	*target;
-+	int				numeric;
-+	bool				escape_quotes;
-+};
-+
- /* Include file for additions: new matches and targets. */
--struct xtables_match
--{
-+struct xtables_match {
- 	/*
- 	 * ABI/API version this module requires. Must be first member,
- 	 * as the rest of this struct may be subject to ABI changes.
-@@ -269,6 +284,10 @@ struct xtables_match
- 	void (*x6_fcheck)(struct xt_fcheck_call *);
- 	const struct xt_option_entry *x6_options;
- 
-+	/* Translate iptables to nft */
-+	int (*xlate)(struct xt_xlate *xl,
-+		     const struct xt_xlate_mt_params *params);
-+
- 	/* Size of per-extension instance extra "global" scratch space */
- 	size_t udata_size;
- 
-@@ -280,8 +299,7 @@ struct xtables_match
- 	unsigned int loaded; /* simulate loading so options are merged properly */
- };
- 
--struct xtables_target
--{
-+struct xtables_target {
- 	/*
- 	 * ABI/API version this module requires. Must be first member,
- 	 * as the rest of this struct may be subject to ABI changes.
-@@ -346,6 +364,10 @@ struct xtables_target
- 	void (*x6_fcheck)(struct xt_fcheck_call *);
- 	const struct xt_option_entry *x6_options;
- 
-+	/* Translate iptables to nft */
-+	int (*xlate)(struct xt_xlate *xl,
-+		     const struct xt_xlate_tg_params *params);
-+
- 	size_t udata_size;
- 
- 	/* Ignore these men behind the curtain: */
-@@ -406,6 +428,17 @@ struct xtables_globals
+@@ -437,6 +437,17 @@ struct xtables_globals
  
  #define XT_GETOPT_TABLEEND {.name = NULL, .has_arg = false}
  

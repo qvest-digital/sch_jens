@@ -170,7 +170,8 @@ static const char *node_type_to_str(uint8_t node_type)
 	static const char * const node_type_str[] = { "unknown", "ca",
 						      "switch", "router",
 						      "rnic", "usnic",
-						      "usnic_dp" };
+						      "usnic_udp",
+						      "unspecified" };
 	if (node_type < ARRAY_SIZE(node_type_str))
 		return node_type_str[node_type];
 	return "unknown";
@@ -268,7 +269,7 @@ static int dev_set_name(struct rd *rd)
 	mnl_attr_put_u32(rd->nlh, RDMA_NLDEV_ATTR_DEV_INDEX, rd->dev_idx);
 	mnl_attr_put_strz(rd->nlh, RDMA_NLDEV_ATTR_DEV_NAME, rd_argv(rd));
 
-	return rd_send_msg(rd);
+	return rd_sendrecv_msg(rd, seq);
 }
 
 static int dev_one_set(struct rd *rd)

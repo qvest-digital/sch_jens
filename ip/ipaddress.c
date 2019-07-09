@@ -1850,7 +1850,6 @@ static int ipaddr_list_flush_or_save(int argc, char **argv, int action)
 	ipaddr_reset_filter(oneline, 0);
 	filter.showqueue = 1;
 	filter.family = preferred_family;
-	filter.group = -1;
 
 	if (action == IPADD_FLUSH) {
 		if (argc <= 0) {
@@ -2107,6 +2106,7 @@ void ipaddr_reset_filter(int oneline, int ifindex)
 	memset(&filter, 0, sizeof(filter));
 	filter.oneline = oneline;
 	filter.ifindex = ifindex;
+	filter.group = -1;
 }
 
 static int default_scope(inet_prefix *lcl)
@@ -2247,11 +2247,20 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 			if (set_lifetime(&preferred_lft, *argv))
 				invarg("preferred_lft value", *argv);
 		} else if (strcmp(*argv, "home") == 0) {
-			ifa_flags |= IFA_F_HOMEADDRESS;
+			if (req.ifa.ifa_family == AF_INET6)
+				ifa_flags |= IFA_F_HOMEADDRESS;
+			else
+				fprintf(stderr, "Warning: home option can be set only for IPv6 addresses\n");
 		} else if (strcmp(*argv, "nodad") == 0) {
-			ifa_flags |= IFA_F_NODAD;
+			if (req.ifa.ifa_family == AF_INET6)
+				ifa_flags |= IFA_F_NODAD;
+			else
+				fprintf(stderr, "Warning: nodad option can be set only for IPv6 addresses\n");
 		} else if (strcmp(*argv, "mngtmpaddr") == 0) {
-			ifa_flags |= IFA_F_MANAGETEMPADDR;
+			if (req.ifa.ifa_family == AF_INET6)
+				ifa_flags |= IFA_F_MANAGETEMPADDR;
+			else
+				fprintf(stderr, "Warning: mngtmpaddr option can be set only for IPv6 addresses\n");
 		} else if (strcmp(*argv, "noprefixroute") == 0) {
 			ifa_flags |= IFA_F_NOPREFIXROUTE;
 		} else if (strcmp(*argv, "autojoin") == 0) {

@@ -18,18 +18,18 @@ KENVFN := $(shell mktemp /tmp/tc_testkenv.XXXXXX)
 ifneq (,$(wildcard /proc/config.gz))
 	KCPATH := /proc/config.gz
 else
-KVER := $(shell uname -r)
-KCPATHS := /lib/modules/$(KVER)/config /boot/config-$(KVER)
-KCPATH := $(firstword $(wildcard $(KCPATHS)))
+	KVER := $(shell uname -r)
+	KCPATHS := /lib/modules/$(KVER)/config /boot/config-$(KVER)
+	KCPATH := $(firstword $(wildcard $(KCPATHS)))
 endif
 
 .PHONY: compile listtests alltests configure $(TESTS)
 
 configure:
-	echo "Entering iproute2" && cd iproute2 && $(MAKE) configure && cd ..;
+	$(MAKE) -C iproute2 configure
 
 compile: configure generate_nlmsg
-	echo "Entering iproute2" && cd iproute2 && $(MAKE) && cd ..;
+	$(MAKE) -C iproute2
 
 listtests:
 	@for t in $(TESTS); do \
@@ -51,7 +51,7 @@ clean: testclean
 	$(MAKE) -C tools clean
 
 distclean: clean
-	echo "Entering iproute2" && cd iproute2 && $(MAKE) distclean && cd ..;
+	$(MAKE) -C iproute2 distclean
 
 $(TESTS): generate_nlmsg testclean
 ifeq (,$(IPVERS))

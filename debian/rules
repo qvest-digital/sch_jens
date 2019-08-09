@@ -36,3 +36,8 @@ override_dh_shlibdeps:
 
 override_dh_auto_test:
 	# upstream test suite needs root and leaves machine unclean, skip it
+
+# We are not shipping the ifstat binary as it conflicts with another Debian
+# package, so avoid shipping the manpage as well. See #873818
+override_dh_install:
+	dh_install -Xifstat.8

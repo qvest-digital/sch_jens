@@ -1344,6 +1344,7 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 	struct htb_class *cl = (struct htb_class *)*arg, *parent;
 	struct nlattr *opt = tca[TCA_OPTIONS];
 	struct nlattr *tb[TCA_HTB_MAX + 1];
+	struct Qdisc *parent_qdisc = NULL;
 	struct tc_htb_opt *hopt;
 	u64 rate64, ceil64;
 	int warn = 0;
@@ -1451,11 +1452,7 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 			/* turn parent into inner node */
 			qdisc_reset(parent->leaf.q);
 			qdisc_tree_reduce_backlog(parent->leaf.q, qlen, backlog);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)
-			qdisc_destroy(parent->leaf.q);
-#else
-+			qdisc_put(parent->leaf.q);
-#endif
+			parent_qdisc = parent->leaf.q;
 			if (parent->prio_activity)
 				htb_deactivate(q, parent);
 
@@ -1534,6 +1531,11 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 	cl->cbuffer = PSCHED_TICKS2NS(hopt->cbuffer);
 
 	sch_tree_unlock(sch);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)
+	qdisc_destroy(parent_qdisc);
+#else
+	qdisc_put(parent_qdisc);
+#endif
 
 	if (warn)
 		pr_warn("HTB: quantum of class %X is %s. Consider r2q change.\n",

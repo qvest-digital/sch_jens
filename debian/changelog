@@ -9,7 +9,7 @@ iproute2 (5.3.0-1) unstable; urgency=medium
 
 iproute2 (5.2.0-1) unstable; urgency=medium
 
-  * Use /run/netns rather than /var/run/netns. Allows to manage namespaces
+  * Use /run/netns rather than /var/run/netns. Allows one to manage namespaces
     early at boot in case /var is on a different filesystem. (Closes:
     #929774)
   * Update upstream source from tag 'upstream/5.2.0'

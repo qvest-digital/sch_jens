@@ -4,12 +4,15 @@
  * Authors:     Leon Romanovsky <leonro@mellanox.com>
  */
 
+#include <fcntl.h>
 #include "rdma.h"
 
 static int dev_help(struct rd *rd)
 {
 	pr_out("Usage: %s dev show [DEV]\n", rd->filename);
 	pr_out("       %s dev set [DEV] name DEVNAME\n", rd->filename);
+	pr_out("       %s dev set [DEV] netns NSNAME\n", rd->filename);
+	pr_out("       %s dev set [DEV] adaptive-moderation [on|off]\n", rd->filename);
 	return 0;
 }
 
@@ -165,6 +168,21 @@ static void dev_print_sys_image_guid(struct rd *rd, struct nlattr **tb)
 		pr_out("sys_image_guid %s ", str);
 }
 
+static void dev_print_dim_setting(struct rd *rd, struct nlattr **tb)
+{
+	uint8_t dim_setting;
+
+	if (!tb[RDMA_NLDEV_ATTR_DEV_DIM])
+		return;
+
+	dim_setting = mnl_attr_get_u8(tb[RDMA_NLDEV_ATTR_DEV_DIM]);
+	if (dim_setting > 1)
+		return;
+
+	print_on_off(rd, "adaptive-moderation", dim_setting);
+
+}
+
 static const char *node_type_to_str(uint8_t node_type)
 {
 	static const char * const node_type_str[] = { "unknown", "ca",
@@ -217,8 +235,10 @@ static int dev_parse_cb(const struct nlmsghdr *nlh, void *data)
 	dev_print_fw(rd, tb);
 	dev_print_node_guid(rd, tb);
 	dev_print_sys_image_guid(rd, tb);
-	if (rd->show_details)
+	if (rd->show_details) {
+		dev_print_dim_setting(rd, tb);
 		dev_print_caps(rd, tb);
+	}
 
 	if (!rd->json_output)
 		pr_out("\n");
@@ -272,11 +292,81 @@ static int dev_set_name(struct rd *rd)
 	return rd_sendrecv_msg(rd, seq);
 }
 
+static int dev_set_netns(struct rd *rd)
+{
+	char *netns_path;
+	uint32_t seq;
+	int netns;
+	int ret;
+
+	if (rd_no_arg(rd)) {
+		pr_err("Please provide device name.\n");
+		return -EINVAL;
+	}
+
+	if (asprintf(&netns_path, "%s/%s", NETNS_RUN_DIR, rd_argv(rd)) < 0)
+		return -ENOMEM;
+
+	netns = open(netns_path, O_RDONLY | O_CLOEXEC);
+	if (netns < 0) {
+		fprintf(stderr, "Cannot open network namespace \"%s\": %s\n",
+			rd_argv(rd), strerror(errno));
+		ret = -EINVAL;
+		goto done;
+	}
+
+	rd_prepare_msg(rd, RDMA_NLDEV_CMD_SET,
+		       &seq, (NLM_F_REQUEST | NLM_F_ACK));
+	mnl_attr_put_u32(rd->nlh, RDMA_NLDEV_ATTR_DEV_INDEX, rd->dev_idx);
+	mnl_attr_put_u32(rd->nlh, RDMA_NLDEV_NET_NS_FD, netns);
+	ret = rd_sendrecv_msg(rd, seq);
+	close(netns);
+done:
+	free(netns_path);
+	return ret;
+}
+
+static int dev_set_dim_sendmsg(struct rd *rd, uint8_t dim_setting)
+{
+	uint32_t seq;
+
+	rd_prepare_msg(rd, RDMA_NLDEV_CMD_SET, &seq,
+		       (NLM_F_REQUEST | NLM_F_ACK));
+	mnl_attr_put_u32(rd->nlh, RDMA_NLDEV_ATTR_DEV_INDEX, rd->dev_idx);
+	mnl_attr_put_u8(rd->nlh, RDMA_NLDEV_ATTR_DEV_DIM, dim_setting);
+
+	return rd_sendrecv_msg(rd, seq);
+}
+
+static int dev_set_dim_off(struct rd *rd)
+{
+	return dev_set_dim_sendmsg(rd, 0);
+}
+
+static int dev_set_dim_on(struct rd *rd)
+{
+	return dev_set_dim_sendmsg(rd, 1);
+}
+
+static int dev_set_dim(struct rd *rd)
+{
+	const struct rd_cmd cmds[] = {
+		{ NULL,		dev_help},
+		{ "on",		dev_set_dim_on},
+		{ "off",	dev_set_dim_off},
+		{ 0 }
+	};
+
+	return rd_exec_cmd(rd, cmds, "parameter");
+}
+
 static int dev_one_set(struct rd *rd)
 {
 	const struct rd_cmd cmds[] = {
 		{ NULL,		dev_help},
 		{ "name",	dev_set_name},
+		{ "netns",	dev_set_netns},
+		{ "adaptive-moderation",	dev_set_dim},
 		{ 0 }
 	};
 

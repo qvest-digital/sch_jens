@@ -25,7 +25,6 @@
 #include <linux/devlink.h>
 #include <libmnl/libmnl.h>
 #include <netinet/ether.h>
-#include <sys/queue.h>
 
 #include "SNAPSHOT.h"
 #include "list.h"
@@ -232,8 +231,8 @@ static void ifname_map_free(struct ifname_map *ifname_map)
 #define DL_OPT_FLASH_FILE_NAME	BIT(25)
 #define DL_OPT_FLASH_COMPONENT	BIT(26)
 #define DL_OPT_HEALTH_REPORTER_NAME	BIT(27)
-#define DL_OPT_HEALTH_REPORTER_GRACEFUL_PERIOD	BIT(27)
-#define DL_OPT_HEALTH_REPORTER_AUTO_RECOVER	BIT(28)
+#define DL_OPT_HEALTH_REPORTER_GRACEFUL_PERIOD	BIT(28)
+#define DL_OPT_HEALTH_REPORTER_AUTO_RECOVER	BIT(29)
 
 struct dl_opts {
 	uint32_t present; /* flags of present items */
@@ -1779,29 +1778,26 @@ static void pr_out_uint64_value(struct dl *dl, uint64_t value)
 		pr_out(" %"PRIu64, value);
 }
 
+static bool is_binary_eol(int i)
+{
+	return !(i%16);
+}
+
 static void pr_out_binary_value(struct dl *dl, uint8_t *data, uint32_t len)
 {
-	int i = 1;
-
-	if (dl->json_output)
-		jsonw_start_array(dl->jw);
-	else
-		pr_out("\n");
+	int i = 0;
 
 	while (i < len) {
-		if (dl->json_output) {
+		if (dl->json_output)
 			jsonw_printf(dl->jw, "%d", data[i]);
-		} else {
-			pr_out(" %02x", data[i]);
-			if (!(i % 16))
-				pr_out("\n");
-		}
+		else
+			pr_out("%02x ", data[i]);
 		i++;
+		if (!dl->json_output && is_binary_eol(i))
+			__pr_out_newline();
 	}
-	if (dl->json_output)
-		jsonw_end_array(dl->jw);
-	else if ((i - 1) % 16)
-		pr_out("\n");
+	if (!dl->json_output && !is_binary_eol(i))
+		__pr_out_newline();
 }
 
 static void pr_out_str_value(struct dl *dl, const char *value)
@@ -2794,8 +2790,26 @@ static const char *port_flavour_name(uint16_t flavour)
 		return "cpu";
 	case DEVLINK_PORT_FLAVOUR_DSA:
 		return "dsa";
+	case DEVLINK_PORT_FLAVOUR_PCI_PF:
+		return "pcipf";
+	case DEVLINK_PORT_FLAVOUR_PCI_VF:
+		return "pcivf";
 	default:
 		return "<unknown flavour>";
+	}
+}
+
+static void pr_out_port_pfvf_num(struct dl *dl, struct nlattr **tb)
+{
+	uint16_t fn_num;
+
+	if (tb[DEVLINK_ATTR_PORT_PCI_PF_NUMBER]) {
+		fn_num = mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_PCI_PF_NUMBER]);
+		pr_out_uint(dl, "pfnum", fn_num);
+	}
+	if (tb[DEVLINK_ATTR_PORT_PCI_VF_NUMBER]) {
+		fn_num = mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_PCI_VF_NUMBER]);
+		pr_out_uint(dl, "vfnum", fn_num);
 	}
 }
 
@@ -2828,6 +2842,21 @@ static void pr_out_port(struct dl *dl, struct nlattr **tb)
 				mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_FLAVOUR]);
 
 		pr_out_str(dl, "flavour", port_flavour_name(port_flavour));
+
+		switch (port_flavour) {
+		case DEVLINK_PORT_FLAVOUR_PCI_PF:
+		case DEVLINK_PORT_FLAVOUR_PCI_VF:
+			pr_out_port_pfvf_num(dl, tb);
+			break;
+		default:
+			break;
+		}
+	}
+	if (tb[DEVLINK_ATTR_PORT_NUMBER]) {
+		uint32_t port_number;
+
+		port_number = mnl_attr_get_u32(tb[DEVLINK_ATTR_PORT_NUMBER]);
+		pr_out_uint(dl, "port", port_number);
 	}
 	if (tb[DEVLINK_ATTR_PORT_SPLIT_GROUP])
 		pr_out_uint(dl, "split_group",
@@ -5949,35 +5978,36 @@ static int fmsg_value_show(struct dl *dl, int type, struct nlattr *nl_data)
 	return MNL_CB_OK;
 }
 
-struct nest_qentry {
+struct nest_entry {
 	int attr_type;
-	TAILQ_ENTRY(nest_qentry) nest_entries;
+	struct list_head list;
 };
 
 struct fmsg_cb_data {
 	struct dl *dl;
 	uint8_t value_type;
-	TAILQ_HEAD(, nest_qentry) qhead;
+	struct list_head entry_list;
 };
 
 static int cmd_fmsg_nest_queue(struct fmsg_cb_data *fmsg_data,
 			       uint8_t *attr_value, bool insert)
 {
-	struct nest_qentry *entry = NULL;
+	struct nest_entry *entry;
 
 	if (insert) {
-		entry = malloc(sizeof(struct nest_qentry));
+		entry = malloc(sizeof(struct nest_entry));
 		if (!entry)
 			return -ENOMEM;
 
 		entry->attr_type = *attr_value;
-		TAILQ_INSERT_HEAD(&fmsg_data->qhead, entry, nest_entries);
+		list_add(&entry->list, &fmsg_data->entry_list);
 	} else {
-		if (TAILQ_EMPTY(&fmsg_data->qhead))
+		if (list_empty(&fmsg_data->entry_list))
 			return MNL_CB_ERROR;
-		entry = TAILQ_FIRST(&fmsg_data->qhead);
+		entry = list_first_entry(&fmsg_data->entry_list,
+					 struct nest_entry, list);
 		*attr_value = entry->attr_type;
-		TAILQ_REMOVE(&fmsg_data->qhead, entry, nest_entries);
+		list_del(&entry->list);
 		free(entry);
 	}
 	return MNL_CB_OK;
@@ -6072,13 +6102,13 @@ static int cmd_fmsg_object_cb(const struct nlmsghdr *nlh, void *data)
 	return MNL_CB_OK;
 }
 
-static int cmd_health_object_common(struct dl *dl, uint8_t cmd)
+static int cmd_health_object_common(struct dl *dl, uint8_t cmd, uint16_t flags)
 {
 	struct fmsg_cb_data data;
 	struct nlmsghdr *nlh;
 	int err;
 
-	nlh = mnlg_msg_prepare(dl->nlg, cmd,  NLM_F_REQUEST | NLM_F_ACK);
+	nlh = mnlg_msg_prepare(dl->nlg, cmd, flags | NLM_F_REQUEST | NLM_F_ACK);
 
 	err = dl_argv_parse_put(nlh, dl,
 				DL_OPT_HANDLE | DL_OPT_HEALTH_REPORTER_NAME, 0);
@@ -6086,19 +6116,23 @@ static int cmd_health_object_common(struct dl *dl, uint8_t cmd)
 		return err;
 
 	data.dl = dl;
-	TAILQ_INIT(&data.qhead);
+	INIT_LIST_HEAD(&data.entry_list);
 	err = _mnlg_socket_sndrcv(dl->nlg, nlh, cmd_fmsg_object_cb, &data);
 	return err;
 }
 
 static int cmd_health_dump_show(struct dl *dl)
 {
-	return cmd_health_object_common(dl, DEVLINK_CMD_HEALTH_REPORTER_DUMP_GET);
+	return cmd_health_object_common(dl,
+					DEVLINK_CMD_HEALTH_REPORTER_DUMP_GET,
+					NLM_F_DUMP);
 }
 
 static int cmd_health_diagnose(struct dl *dl)
 {
-	return cmd_health_object_common(dl, DEVLINK_CMD_HEALTH_REPORTER_DIAGNOSE);
+	return cmd_health_object_common(dl,
+					DEVLINK_CMD_HEALTH_REPORTER_DIAGNOSE,
+					0);
 }
 
 static int cmd_health_recover(struct dl *dl)

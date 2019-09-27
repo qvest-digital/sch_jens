@@ -27,8 +27,9 @@
 static void
 explain(void)
 {
-	fprintf(stderr, "Usage: ... connmark [zone ZONE] [CONTROL] [index <INDEX>]\n");
-	fprintf(stderr, "where :\n"
+	fprintf(stderr,
+		"Usage: ... connmark [zone ZONE] [CONTROL] [index <INDEX>]\n"
+		"where :\n"
 		"\tZONE is the conntrack zone\n"
 		"\tCONTROL := reclassify | pipe | drop | continue | ok |\n"
 		"\t           goto chain <CHAIN_INDEX>\n");
@@ -114,7 +115,7 @@ static int print_connmark(struct action_util *au, FILE *f, struct rtattr *arg)
 
 	parse_rtattr_nested(tb, TCA_CONNMARK_MAX, arg);
 	if (tb[TCA_CONNMARK_PARMS] == NULL) {
-		print_string(PRINT_FP, NULL, "%s", "[NULL connmark parameters]");
+		fprintf(stderr, "Missing connmark parameters\n");
 		return -1;
 	}
 

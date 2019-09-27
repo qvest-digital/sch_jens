@@ -106,7 +106,6 @@ static int security_get_initial_context(char *name,  char **context)
 }
 #endif
 
-static int resolve_services = 1;
 int preferred_family = AF_UNSPEC;
 static int show_options;
 int show_details;
@@ -121,6 +120,7 @@ static int follow_events;
 static int sctp_ino;
 static int show_tipcinfo;
 static int show_tos;
+int numeric;
 int oneline;
 
 enum col_id {
@@ -1553,7 +1553,7 @@ static const char *resolve_service(int port)
 		return buf;
 	}
 
-	if (!resolve_services)
+	if (numeric)
 		goto do_numeric;
 
 	if (dg_proto == RAW_PROTO)
@@ -2361,7 +2361,7 @@ static int proc_inet_split_line(char *line, char **loc, char **rem, char **data)
 
 static char *sprint_bw(char *buf, double bw)
 {
-	if (!resolve_services)
+	if (numeric)
 		sprintf(buf, "%.0f", bw);
 	else if (bw > 1000000.)
 		sprintf(buf, "%.1fM", bw / 1000000.);
@@ -2414,7 +2414,7 @@ static void sctp_stats_print(struct sctp_info *s)
 	if (s->sctpi_s_pd_point)
 		out(" pdpoint:%d", s->sctpi_s_pd_point);
 	if (s->sctpi_s_nodelay)
-		out(" nodealy:%d", s->sctpi_s_nodelay);
+		out(" nodelay:%d", s->sctpi_s_nodelay);
 	if (s->sctpi_s_disable_fragments)
 		out(" nofrag:%d", s->sctpi_s_disable_fragments);
 	if (s->sctpi_s_v4mapped)
@@ -2937,7 +2937,7 @@ static void sctp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
 		len = RTA_PAYLOAD(tb[INET_DIAG_LOCALS]);
 		sa = RTA_DATA(tb[INET_DIAG_LOCALS]);
 
-		out("locals:%s", format_host_sa(sa));
+		out(" locals:%s", format_host_sa(sa));
 		for (sa++, len -= sizeof(*sa); len > 0; sa++, len -= sizeof(*sa))
 			out(",%s", format_host_sa(sa));
 
@@ -4298,14 +4298,11 @@ static int netlink_show_one(struct filter *f,
 
 	sock_state_print(&st);
 
-	if (resolve_services)
-		prot_name = nl_proto_n2a(prot, prot_buf, sizeof(prot_buf));
-	else
-		prot_name = int_to_str(prot, prot_buf);
+	prot_name = nl_proto_n2a(prot, prot_buf, sizeof(prot_buf));
 
 	if (pid == -1) {
 		procname[0] = '*';
-	} else if (resolve_services) {
+	} else if (!numeric) {
 		int done = 0;
 
 		if (!pid) {
@@ -5052,7 +5049,7 @@ int main(int argc, char *argv[])
 				 long_opts, NULL)) != EOF) {
 		switch (ch) {
 		case 'n':
-			resolve_services = 0;
+			numeric = 1;
 			break;
 		case 'r':
 			resolve_hosts = 1;
@@ -5270,7 +5267,7 @@ int main(int argc, char *argv[])
 	filter_states_set(&current_filter, state_filter);
 	filter_merge_defaults(&current_filter);
 
-	if (resolve_services && resolve_hosts &&
+	if (!numeric && resolve_hosts &&
 	    (current_filter.dbs & (UNIX_DBM|INET_L4_DBM)))
 		init_service_resolver();
 

@@ -8,7 +8,7 @@ Subject: Add moo feature
 
 --- a/ip/ip.c
 +++ b/ip/ip.c
-@@ -69,6 +69,20 @@ static int do_help(int argc, char **argv
+@@ -69,6 +69,20 @@
  	return 0;
  }
  
@@ -29,9 +29,9 @@ Subject: Add moo feature
  static const struct cmd {
  	const char *cmd;
  	int (*func)(int argc, char **argv);
-@@ -103,6 +117,7 @@ static const struct cmd {
- 	{ "vrf",	do_ipvrf},
+@@ -104,6 +118,7 @@
  	{ "sr",		do_seg6 },
+ 	{ "nexthop",	do_ipnh },
  	{ "help",	do_help },
 +	{ "moo",	do_moo }, 
  	{ 0 }

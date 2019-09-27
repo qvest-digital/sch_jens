@@ -101,22 +101,6 @@ out:
 	return -1;
 }
 
-/* Parse a percent e.g: '30%'
- * return: 0 = ok, -1 = error, 1 = out of range
- */
-int parse_percent(double *val, const char *str)
-{
-	char *p;
-
-	*val = strtod(str, &p) / 100.;
-	if (*val == HUGE_VALF || *val == HUGE_VALL)
-		return 1;
-	if (*p && strcmp(p, "%"))
-		return -1;
-
-	return 0;
-}
-
 int get_hex(char c)
 {
 	if (c >= 'A' && c <= 'F')
@@ -184,7 +168,7 @@ static int get_netmask(unsigned int *val, const char *arg, int base)
 	if (!get_unsigned(val, arg, base))
 		return 0;
 
-	/* try coverting dotted quad to CIDR */
+	/* try converting dotted quad to CIDR */
 	if (!get_addr_1(&addr, arg, AF_INET) && addr.family == AF_INET) {
 		int b = mask2bits(addr.data[0]);
 
@@ -390,7 +374,7 @@ int get_u8(__u8 *val, const char *arg, int base)
 
 int get_s64(__s64 *val, const char *arg, int base)
 {
-	long res;
+	long long res;
 	char *ptr;
 
 	errno = 0;
@@ -887,13 +871,18 @@ const char *get_ifname_rta(int ifindex, const struct rtattr *rta)
 	return name;
 }
 
-int matches(const char *cmd, const char *pattern)
+/* Returns false if 'prefix' is a not empty prefix of 'string'.
+ */
+bool matches(const char *prefix, const char *string)
 {
-	int len = strlen(cmd);
+	if (!*prefix)
+		return true;
+	while (*string && *prefix == *string) {
+		prefix++;
+		string++;
+	}
 
-	if (len > strlen(pattern))
-		return -1;
-	return memcmp(pattern, cmd, len);
+	return !!*prefix;
 }
 
 int inet_addr_match(const inet_prefix *a, const inet_prefix *b, int bits)

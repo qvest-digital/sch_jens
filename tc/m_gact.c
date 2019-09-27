@@ -53,8 +53,7 @@ explain(void)
 			"\tINDEX := index value used\n"
 			"\n");
 #else
-	fprintf(stderr, "Usage: ... gact <ACTION> [INDEX]\n");
-	fprintf(stderr,
+	fprintf(stderr, "Usage: ... gact <ACTION> [INDEX]\n"
 		"Where: \tACTION := reclassify | drop | continue | pass | pipe |\n"
 		"       \t          goto chain <CHAIN_INDEX> | jump <JUMP_COUNT>\n"
 		"\tINDEX := index value used\n"
@@ -178,7 +177,7 @@ print_gact(struct action_util *au, FILE *f, struct rtattr *arg)
 	parse_rtattr_nested(tb, TCA_GACT_MAX, arg);
 
 	if (tb[TCA_GACT_PARMS] == NULL) {
-		print_string(PRINT_FP, NULL, "%s", "[NULL gact parameters]");
+		fprintf(stderr, "Missing gact parameters\n");
 		return -1;
 	}
 	p = RTA_DATA(tb[TCA_GACT_PARMS]);

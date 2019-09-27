@@ -34,8 +34,8 @@ static int pedit_debug;
 
 static void explain(void)
 {
-	fprintf(stderr, "Usage: ... pedit munge [ex] <MUNGE> [CONTROL]\n");
 	fprintf(stderr,
+		"Usage: ... pedit munge [ex] <MUNGE> [CONTROL]\n"
 		"Where: MUNGE := <RAW>|<LAYERED>\n"
 		"\t<RAW>:= <OFFSETC>[ATC]<CMD>\n \t\tOFFSETC:= offset <offval> <u8|u16|u32>\n"
 		"\t\tATC:= at <atval> offmask <maskval> shift <shiftval>\n"
@@ -742,7 +742,7 @@ static int print_pedit(struct action_util *au, FILE *f, struct rtattr *arg)
 	parse_rtattr_nested(tb, TCA_PEDIT_MAX, arg);
 
 	if (!tb[TCA_PEDIT_PARMS] && !tb[TCA_PEDIT_PARMS_EX]) {
-		fprintf(f, "[NULL pedit parameters]");
+		fprintf(stderr, "Missing pedit parameters\n");
 		return -1;
 	}
 

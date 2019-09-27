@@ -34,6 +34,7 @@ extern int timestamp_short;
 extern const char * _SL_;
 extern int max_flush_loops;
 extern int batch_mode;
+extern int numeric;
 extern bool do_all;
 
 #ifndef CONFDIR
@@ -145,7 +146,6 @@ int get_addr_rta(inet_prefix *dst, const struct rtattr *rta, int family);
 int get_addr_ila(__u64 *val, const char *arg);
 
 int read_prop(const char *dev, char *prop, long *value);
-int parse_percent(double *val, const char *str);
 int get_hex(char c);
 int get_integer(int *val, const char *arg, int base);
 int get_unsigned(unsigned *val, const char *arg, int base);
@@ -198,7 +198,7 @@ int nodev(const char *dev);
 int check_ifname(const char *);
 int get_ifname(char *, const char *);
 const char *get_ifname_rta(int ifindex, const struct rtattr *rta);
-int matches(const char *arg, const char *pattern);
+bool matches(const char *prefix, const char *string);
 int inet_addr_match(const inet_prefix *a, const inet_prefix *b, int bits);
 int inet_addr_match_rta(const inet_prefix *m, const struct rtattr *rta);
 

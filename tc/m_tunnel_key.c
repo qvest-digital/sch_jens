@@ -21,9 +21,9 @@
 
 static void explain(void)
 {
-	fprintf(stderr, "Usage: tunnel_key unset\n");
-	fprintf(stderr, "       tunnel_key set <TUNNEL_KEY>\n");
 	fprintf(stderr,
+		"Usage: tunnel_key unset\n"
+		"       tunnel_key set <TUNNEL_KEY>\n"
 		"Where TUNNEL_KEY is a combination of:\n"
 		"id <TUNNELID>\n"
 		"src_ip <IP> (mandatory)\n"
@@ -493,8 +493,7 @@ static int print_tunnel_key(struct action_util *au, FILE *f, struct rtattr *arg)
 	parse_rtattr_nested(tb, TCA_TUNNEL_KEY_MAX, arg);
 
 	if (!tb[TCA_TUNNEL_KEY_PARMS]) {
-		print_string(PRINT_FP, NULL, "%s",
-			     "[NULL tunnel_key parameters]");
+		fprintf(stderr, "Missing tunnel_key parameters\n");
 		return -1;
 	}
 	parm = RTA_DATA(tb[TCA_TUNNEL_KEY_PARMS]);

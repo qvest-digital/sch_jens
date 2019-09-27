@@ -26,6 +26,7 @@
 
 #include <linux/netdevice.h>
 #include <linux/if_arp.h>
+#include <linux/if_infiniband.h>
 #include <linux/sockios.h>
 #include <linux/net_namespace.h>
 
@@ -52,32 +53,33 @@ static void usage(void)
 	if (do_link)
 		iplink_usage();
 
-	fprintf(stderr, "Usage: ip address {add|change|replace} IFADDR dev IFNAME [ LIFETIME ]\n");
-	fprintf(stderr, "                                                      [ CONFFLAG-LIST ]\n");
-	fprintf(stderr, "       ip address del IFADDR dev IFNAME [mngtmpaddr]\n");
-	fprintf(stderr, "       ip address {save|flush} [ dev IFNAME ] [ scope SCOPE-ID ]\n");
-	fprintf(stderr, "                            [ to PREFIX ] [ FLAG-LIST ] [ label LABEL ] [up]\n");
-	fprintf(stderr, "       ip address [ show [ dev IFNAME ] [ scope SCOPE-ID ] [ master DEVICE ]\n");
-	fprintf(stderr, "                         [ type TYPE ] [ to PREFIX ] [ FLAG-LIST ]\n");
-	fprintf(stderr, "                         [ label LABEL ] [up] [ vrf NAME ] ]\n");
-	fprintf(stderr, "       ip address {showdump|restore}\n");
-	fprintf(stderr, "IFADDR := PREFIX | ADDR peer PREFIX\n");
-	fprintf(stderr, "          [ broadcast ADDR ] [ anycast ADDR ]\n");
-	fprintf(stderr, "          [ label IFNAME ] [ scope SCOPE-ID ] [ metric METRIC ]\n");
-	fprintf(stderr, "SCOPE-ID := [ host | link | global | NUMBER ]\n");
-	fprintf(stderr, "FLAG-LIST := [ FLAG-LIST ] FLAG\n");
-	fprintf(stderr, "FLAG  := [ permanent | dynamic | secondary | primary |\n");
-	fprintf(stderr, "           [-]tentative | [-]deprecated | [-]dadfailed | temporary |\n");
-	fprintf(stderr, "           CONFFLAG-LIST ]\n");
-	fprintf(stderr, "CONFFLAG-LIST := [ CONFFLAG-LIST ] CONFFLAG\n");
-	fprintf(stderr, "CONFFLAG  := [ home | nodad | mngtmpaddr | noprefixroute | autojoin ]\n");
-	fprintf(stderr, "LIFETIME := [ valid_lft LFT ] [ preferred_lft LFT ]\n");
-	fprintf(stderr, "LFT := forever | SECONDS\n");
-	fprintf(stderr, "TYPE := { vlan | veth | vcan | vxcan | dummy | ifb | macvlan | macvtap |\n");
-	fprintf(stderr, "          bridge | bond | ipoib | ip6tnl | ipip | sit | vxlan | lowpan |\n");
-	fprintf(stderr, "          gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan | vti |\n");
-	fprintf(stderr, "          nlmon | can | bond_slave | ipvlan | geneve | bridge_slave |\n");
-	fprintf(stderr, "          hsr | macsec | netdevsim }\n");
+	fprintf(stderr,
+		"Usage: ip address {add|change|replace} IFADDR dev IFNAME [ LIFETIME ]\n"
+		"                                                      [ CONFFLAG-LIST ]\n"
+		"       ip address del IFADDR dev IFNAME [mngtmpaddr]\n"
+		"       ip address {save|flush} [ dev IFNAME ] [ scope SCOPE-ID ]\n"
+		"                            [ to PREFIX ] [ FLAG-LIST ] [ label LABEL ] [up]\n"
+		"       ip address [ show [ dev IFNAME ] [ scope SCOPE-ID ] [ master DEVICE ]\n"
+		"                         [ type TYPE ] [ to PREFIX ] [ FLAG-LIST ]\n"
+		"                         [ label LABEL ] [up] [ vrf NAME ] ]\n"
+		"       ip address {showdump|restore}\n"
+		"IFADDR := PREFIX | ADDR peer PREFIX\n"
+		"          [ broadcast ADDR ] [ anycast ADDR ]\n"
+		"          [ label IFNAME ] [ scope SCOPE-ID ] [ metric METRIC ]\n"
+		"SCOPE-ID := [ host | link | global | NUMBER ]\n"
+		"FLAG-LIST := [ FLAG-LIST ] FLAG\n"
+		"FLAG  := [ permanent | dynamic | secondary | primary |\n"
+		"           [-]tentative | [-]deprecated | [-]dadfailed | temporary |\n"
+		"           CONFFLAG-LIST ]\n"
+		"CONFFLAG-LIST := [ CONFFLAG-LIST ] CONFFLAG\n"
+		"CONFFLAG  := [ home | nodad | mngtmpaddr | noprefixroute | autojoin ]\n"
+		"LIFETIME := [ valid_lft LFT ] [ preferred_lft LFT ]\n"
+		"LFT := forever | SECONDS\n"
+		"TYPE := { vlan | veth | vcan | vxcan | dummy | ifb | macvlan | macvtap |\n"
+		"          bridge | bond | ipoib | ip6tnl | ipip | sit | vxlan | lowpan |\n"
+		"          gre | gretap | erspan | ip6gre | ip6gretap | ip6erspan | vti |\n"
+		"          nlmon | can | bond_slave | ipvlan | geneve | bridge_slave |\n"
+		"          hsr | macsec | netdevsim }\n");
 
 	exit(-1);
 }
@@ -349,9 +351,10 @@ static void print_af_spec(FILE *fp, struct rtattr *af_spec_attr)
 
 static void print_vf_stats64(FILE *fp, struct rtattr *vfstats);
 
-static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
+static void print_vfinfo(FILE *fp, struct ifinfomsg *ifi, struct rtattr *vfinfo)
 {
 	struct ifla_vf_mac *vf_mac;
+	struct ifla_vf_broadcast *vf_broadcast;
 	struct ifla_vf_tx_rate *vf_tx_rate;
 	struct rtattr *vf[IFLA_VF_MAX + 1] = {};
 
@@ -365,13 +368,41 @@ static void print_vfinfo(FILE *fp, struct rtattr *vfinfo)
 	parse_rtattr_nested(vf, IFLA_VF_MAX, vfinfo);
 
 	vf_mac = RTA_DATA(vf[IFLA_VF_MAC]);
+	vf_broadcast = RTA_DATA(vf[IFLA_VF_BROADCAST]);
 	vf_tx_rate = RTA_DATA(vf[IFLA_VF_TX_RATE]);
 
 	print_string(PRINT_FP, NULL, "%s    ", _SL_);
 	print_int(PRINT_ANY, "vf", "vf %d ", vf_mac->vf);
-	print_string(PRINT_ANY, "mac", "MAC %s",
-		     ll_addr_n2a((unsigned char *) &vf_mac->mac,
-				 ETH_ALEN, 0, b1, sizeof(b1)));
+
+	print_string(PRINT_ANY,
+		     "link_type",
+		     "    link/%s ",
+		     ll_type_n2a(ifi->ifi_type, b1, sizeof(b1)));
+
+	print_color_string(PRINT_ANY, COLOR_MAC,
+			   "address", "%s",
+			   ll_addr_n2a((unsigned char *) &vf_mac->mac,
+				       ifi->ifi_type == ARPHRD_ETHER ?
+				       ETH_ALEN : INFINIBAND_ALEN,
+				       ifi->ifi_type,
+				       b1, sizeof(b1)));
+
+	if (vf[IFLA_VF_BROADCAST]) {
+		if (ifi->ifi_flags&IFF_POINTOPOINT) {
+			print_string(PRINT_FP, NULL, " peer ", NULL);
+			print_bool(PRINT_JSON,
+				   "link_pointtopoint", NULL, true);
+		} else
+			print_string(PRINT_FP, NULL, " brd ", NULL);
+
+		print_color_string(PRINT_ANY, COLOR_MAC,
+				   "broadcast", "%s",
+				   ll_addr_n2a((unsigned char *) &vf_broadcast->broadcast,
+					       ifi->ifi_type == ARPHRD_ETHER ?
+					       ETH_ALEN : INFINIBAND_ALEN,
+					       ifi->ifi_type,
+					       b1, sizeof(b1)));
+	}
 
 	if (vf[IFLA_VF_VLAN_LIST]) {
 		struct rtattr *i, *vfvlanlist = vf[IFLA_VF_VLAN_LIST];
@@ -1102,7 +1133,7 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 		open_json_array(PRINT_JSON, "vfinfo_list");
 		for (i = RTA_DATA(vflist); RTA_OK(i, rem); i = RTA_NEXT(i, rem)) {
 			open_json_object(NULL);
-			print_vfinfo(fp, i);
+			print_vfinfo(fp, ifi, i);
 			close_json_object();
 		}
 		close_json_array(PRINT_JSON, NULL);

@@ -133,6 +133,7 @@ enum col_id {
 	COL_RADDR,
 	COL_RSERV,
 	COL_EXT,
+	COL_PROC,
 	COL_MAX
 };
 
@@ -160,6 +161,7 @@ static struct column columns[] = {
 	{ ALIGN_LEFT,	"Port",			"",	0, 0, 0 },
 	{ ALIGN_RIGHT,	"Peer Address:",	" ",	0, 0, 0 },
 	{ ALIGN_LEFT,	"Port",			"",	0, 0, 0 },
+	{ ALIGN_LEFT,	"Process",		"",	0, 0, 0 },
 	{ ALIGN_LEFT,	"",			"",	0, 0, 0 },
 };
 
@@ -3329,28 +3331,28 @@ static int tcp_show_netlink_file(struct filter *f)
 	}
 
 	while (1) {
-		int status, err2;
+		int err2;
+		size_t status, nitems;
 		struct nlmsghdr *h = (struct nlmsghdr *)buf;
 		struct sockstat s = {};
 
 		status = fread(buf, 1, sizeof(*h), fp);
-		if (status < 0) {
-			perror("Reading header from $TCPDIAG_FILE");
-			break;
-		}
 		if (status != sizeof(*h)) {
-			perror("Unexpected EOF reading $TCPDIAG_FILE");
+			if (ferror(fp))
+				perror("Reading header from $TCPDIAG_FILE");
+			if (feof(fp))
+				fprintf(stderr, "Unexpected EOF reading $TCPDIAG_FILE");
 			break;
 		}
 
-		status = fread(h+1, 1, NLMSG_ALIGN(h->nlmsg_len-sizeof(*h)), fp);
+		nitems = NLMSG_ALIGN(h->nlmsg_len - sizeof(*h));
+		status = fread(h+1, 1, nitems, fp);
 
-		if (status < 0) {
-			perror("Reading $TCPDIAG_FILE");
-			break;
-		}
-		if (status + sizeof(*h) < h->nlmsg_len) {
-			perror("Unexpected EOF reading $TCPDIAG_FILE");
+		if (status != nitems) {
+			if (ferror(fp))
+				perror("Reading $TCPDIAG_FILE");
+			if (feof(fp))
+				fprintf(stderr, "Unexpected EOF reading $TCPDIAG_FILE");
 			break;
 		}
 

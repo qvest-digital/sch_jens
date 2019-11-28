@@ -1,3 +1,11 @@
+iproute2 (5.4.0-1) unstable; urgency=medium
+
+  * Fix Lintian Warning: spelling-error-in-changelog
+  * Update upstream source from tag 'upstream/5.4.0'
+  * iproute2-doc: upstream no longer ships examples
+
+ -- Luca Boccassi <bluca@debian.org>  Thu, 28 Nov 2019 10:56:11 +0000
+
 iproute2 (5.3.0-1) unstable; urgency=medium
 
   * Bump Standards-Version to 4.4.0, no changes.

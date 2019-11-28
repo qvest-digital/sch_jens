@@ -438,12 +438,13 @@ int rtnl_netconfdump_req(struct rtnl_handle *rth, int family)
 	return send(rth->fd, &req, sizeof(req), 0);
 }
 
-int rtnl_nsiddump_req(struct rtnl_handle *rth, int family)
+int rtnl_nsiddump_req_filter_fn(struct rtnl_handle *rth, int family,
+				req_filter_fn_t filter_fn)
 {
 	struct {
 		struct nlmsghdr nlh;
 		struct rtgenmsg rtm;
-		char buf[0] __aligned(NLMSG_ALIGNTO);
+		char buf[1024];
 	} req = {
 		.nlh.nlmsg_len = NLMSG_LENGTH(NLMSG_ALIGN(sizeof(struct rtgenmsg))),
 		.nlh.nlmsg_type = RTM_GETNSID,
@@ -451,8 +452,16 @@ int rtnl_nsiddump_req(struct rtnl_handle *rth, int family)
 		.nlh.nlmsg_seq = rth->dump = ++rth->seq,
 		.rtm.rtgen_family = family,
 	};
+	int err;
 
-	return send(rth->fd, &req, sizeof(req), 0);
+	if (!filter_fn)
+		return -EINVAL;
+
+	err = filter_fn(&req.nlh, sizeof(req));
+	if (err)
+		return err;
+
+	return send(rth->fd, &req, req.nlh.nlmsg_len, 0);
 }
 
 static int __rtnl_linkdump_req(struct rtnl_handle *rth, int family)
@@ -1165,7 +1174,7 @@ int rtnl_listen(struct rtnl_handle *rtnl,
 int rtnl_from_file(FILE *rtnl, rtnl_listen_filter_t handler,
 		   void *jarg)
 {
-	int status;
+	size_t status;
 	char buf[16384];
 	struct nlmsghdr *h = (struct nlmsghdr *)buf;
 
@@ -1175,14 +1184,15 @@ int rtnl_from_file(FILE *rtnl, rtnl_listen_filter_t handler,
 
 		status = fread(&buf, 1, sizeof(*h), rtnl);
 
-		if (status < 0) {
-			if (errno == EINTR)
-				continue;
-			perror("rtnl_from_file: fread");
+		if (status == 0 && feof(rtnl))
+			return 0;
+		if (status != sizeof(*h)) {
+			if (ferror(rtnl))
+				perror("rtnl_from_file: fread");
+			if (feof(rtnl))
+				fprintf(stderr, "rtnl-from_file: truncated message\n");
 			return -1;
 		}
-		if (status == 0)
-			return 0;
 
 		len = h->nlmsg_len;
 		l = len - sizeof(*h);
@@ -1195,12 +1205,11 @@ int rtnl_from_file(FILE *rtnl, rtnl_listen_filter_t handler,
 
 		status = fread(NLMSG_DATA(h), 1, NLMSG_ALIGN(l), rtnl);
 
-		if (status < 0) {
-			perror("rtnl_from_file: fread");
-			return -1;
-		}
-		if (status < l) {
-			fprintf(stderr, "rtnl-from_file: truncated message\n");
+		if (status != NLMSG_ALIGN(l)) {
+			if (ferror(rtnl))
+				perror("rtnl_from_file: fread");
+			if (feof(rtnl))
+				fprintf(stderr, "rtnl-from_file: truncated message\n");
 			return -1;
 		}
 

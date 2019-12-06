@@ -1,3 +1,9 @@
+iproute2 (5.4.0-1~bpo10+1) buster-backports; urgency=medium
+
+  * Rebuild for buster-backports.
+
+ -- Luca Boccassi <bluca@debian.org>  Fri, 06 Dec 2019 11:01:19 +0000
+
 iproute2 (5.4.0-1) unstable; urgency=medium
 
   * Fix Lintian Warning: spelling-error-in-changelog

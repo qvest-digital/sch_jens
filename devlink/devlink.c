@@ -32,6 +32,7 @@
 #include "mnlg.h"
 #include "json_writer.h"
 #include "utils.h"
+#include "namespace.h"
 
 #define ESWITCH_MODE_LEGACY "legacy"
 #define ESWITCH_MODE_SWITCHDEV "switchdev"
@@ -260,6 +261,7 @@ static void ifname_map_free(struct ifname_map *ifname_map)
 #define DL_OPT_TRAP_NAME		BIT(30)
 #define DL_OPT_TRAP_ACTION		BIT(31)
 #define DL_OPT_TRAP_GROUP_NAME		BIT(32)
+#define DL_OPT_NETNS	BIT(33)
 
 struct dl_opts {
 	uint64_t present; /* flags of present items */
@@ -281,7 +283,7 @@ struct dl_opts {
 	bool dpipe_counters_enable;
 	bool eswitch_encap_mode;
 	const char *resource_path;
-	uint32_t resource_size;
+	uint64_t resource_size;
 	uint32_t resource_id;
 	bool resource_id_valid;
 	const char *param_name;
@@ -299,6 +301,8 @@ struct dl_opts {
 	const char *trap_name;
 	const char *trap_group_name;
 	enum devlink_trap_action trap_action;
+	bool netns_is_pid;
+	uint32_t netns;
 };
 
 struct dl {
@@ -339,6 +343,12 @@ static void dl_arg_inc(struct dl *dl)
 		return;
 	dl->argc--;
 	dl->argv++;
+}
+
+static void dl_arg_dec(struct dl *dl)
+{
+	dl->argc++;
+	dl->argv--;
 }
 
 static char *dl_argv_next(struct dl *dl)
@@ -383,6 +393,17 @@ static void __pr_out_indent_newline(struct dl *dl)
 {
 	if (!g_indent_newline && !dl->json_output)
 		pr_out(" ");
+}
+
+static void check_indent_newline(struct dl *dl)
+{
+	__pr_out_indent_newline(dl);
+
+	if (g_indent_newline && !is_json_context()) {
+		printf("%s", g_indent_str);
+		g_indent_newline = false;
+	}
+	g_new_line_count = 0;
 }
 
 static const enum mnl_attr_data_type devlink_policy[DEVLINK_ATTR_MAX + 1] = {
@@ -1147,6 +1168,10 @@ static int dl_args_finding_required_validate(uint64_t o_required,
 			return -EINVAL;
 		}
 	}
+	if (o_required & ~o_found) {
+		pr_err("BUG: unknown argument required but not found\n");
+		return -EINVAL;
+	}
 	return 0;
 }
 
@@ -1165,6 +1190,7 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 					  &opts->port_index, &handle_bit);
 		if (err)
 			return err;
+		o_required &= ~(DL_OPT_HANDLE | DL_OPT_HANDLEP) | handle_bit;
 		o_found |= handle_bit;
 	} else if (o_required & DL_OPT_HANDLE) {
 		err = dl_argv_handle(dl, &opts->bus_name, &opts->dev_name);
@@ -1334,7 +1360,7 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 		} else if (dl_argv_match(dl, "size") &&
 			   (o_all & DL_OPT_RESOURCE_SIZE)) {
 			dl_arg_inc(dl);
-			err = dl_argv_uint32_t(dl, &opts->resource_size);
+			err = dl_argv_uint64_t(dl, &opts->resource_size);
 			if (err)
 				return err;
 			o_found |= DL_OPT_RESOURCE_SIZE;
@@ -1447,6 +1473,23 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 			if (err)
 				return err;
 			o_found |= DL_OPT_TRAP_ACTION;
+		} else if (dl_argv_match(dl, "netns") &&
+			(o_all & DL_OPT_NETNS)) {
+			const char *netns_str;
+
+			dl_arg_inc(dl);
+			err = dl_argv_str(dl, &netns_str);
+			if (err)
+				return err;
+			opts->netns = netns_get_fd(netns_str);
+			if ((int)opts->netns < 0) {
+				dl_arg_dec(dl);
+				err = dl_argv_uint32_t(dl, &opts->netns);
+				if (err)
+					return err;
+				opts->netns_is_pid = true;
+			}
+			o_found |= DL_OPT_NETNS;
 		} else {
 			pr_err("Unknown option \"%s\"\n", dl_argv(dl));
 			return -EINVAL;
@@ -1569,7 +1612,11 @@ static void dl_opts_put(struct nlmsghdr *nlh, struct dl *dl)
 	if (opts->present & DL_OPT_TRAP_ACTION)
 		mnl_attr_put_u8(nlh, DEVLINK_ATTR_TRAP_ACTION,
 				opts->trap_action);
-
+	if (opts->present & DL_OPT_NETNS)
+		mnl_attr_put_u32(nlh,
+				 opts->netns_is_pid ? DEVLINK_ATTR_NETNS_PID :
+						      DEVLINK_ATTR_NETNS_FD,
+				 opts->netns);
 }
 
 static int dl_argv_parse_put(struct nlmsghdr *nlh, struct dl *dl,
@@ -1630,7 +1677,7 @@ static void cmd_dev_help(void)
 	pr_err("       devlink dev eswitch show DEV\n");
 	pr_err("       devlink dev param set DEV name PARAMETER value VALUE cmode { permanent | driverinit | runtime }\n");
 	pr_err("       devlink dev param show [DEV name PARAMETER]\n");
-	pr_err("       devlink dev reload DEV\n");
+	pr_err("       devlink dev reload DEV [ netns { PID | NAME | ID } ]\n");
 	pr_err("       devlink dev info [ DEV ]\n");
 	pr_err("       devlink dev flash DEV file PATH [ component NAME ]\n");
 }
@@ -1679,19 +1726,17 @@ static void __pr_out_handle_start(struct dl *dl, struct nlattr **tb,
 	if (dl->json_output) {
 		if (array) {
 			if (should_arr_last_handle_end(dl, bus_name, dev_name))
-				jsonw_end_array(dl->jw);
+				close_json_array(PRINT_JSON, NULL);
 			if (should_arr_last_handle_start(dl, bus_name,
 							 dev_name)) {
-				jsonw_name(dl->jw, buf);
-				jsonw_start_array(dl->jw);
-				jsonw_start_object(dl->jw);
+				open_json_array(PRINT_JSON, buf);
+				open_json_object(NULL);
 				arr_last_handle_set(dl, bus_name, dev_name);
 			} else {
-				jsonw_start_object(dl->jw);
+				open_json_object(NULL);
 			}
 		} else {
-			jsonw_name(dl->jw, buf);
-			jsonw_start_object(dl->jw);
+			open_json_object(buf);
 		}
 	} else {
 		if (array) {
@@ -1718,7 +1763,7 @@ static void pr_out_handle_start_arr(struct dl *dl, struct nlattr **tb)
 static void pr_out_handle_end(struct dl *dl)
 {
 	if (dl->json_output)
-		jsonw_end_object(dl->jw);
+		close_json_object();
 	else
 		__pr_out_newline();
 }
@@ -1780,21 +1825,19 @@ static void __pr_out_port_handle_start(struct dl *dl, const char *bus_name,
 			if (should_arr_last_port_handle_end(dl, bus_name,
 							    dev_name,
 							    port_index))
-				jsonw_end_array(dl->jw);
+				close_json_array(PRINT_JSON, NULL);
 			if (should_arr_last_port_handle_start(dl, bus_name,
 							      dev_name,
 							      port_index)) {
-				jsonw_name(dl->jw, buf);
-				jsonw_start_array(dl->jw);
-				jsonw_start_object(dl->jw);
+				open_json_array(PRINT_JSON, buf);
+				open_json_object(NULL);
 				arr_last_port_handle_set(dl, bus_name, dev_name,
 							 port_index);
 			} else {
-				jsonw_start_object(dl->jw);
+				open_json_object(NULL);
 			}
 		} else {
-			jsonw_name(dl->jw, buf);
-			jsonw_start_object(dl->jw);
+			open_json_object(buf);
 		}
 	} else {
 		pr_out("%s:", buf);
@@ -1828,75 +1871,21 @@ static void pr_out_port_handle_start_arr(struct dl *dl, struct nlattr **tb, bool
 static void pr_out_port_handle_end(struct dl *dl)
 {
 	if (dl->json_output)
-		jsonw_end_object(dl->jw);
+		close_json_object();
 	else
 		pr_out("\n");
-}
-
-
-static void pr_out_str(struct dl *dl, const char *name, const char *val)
-{
-	__pr_out_indent_newline(dl);
-	if (dl->json_output)
-		jsonw_string_field(dl->jw, name, val);
-	else
-		pr_out("%s %s", name, val);
-}
-
-static void pr_out_bool(struct dl *dl, const char *name, bool val)
-{
-	if (dl->json_output)
-		jsonw_bool_field(dl->jw, name, val);
-	else
-		pr_out_str(dl, name, val ? "true" : "false");
-}
-
-static void pr_out_uint(struct dl *dl, const char *name, unsigned int val)
-{
-	__pr_out_indent_newline(dl);
-	if (dl->json_output)
-		jsonw_uint_field(dl->jw, name, val);
-	else
-		pr_out("%s %u", name, val);
 }
 
 static void pr_out_u64(struct dl *dl, const char *name, uint64_t val)
 {
 	__pr_out_indent_newline(dl);
 	if (val == (uint64_t) -1)
-		return pr_out_str(dl, name, "unlimited");
+		return print_string_name_value(name, "unlimited");
 
 	if (dl->json_output)
-		jsonw_u64_field(dl->jw, name, val);
+		print_u64(PRINT_JSON, name, NULL, val);
 	else
 		pr_out("%s %"PRIu64, name, val);
-}
-
-static void pr_out_bool_value(struct dl *dl, bool value)
-{
-	__pr_out_indent_newline(dl);
-	if (dl->json_output)
-		jsonw_bool(dl->jw, value);
-	else
-		pr_out("%s", value ? "true" : "false");
-}
-
-static void pr_out_uint_value(struct dl *dl, unsigned int value)
-{
-	__pr_out_indent_newline(dl);
-	if (dl->json_output)
-		jsonw_uint(dl->jw, value);
-	else
-		pr_out("%u", value);
-}
-
-static void pr_out_uint64_value(struct dl *dl, uint64_t value)
-{
-	__pr_out_indent_newline(dl);
-	if (dl->json_output)
-		jsonw_u64(dl->jw, value);
-	else
-		pr_out("%"PRIu64, value);
 }
 
 static bool is_binary_eol(int i)
@@ -1910,7 +1899,7 @@ static void pr_out_binary_value(struct dl *dl, uint8_t *data, uint32_t len)
 
 	while (i < len) {
 		if (dl->json_output)
-			jsonw_printf(dl->jw, "%d", data[i]);
+			print_int(PRINT_JSON, NULL, NULL, data[i]);
 		else
 			pr_out("%02x ", data[i]);
 		i++;
@@ -1921,20 +1910,11 @@ static void pr_out_binary_value(struct dl *dl, uint8_t *data, uint32_t len)
 		__pr_out_newline();
 }
 
-static void pr_out_str_value(struct dl *dl, const char *value)
-{
-	__pr_out_indent_newline(dl);
-	if (dl->json_output)
-		jsonw_string(dl->jw, value);
-	else
-		pr_out("%s", value);
-}
-
 static void pr_out_name(struct dl *dl, const char *name)
 {
 	__pr_out_indent_newline(dl);
 	if (dl->json_output)
-		jsonw_name(dl->jw, name);
+		print_string(PRINT_JSON, name, NULL, NULL);
 	else
 		pr_out("%s:", name);
 }
@@ -1942,17 +1922,15 @@ static void pr_out_name(struct dl *dl, const char *name)
 static void pr_out_region_chunk_start(struct dl *dl, uint64_t addr)
 {
 	if (dl->json_output) {
-		jsonw_name(dl->jw, "address");
-		jsonw_uint(dl->jw, addr);
-		jsonw_name(dl->jw, "data");
-		jsonw_start_array(dl->jw);
+		print_uint(PRINT_JSON, "address", NULL, addr);
+		open_json_array(PRINT_JSON, "data");
 	}
 }
 
 static void pr_out_region_chunk_end(struct dl *dl)
 {
 	if (dl->json_output)
-		jsonw_end_array(dl->jw);
+		close_json_array(PRINT_JSON, NULL);
 }
 
 static void pr_out_region_chunk(struct dl *dl, uint8_t *data, uint32_t len,
@@ -1972,7 +1950,7 @@ static void pr_out_region_chunk(struct dl *dl, uint8_t *data, uint32_t len,
 		align_val++;
 
 		if (dl->json_output)
-			jsonw_printf(dl->jw, "%d", data[i]);
+			print_int(PRINT_JSON, NULL, NULL, data[i]);
 		else
 			pr_out("%02x ", data[i]);
 
@@ -1985,9 +1963,8 @@ static void pr_out_region_chunk(struct dl *dl, uint8_t *data, uint32_t len,
 static void pr_out_section_start(struct dl *dl, const char *name)
 {
 	if (dl->json_output) {
-		jsonw_start_object(dl->jw);
-		jsonw_name(dl->jw, name);
-		jsonw_start_object(dl->jw);
+		open_json_object(NULL);
+		open_json_object(name);
 	}
 }
 
@@ -1995,17 +1972,16 @@ static void pr_out_section_end(struct dl *dl)
 {
 	if (dl->json_output) {
 		if (dl->arr_last.present)
-			jsonw_end_array(dl->jw);
-		jsonw_end_object(dl->jw);
-		jsonw_end_object(dl->jw);
+			close_json_array(PRINT_JSON, NULL);
+		close_json_object();
+		close_json_object();
 	}
 }
 
 static void pr_out_array_start(struct dl *dl, const char *name)
 {
 	if (dl->json_output) {
-		jsonw_name(dl->jw, name);
-		jsonw_start_array(dl->jw);
+		open_json_array(PRINT_JSON, name);
 	} else {
 		__pr_out_indent_inc();
 		__pr_out_newline();
@@ -2018,7 +1994,7 @@ static void pr_out_array_start(struct dl *dl, const char *name)
 static void pr_out_array_end(struct dl *dl)
 {
 	if (dl->json_output) {
-		jsonw_end_array(dl->jw);
+		close_json_array(PRINT_JSON, NULL);
 	} else {
 		__pr_out_indent_dec();
 		__pr_out_indent_dec();
@@ -2028,8 +2004,7 @@ static void pr_out_array_end(struct dl *dl)
 static void pr_out_object_start(struct dl *dl, const char *name)
 {
 	if (dl->json_output) {
-		jsonw_name(dl->jw, name);
-		jsonw_start_object(dl->jw);
+		open_json_object(name);
 	} else {
 		__pr_out_indent_inc();
 		__pr_out_newline();
@@ -2042,7 +2017,7 @@ static void pr_out_object_start(struct dl *dl, const char *name)
 static void pr_out_object_end(struct dl *dl)
 {
 	if (dl->json_output) {
-		jsonw_end_object(dl->jw);
+		close_json_object();
 	} else {
 		__pr_out_indent_dec();
 		__pr_out_indent_dec();
@@ -2052,13 +2027,13 @@ static void pr_out_object_end(struct dl *dl)
 static void pr_out_entry_start(struct dl *dl)
 {
 	if (dl->json_output)
-		jsonw_start_object(dl->jw);
+		open_json_object(NULL);
 }
 
 static void pr_out_entry_end(struct dl *dl)
 {
 	if (dl->json_output)
-		jsonw_end_object(dl->jw);
+		close_json_object();
 	else
 		__pr_out_newline();
 }
@@ -2129,19 +2104,24 @@ static void pr_out_eswitch(struct dl *dl, struct nlattr **tb)
 {
 	__pr_out_handle_start(dl, tb, true, false);
 
-	if (tb[DEVLINK_ATTR_ESWITCH_MODE])
-		pr_out_str(dl, "mode",
-			   eswitch_mode_name(mnl_attr_get_u16(tb[DEVLINK_ATTR_ESWITCH_MODE])));
-
-	if (tb[DEVLINK_ATTR_ESWITCH_INLINE_MODE])
-		pr_out_str(dl, "inline-mode",
-			   eswitch_inline_mode_name(mnl_attr_get_u8(
-				   tb[DEVLINK_ATTR_ESWITCH_INLINE_MODE])));
-
+	if (tb[DEVLINK_ATTR_ESWITCH_MODE]) {
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "mode", "mode %s",
+			     eswitch_mode_name(mnl_attr_get_u16(
+				     tb[DEVLINK_ATTR_ESWITCH_MODE])));
+	}
+	if (tb[DEVLINK_ATTR_ESWITCH_INLINE_MODE]) {
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "inline-mode", "inline-mode %s",
+			     eswitch_inline_mode_name(mnl_attr_get_u8(
+				     tb[DEVLINK_ATTR_ESWITCH_INLINE_MODE])));
+	}
 	if (tb[DEVLINK_ATTR_ESWITCH_ENCAP_MODE]) {
 		bool encap_mode = !!mnl_attr_get_u8(tb[DEVLINK_ATTR_ESWITCH_ENCAP_MODE]);
 
-		pr_out_str(dl, "encap", encap_mode ? "enable" : "disable");
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "encap", "encap %s",
+			     encap_mode ? "enable" : "disable");
 	}
 
 	pr_out_handle_end(dl);
@@ -2328,8 +2308,10 @@ static void pr_out_param_value(struct dl *dl, const char *nla_name,
 	     !nla_value[DEVLINK_ATTR_PARAM_VALUE_DATA]))
 		return;
 
-	pr_out_str(dl, "cmode",
-		   param_cmode_name(mnl_attr_get_u8(nla_value[DEVLINK_ATTR_PARAM_VALUE_CMODE])));
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "cmode", "cmode %s",
+		     param_cmode_name(mnl_attr_get_u8(nla_value[DEVLINK_ATTR_PARAM_VALUE_CMODE])));
+
 	val_attr = nla_value[DEVLINK_ATTR_PARAM_VALUE_DATA];
 
 	conv_exists = param_val_conv_exists(param_val_conv, PARAM_VAL_CONV_LEN,
@@ -2345,9 +2327,10 @@ static void pr_out_param_value(struct dl *dl, const char *nla_name,
 						     &vstr);
 			if (err)
 				return;
-			pr_out_str(dl, "value", vstr);
+			print_string(PRINT_ANY, "value", " value %s", vstr);
 		} else {
-			pr_out_uint(dl, "value", mnl_attr_get_u8(val_attr));
+			print_uint(PRINT_ANY, "value", " value %u",
+				   mnl_attr_get_u8(val_attr));
 		}
 		break;
 	case MNL_TYPE_U16:
@@ -2359,9 +2342,10 @@ static void pr_out_param_value(struct dl *dl, const char *nla_name,
 						     &vstr);
 			if (err)
 				return;
-			pr_out_str(dl, "value", vstr);
+			print_string(PRINT_ANY, "value", " value %s", vstr);
 		} else {
-			pr_out_uint(dl, "value", mnl_attr_get_u16(val_attr));
+			print_uint(PRINT_ANY, "value", " value %u",
+				   mnl_attr_get_u16(val_attr));
 		}
 		break;
 	case MNL_TYPE_U32:
@@ -2373,16 +2357,18 @@ static void pr_out_param_value(struct dl *dl, const char *nla_name,
 						     &vstr);
 			if (err)
 				return;
-			pr_out_str(dl, "value", vstr);
+			print_string(PRINT_ANY, "value", " value %s", vstr);
 		} else {
-			pr_out_uint(dl, "value", mnl_attr_get_u32(val_attr));
+			print_uint(PRINT_ANY, "value", " value %u",
+				   mnl_attr_get_u32(val_attr));
 		}
 		break;
 	case MNL_TYPE_STRING:
-		pr_out_str(dl, "value", mnl_attr_get_str(val_attr));
+		print_string(PRINT_ANY, "value", " value %s",
+			     mnl_attr_get_str(val_attr));
 		break;
 	case MNL_TYPE_FLAG:
-		pr_out_bool(dl, "value", val_attr ? true : false);
+		print_bool(PRINT_ANY, "value", " value %s", val_attr);
 		break;
 	}
 }
@@ -2411,12 +2397,12 @@ static void pr_out_param(struct dl *dl, struct nlattr **tb, bool array)
 	nla_type = mnl_attr_get_u8(nla_param[DEVLINK_ATTR_PARAM_TYPE]);
 
 	nla_name = mnl_attr_get_str(nla_param[DEVLINK_ATTR_PARAM_NAME]);
-	pr_out_str(dl, "name", nla_name);
-
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "name", "name %s ", nla_name);
 	if (!nla_param[DEVLINK_ATTR_PARAM_GENERIC])
-		pr_out_str(dl, "type", "driver-specific");
+		print_string(PRINT_ANY, "type", "type %s", "driver-specific");
 	else
-		pr_out_str(dl, "type", "generic");
+		print_string(PRINT_ANY, "type", "type %s", "generic");
 
 	pr_out_array_start(dl, "values");
 	mnl_attr_for_each_nested(param_value_attr,
@@ -2693,7 +2679,8 @@ static int cmd_dev_show_cb(const struct nlmsghdr *nlh, void *data)
 
 	if (reload_failed) {
 		__pr_out_handle_start(dl, tb, true, false);
-		pr_out_bool(dl, "reload_failed", true);
+		check_indent_newline(dl);
+		print_bool(PRINT_ANY, "reload_failed", "reload_failed %s", true);
 		pr_out_handle_end(dl);
 	} else {
 		pr_out_handle(dl, tb);
@@ -2727,7 +2714,7 @@ static int cmd_dev_show(struct dl *dl)
 
 static void cmd_dev_reload_help(void)
 {
-	pr_err("Usage: devlink dev reload [ DEV ]\n");
+	pr_err("Usage: devlink dev reload DEV [ netns { PID | NAME | ID } ]\n");
 }
 
 static int cmd_dev_reload(struct dl *dl)
@@ -2743,7 +2730,7 @@ static int cmd_dev_reload(struct dl *dl)
 	nlh = mnlg_msg_prepare(dl->nlg, DEVLINK_CMD_RELOAD,
 			       NLM_F_REQUEST | NLM_F_ACK);
 
-	err = dl_argv_parse_put(nlh, dl, DL_OPT_HANDLE, 0);
+	err = dl_argv_parse_put(nlh, dl, DL_OPT_HANDLE, DL_OPT_NETNS);
 	if (err)
 		return err;
 
@@ -2780,7 +2767,8 @@ static void pr_out_versions_single(struct dl *dl, const struct nlmsghdr *nlh,
 		ver_name = mnl_attr_get_str(tb[DEVLINK_ATTR_INFO_VERSION_NAME]);
 		ver_value = mnl_attr_get_str(tb[DEVLINK_ATTR_INFO_VERSION_VALUE]);
 
-		pr_out_str(dl, ver_name, ver_value);
+		check_indent_newline(dl);
+		print_string_name_value(ver_name, ver_value);
 		if (!dl->json_output)
 			__pr_out_newline();
 	}
@@ -2800,7 +2788,9 @@ static void pr_out_info(struct dl *dl, const struct nlmsghdr *nlh,
 
 		if (!dl->json_output)
 			__pr_out_newline();
-		pr_out_str(dl, "driver", mnl_attr_get_str(nla_drv));
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "driver", "driver %s",
+			     mnl_attr_get_str(nla_drv));
 	}
 
 	if (tb[DEVLINK_ATTR_INFO_SERIAL_NUMBER]) {
@@ -2808,7 +2798,9 @@ static void pr_out_info(struct dl *dl, const struct nlmsghdr *nlh,
 
 		if (!dl->json_output)
 			__pr_out_newline();
-		pr_out_str(dl, "serial_number", mnl_attr_get_str(nla_sn));
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "serial_number", "serial_number %s",
+			     mnl_attr_get_str(nla_sn));
 	}
 	__pr_out_indent_dec();
 
@@ -3167,11 +3159,11 @@ static void pr_out_port_pfvf_num(struct dl *dl, struct nlattr **tb)
 
 	if (tb[DEVLINK_ATTR_PORT_PCI_PF_NUMBER]) {
 		fn_num = mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_PCI_PF_NUMBER]);
-		pr_out_uint(dl, "pfnum", fn_num);
+		print_uint(PRINT_ANY, "pfnum", " pfnum %u", fn_num);
 	}
 	if (tb[DEVLINK_ATTR_PORT_PCI_VF_NUMBER]) {
 		fn_num = mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_PCI_VF_NUMBER]);
-		pr_out_uint(dl, "vfnum", fn_num);
+		print_uint(PRINT_ANY, "vfnum", " vfnum %u", fn_num);
 	}
 }
 
@@ -3181,29 +3173,34 @@ static void pr_out_port(struct dl *dl, struct nlattr **tb)
 	struct nlattr *dpt_attr = tb[DEVLINK_ATTR_PORT_DESIRED_TYPE];
 
 	pr_out_port_handle_start(dl, tb, false);
+	check_indent_newline(dl);
 	if (pt_attr) {
 		uint16_t port_type = mnl_attr_get_u16(pt_attr);
 
-		pr_out_str(dl, "type", port_type_name(port_type));
+		print_string(PRINT_ANY, "type", "type %s",
+			     port_type_name(port_type));
 		if (dpt_attr) {
 			uint16_t des_port_type = mnl_attr_get_u16(dpt_attr);
 
 			if (port_type != des_port_type)
-				pr_out_str(dl, "des_type",
-					   port_type_name(des_port_type));
+				print_string(PRINT_ANY, "des_type", " des_type %s",
+					     port_type_name(des_port_type));
 		}
 	}
-	if (tb[DEVLINK_ATTR_PORT_NETDEV_NAME])
-		pr_out_str(dl, "netdev",
-			   mnl_attr_get_str(tb[DEVLINK_ATTR_PORT_NETDEV_NAME]));
-	if (tb[DEVLINK_ATTR_PORT_IBDEV_NAME])
-		pr_out_str(dl, "ibdev",
-			   mnl_attr_get_str(tb[DEVLINK_ATTR_PORT_IBDEV_NAME]));
+	if (tb[DEVLINK_ATTR_PORT_NETDEV_NAME]) {
+		print_string(PRINT_ANY, "netdev", " netdev %s",
+			     mnl_attr_get_str(tb[DEVLINK_ATTR_PORT_NETDEV_NAME]));
+	}
+	if (tb[DEVLINK_ATTR_PORT_IBDEV_NAME]) {
+		print_string(PRINT_ANY, "ibdev", " ibdev %s",
+			     mnl_attr_get_str(tb[DEVLINK_ATTR_PORT_IBDEV_NAME]));
+		}
 	if (tb[DEVLINK_ATTR_PORT_FLAVOUR]) {
 		uint16_t port_flavour =
 				mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_FLAVOUR]);
 
-		pr_out_str(dl, "flavour", port_flavour_name(port_flavour));
+		print_string(PRINT_ANY, "flavour", " flavour %s",
+			     port_flavour_name(port_flavour));
 
 		switch (port_flavour) {
 		case DEVLINK_PORT_FLAVOUR_PCI_PF:
@@ -3218,11 +3215,11 @@ static void pr_out_port(struct dl *dl, struct nlattr **tb)
 		uint32_t port_number;
 
 		port_number = mnl_attr_get_u32(tb[DEVLINK_ATTR_PORT_NUMBER]);
-		pr_out_uint(dl, "port", port_number);
+		print_uint(PRINT_ANY, "port", " port %u", port_number);
 	}
 	if (tb[DEVLINK_ATTR_PORT_SPLIT_GROUP])
-		pr_out_uint(dl, "split_group",
-			    mnl_attr_get_u32(tb[DEVLINK_ATTR_PORT_SPLIT_GROUP]));
+		print_uint(PRINT_ANY, "split_group", " split_group %u",
+			   mnl_attr_get_u32(tb[DEVLINK_ATTR_PORT_SPLIT_GROUP]));
 	pr_out_port_handle_end(dl);
 }
 
@@ -3354,18 +3351,19 @@ static void cmd_sb_help(void)
 static void pr_out_sb(struct dl *dl, struct nlattr **tb)
 {
 	pr_out_handle_start_arr(dl, tb);
-	pr_out_uint(dl, "sb",
-		    mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_INDEX]));
-	pr_out_uint(dl, "size",
-		    mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_SIZE]));
-	pr_out_uint(dl, "ing_pools",
-		    mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_INGRESS_POOL_COUNT]));
-	pr_out_uint(dl, "eg_pools",
-		    mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_EGRESS_POOL_COUNT]));
-	pr_out_uint(dl, "ing_tcs",
-		    mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_INGRESS_TC_COUNT]));
-	pr_out_uint(dl, "eg_tcs",
-		    mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_EGRESS_TC_COUNT]));
+	check_indent_newline(dl);
+	print_uint(PRINT_ANY, "sb", "sb %u",
+		   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_INDEX]));
+	print_uint(PRINT_ANY, "size", " size %u",
+		   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_SIZE]));
+	print_uint(PRINT_ANY, "ing_pools", " ing_pools %u",
+		   mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_INGRESS_POOL_COUNT]));
+	print_uint(PRINT_ANY, "eg_pools", " eg_pools %u",
+		   mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_EGRESS_POOL_COUNT]));
+	print_uint(PRINT_ANY, "ing_tcs", " ing_tcs %u",
+		   mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_INGRESS_TC_COUNT]));
+	print_uint(PRINT_ANY, "eg_tcs", " eg_tcs %u",
+		   mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_EGRESS_TC_COUNT]));
 	pr_out_handle_end(dl);
 }
 
@@ -3431,19 +3429,20 @@ static const char *threshold_type_name(uint8_t type)
 static void pr_out_sb_pool(struct dl *dl, struct nlattr **tb)
 {
 	pr_out_handle_start_arr(dl, tb);
-	pr_out_uint(dl, "sb",
-		    mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_INDEX]));
-	pr_out_uint(dl, "pool",
-		    mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_POOL_INDEX]));
-	pr_out_str(dl, "type",
-		   pool_type_name(mnl_attr_get_u8(tb[DEVLINK_ATTR_SB_POOL_TYPE])));
-	pr_out_uint(dl, "size",
-		    mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_POOL_SIZE]));
-	pr_out_str(dl, "thtype",
-		   threshold_type_name(mnl_attr_get_u8(tb[DEVLINK_ATTR_SB_POOL_THRESHOLD_TYPE])));
+	check_indent_newline(dl);
+	print_uint(PRINT_ANY, "sb", "sb %u",
+		   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_INDEX]));
+	print_uint(PRINT_ANY, "pool", " pool %u",
+		   mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_POOL_INDEX]));
+	print_string(PRINT_ANY, "type", " type %s",
+		     pool_type_name(mnl_attr_get_u8(tb[DEVLINK_ATTR_SB_POOL_TYPE])));
+	print_uint(PRINT_ANY, "size", " size %u",
+		   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_POOL_SIZE]));
+	print_string(PRINT_ANY, "thtype", " thtype %s",
+		     threshold_type_name(mnl_attr_get_u8(tb[DEVLINK_ATTR_SB_POOL_THRESHOLD_TYPE])));
 	if (tb[DEVLINK_ATTR_SB_POOL_CELL_SIZE])
-		pr_out_uint(dl, "cell_size",
-			    mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_POOL_CELL_SIZE]));
+		print_uint(PRINT_ANY, "cell_size", " cell size %u",
+			   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_POOL_CELL_SIZE]));
 	pr_out_handle_end(dl);
 }
 
@@ -3523,12 +3522,13 @@ static int cmd_sb_pool(struct dl *dl)
 static void pr_out_sb_port_pool(struct dl *dl, struct nlattr **tb)
 {
 	pr_out_port_handle_start_arr(dl, tb, true);
-	pr_out_uint(dl, "sb",
-		    mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_INDEX]));
-	pr_out_uint(dl, "pool",
-		    mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_POOL_INDEX]));
-	pr_out_uint(dl, "threshold",
-		    mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_THRESHOLD]));
+	check_indent_newline(dl);
+	print_uint(PRINT_ANY, "sb", "sb %u",
+		   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_INDEX]));
+	print_uint(PRINT_ANY, "pool", " pool %u",
+		   mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_POOL_INDEX]));
+	print_uint(PRINT_ANY, "threshold", " threshold %u",
+		   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_THRESHOLD]));
 	pr_out_port_handle_end(dl);
 }
 
@@ -3621,16 +3621,17 @@ static int cmd_sb_port(struct dl *dl)
 static void pr_out_sb_tc_bind(struct dl *dl, struct nlattr **tb)
 {
 	pr_out_port_handle_start_arr(dl, tb, true);
-	pr_out_uint(dl, "sb",
-	       mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_INDEX]));
-	pr_out_uint(dl, "tc",
-	       mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_TC_INDEX]));
-	pr_out_str(dl, "type",
-	       pool_type_name(mnl_attr_get_u8(tb[DEVLINK_ATTR_SB_POOL_TYPE])));
-	pr_out_uint(dl, "pool",
-	       mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_POOL_INDEX]));
-	pr_out_uint(dl, "threshold",
-	       mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_THRESHOLD]));
+	check_indent_newline(dl);
+	print_uint(PRINT_ANY, "sb", "sb %u",
+		   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_INDEX]));
+	print_uint(PRINT_ANY, "tc", " tc %u",
+		   mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_TC_INDEX]));
+	print_string(PRINT_ANY, "type", " type %s",
+		     pool_type_name(mnl_attr_get_u8(tb[DEVLINK_ATTR_SB_POOL_TYPE])));
+	print_uint(PRINT_ANY, "pool", " pool %u",
+		   mnl_attr_get_u16(tb[DEVLINK_ATTR_SB_POOL_INDEX]));
+	print_uint(PRINT_ANY, "threshold", " threshold %u",
+		   mnl_attr_get_u32(tb[DEVLINK_ATTR_SB_THRESHOLD]));
 	pr_out_port_handle_end(dl);
 }
 
@@ -3851,20 +3852,18 @@ static void pr_out_json_occ_show_item_list(struct dl *dl, const char *label,
 	struct occ_item *occ_item;
 	char buf[32];
 
-	jsonw_name(dl->jw, label);
-	jsonw_start_object(dl->jw);
+	open_json_object(label);
 	list_for_each_entry(occ_item, list, list) {
 		sprintf(buf, "%u", occ_item->index);
-		jsonw_name(dl->jw, buf);
-		jsonw_start_object(dl->jw);
+		open_json_object(buf);
 		if (bound_pool)
-			jsonw_uint_field(dl->jw, "bound_pool",
-					 occ_item->bound_pool_index);
-		jsonw_uint_field(dl->jw, "current", occ_item->cur);
-		jsonw_uint_field(dl->jw, "max", occ_item->max);
-		jsonw_end_object(dl->jw);
+			print_uint(PRINT_JSON, "bound_pool", NULL,
+				   occ_item->bound_pool_index);
+		print_uint(PRINT_JSON, "current", NULL, occ_item->cur);
+		print_uint(PRINT_JSON, "max", NULL, occ_item->max);
+		close_json_object();
 	}
-	jsonw_end_object(dl->jw);
+	close_json_object();
 }
 
 static void pr_out_occ_show_port(struct dl *dl, struct occ_port *occ_port)
@@ -4207,13 +4206,16 @@ static void pr_out_flash_update(struct dl *dl, struct nlattr **tb)
 {
 	__pr_out_handle_start(dl, tb, true, false);
 
-	if (tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_MSG])
-		pr_out_str(dl, "msg",
-			   mnl_attr_get_str(tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_MSG]));
-
-	if (tb[DEVLINK_ATTR_FLASH_UPDATE_COMPONENT])
-		pr_out_str(dl, "component",
-			   mnl_attr_get_str(tb[DEVLINK_ATTR_FLASH_UPDATE_COMPONENT]));
+	if (tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_MSG]) {
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "msg", "msg %s",
+			     mnl_attr_get_str(tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_MSG]));
+	}
+	if (tb[DEVLINK_ATTR_FLASH_UPDATE_COMPONENT]) {
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "component", "component %s",
+			     mnl_attr_get_str(tb[DEVLINK_ATTR_FLASH_UPDATE_COMPONENT]));
+	}
 
 	if (tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_DONE])
 		pr_out_u64(dl, "done",
@@ -4680,13 +4682,15 @@ static void pr_out_dpipe_fields(struct dpipe_ctx *ctx,
 	for (i = 0; i < field_count; i++) {
 		field = &fields[i];
 		pr_out_entry_start(ctx->dl);
-		pr_out_str(ctx->dl, "name", field->name);
+		check_indent_newline(ctx->dl);
+		print_string(PRINT_ANY, "name", "name %s", field->name);
 		if (ctx->dl->verbose)
-			pr_out_uint(ctx->dl, "id", field->id);
-		pr_out_uint(ctx->dl, "bitwidth", field->bitwidth);
-		if (field->mapping_type)
-			pr_out_str(ctx->dl, "mapping_type",
-				   dpipe_field_mapping_e2s(field->mapping_type));
+			print_uint(PRINT_ANY, "id", " id %u", field->id);
+		print_uint(PRINT_ANY, "bitwidth", " bitwidth %u", field->bitwidth);
+		if (field->mapping_type) {
+			print_string(PRINT_ANY, "mapping_type", " mapping_type %s",
+				     dpipe_field_mapping_e2s(field->mapping_type));
+		}
 		pr_out_entry_end(ctx->dl);
 	}
 }
@@ -4696,11 +4700,11 @@ pr_out_dpipe_header(struct dpipe_ctx *ctx, struct nlattr **tb,
 		    struct dpipe_header *header, bool global)
 {
 	pr_out_handle_start_arr(ctx->dl, tb);
-	pr_out_str(ctx->dl, "name", header->name);
+	check_indent_newline(ctx->dl);
+	print_string(PRINT_ANY, "name", "name %s", header->name);
 	if (ctx->dl->verbose) {
-		pr_out_uint(ctx->dl, "id", header->id);
-		pr_out_str(ctx->dl, "global",
-			   global ? "true" : "false");
+		print_uint(PRINT_ANY, "id", " id %u", header->id);
+		print_bool(PRINT_ANY, "global", " global %s", global);
 	}
 	pr_out_array_start(ctx->dl, "field");
 	pr_out_dpipe_fields(ctx, header->fields,
@@ -4924,20 +4928,21 @@ static void pr_out_dpipe_action(struct dpipe_action *action,
 	struct dpipe_op_info *op_info = &action->info;
 	const char *mapping;
 
-	pr_out_str(ctx->dl, "type",
-		   dpipe_action_type_e2s(action->type));
-	pr_out_str(ctx->dl, "header",
-		   dpipe_header_id2s(ctx, op_info->header_id,
-				     op_info->header_global));
-	pr_out_str(ctx->dl, "field",
-		   dpipe_field_id2s(ctx, op_info->header_id,
-				    op_info->field_id,
-				    op_info->header_global));
+	check_indent_newline(ctx->dl);
+	print_string(PRINT_ANY, "type", "type %s",
+		     dpipe_action_type_e2s(action->type));
+	print_string(PRINT_ANY, "header", " header %s",
+		     dpipe_header_id2s(ctx, op_info->header_id,
+				       op_info->header_global));
+	print_string(PRINT_ANY, "field", " field %s",
+		     dpipe_field_id2s(ctx, op_info->header_id,
+				      op_info->field_id,
+				      op_info->header_global));
 	mapping = dpipe_mapping_get(ctx, op_info->header_id,
 				    op_info->field_id,
 				    op_info->header_global);
 	if (mapping)
-		pr_out_str(ctx->dl, "mapping", mapping);
+		print_string(PRINT_ANY, "mapping", " mapping %s", mapping);
 }
 
 static int dpipe_action_parse(struct dpipe_action *action, struct nlattr *nl)
@@ -5006,20 +5011,21 @@ static void pr_out_dpipe_match(struct dpipe_match *match,
 	struct dpipe_op_info *op_info = &match->info;
 	const char *mapping;
 
-	pr_out_str(ctx->dl, "type",
-		   dpipe_match_type_e2s(match->type));
-	pr_out_str(ctx->dl, "header",
-		   dpipe_header_id2s(ctx, op_info->header_id,
-				     op_info->header_global));
-	pr_out_str(ctx->dl, "field",
-		   dpipe_field_id2s(ctx, op_info->header_id,
-				    op_info->field_id,
-				    op_info->header_global));
+	check_indent_newline(ctx->dl);
+	print_string(PRINT_ANY, "type", "type %s",
+		     dpipe_match_type_e2s(match->type));
+	print_string(PRINT_ANY, "header", " header %s",
+		     dpipe_header_id2s(ctx, op_info->header_id,
+				       op_info->header_global));
+	print_string(PRINT_ANY, "field", " field %s",
+		     dpipe_field_id2s(ctx, op_info->header_id,
+				      op_info->field_id,
+				      op_info->header_global));
 	mapping = dpipe_mapping_get(ctx, op_info->header_id,
 				    op_info->field_id,
 				    op_info->header_global);
 	if (mapping)
-		pr_out_str(ctx->dl, "mapping", mapping);
+		print_string(PRINT_ANY, "mapping", " mapping %s", mapping);
 }
 
 static int dpipe_match_parse(struct dpipe_match *match,
@@ -5124,7 +5130,8 @@ resource_path_print(struct dl *dl, struct resources *resources,
 		path -= strlen(del);
 		memcpy(path, del, strlen(del));
 	}
-	pr_out_str(dl, "resource_path", path);
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "resource_path", "resource_path %s", path);
 	free(path);
 }
 
@@ -5169,16 +5176,17 @@ static int dpipe_table_show(struct dpipe_ctx *ctx, struct nlattr *nl)
 	if (!ctx->print_tables)
 		return 0;
 
-	pr_out_str(ctx->dl, "name", table->name);
-	pr_out_uint(ctx->dl, "size", size);
-	pr_out_str(ctx->dl, "counters_enabled",
-		   counters_enabled ? "true" : "false");
+	check_indent_newline(ctx->dl);
+	print_string(PRINT_ANY, "name", "name %s", table->name);
+	print_uint(PRINT_ANY, "size", " size %u", size);
+	print_bool(PRINT_ANY, "counters_enabled", " counters_enabled %s", counters_enabled);
 
 	if (resource_valid) {
 		resource_units = mnl_attr_get_u32(nla_table[DEVLINK_ATTR_DPIPE_TABLE_RESOURCE_UNITS]);
 		resource_path_print(ctx->dl, ctx->resources,
 				    table->resource_id);
-		pr_out_uint(ctx->dl, "resource_units", resource_units);
+		print_uint(PRINT_ANY, "resource_units", " resource_units %u",
+			   resource_units);
 	}
 
 	pr_out_array_start(ctx->dl, "match");
@@ -5349,7 +5357,8 @@ static void dpipe_field_printer_ipv4_addr(struct dpipe_ctx *ctx,
 	struct in_addr ip_addr;
 
 	ip_addr.s_addr = htonl(*(uint32_t *)value);
-	pr_out_str(ctx->dl, dpipe_value_type_e2s(type), inet_ntoa(ip_addr));
+	check_indent_newline(ctx->dl);
+	print_string_name_value(dpipe_value_type_e2s(type), inet_ntoa(ip_addr));
 }
 
 static void
@@ -5357,8 +5366,9 @@ dpipe_field_printer_ethernet_addr(struct dpipe_ctx *ctx,
 				  enum dpipe_value_type type,
 				  void *value)
 {
-	pr_out_str(ctx->dl, dpipe_value_type_e2s(type),
-		   ether_ntoa((struct ether_addr *)value));
+	check_indent_newline(ctx->dl);
+	print_string_name_value(dpipe_value_type_e2s(type),
+				ether_ntoa((struct ether_addr *)value));
 }
 
 static void dpipe_field_printer_ipv6_addr(struct dpipe_ctx *ctx,
@@ -5368,7 +5378,8 @@ static void dpipe_field_printer_ipv6_addr(struct dpipe_ctx *ctx,
 	char str[INET6_ADDRSTRLEN];
 
 	inet_ntop(AF_INET6, value, str, INET6_ADDRSTRLEN);
-	pr_out_str(ctx->dl, dpipe_value_type_e2s(type), str);
+	check_indent_newline(ctx->dl);
+	print_string_name_value(dpipe_value_type_e2s(type), str);
 }
 
 static struct dpipe_field_printer dpipe_field_printers_ipv4[] = {
@@ -5458,7 +5469,8 @@ static void __pr_out_entry_value(struct dpipe_ctx *ctx,
 	if (value_len == sizeof(uint32_t)) {
 		uint32_t *value_32 = value;
 
-		pr_out_uint(ctx->dl, dpipe_value_type_e2s(type), *value_32);
+		check_indent_newline(ctx->dl);
+		print_uint_name_value(dpipe_value_type_e2s(type), *value_32);
 	}
 }
 
@@ -5479,7 +5491,8 @@ static void pr_out_dpipe_entry_value(struct dpipe_ctx *ctx,
 
 	if (mapping) {
 		value_mapping = mnl_attr_get_u32(nla_match_value[DEVLINK_ATTR_DPIPE_VALUE_MAPPING]);
-		pr_out_uint(ctx->dl, "mapping_value", value_mapping);
+		check_indent_newline(ctx->dl);
+		print_uint(PRINT_ANY, "mapping_value", "mapping_value %u", value_mapping);
 	}
 
 	if (mask) {
@@ -5596,12 +5609,13 @@ static int dpipe_entry_show(struct dpipe_ctx *ctx, struct nlattr *nl)
 		return -EINVAL;
 	}
 
+	check_indent_newline(ctx->dl);
 	entry_index = mnl_attr_get_u32(nla_entry[DEVLINK_ATTR_DPIPE_ENTRY_INDEX]);
-	pr_out_uint(ctx->dl, "index", entry_index);
+	print_uint(PRINT_ANY, "index", "index %u", entry_index);
 
 	if (nla_entry[DEVLINK_ATTR_DPIPE_ENTRY_COUNTER]) {
 		counter = mnl_attr_get_u64(nla_entry[DEVLINK_ATTR_DPIPE_ENTRY_COUNTER]);
-		pr_out_uint(ctx->dl, "counter", counter);
+		print_uint(PRINT_ANY, "counter", " counter %u", counter);
 	}
 
 	pr_out_array_start(ctx->dl, "match_value");
@@ -5847,20 +5861,24 @@ static void resource_show(struct resource *resource,
 	struct dl *dl = ctx->dl;
 	bool array = false;
 
-	pr_out_str(dl, "name", resource->name);
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "name", "name %s", resource->name);
 	if (dl->verbose)
 		resource_path_print(dl, ctx->resources, resource->id);
 	pr_out_u64(dl, "size", resource->size);
 	if (resource->size != resource->size_new)
 		pr_out_u64(dl, "size_new", resource->size_new);
 	if (resource->occ_valid)
-		pr_out_uint(dl, "occ", resource->size_occ);
-	pr_out_str(dl, "unit", resource_unit_str_get(resource->unit));
+		print_uint(PRINT_ANY, "occ", " occ %u",  resource->size_occ);
+	print_string(PRINT_ANY, "unit", " unit %s",
+		     resource_unit_str_get(resource->unit));
 
 	if (resource->size_min != resource->size_max) {
-		pr_out_uint(dl, "size_min", resource->size_min);
+		print_uint(PRINT_ANY, "size_min", " size_min %u",
+			   resource->size_min);
 		pr_out_u64(dl, "size_max", resource->size_max);
-		pr_out_uint(dl, "size_gran", resource->size_gran);
+		print_uint(PRINT_ANY, "size_gran", " size_gran %u",
+			   resource->size_gran);
 	}
 
 	list_for_each_entry(table, &ctx->tables->table_list, list)
@@ -5871,14 +5889,17 @@ static void resource_show(struct resource *resource,
 	if (array)
 		pr_out_array_start(dl, "dpipe_tables");
 	else
-		pr_out_str(dl, "dpipe_tables", "none");
+		print_string(PRINT_ANY, "dpipe_tables", " dpipe_tables none",
+			     "none");
 
 	list_for_each_entry(table, &ctx->tables->table_list, list) {
 		if (table->resource_id != resource->id ||
 		    !table->resource_valid)
 			continue;
 		pr_out_entry_start(dl);
-		pr_out_str(dl, "table_name", table->name);
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "table_name", "table_name %s",
+			     table->name);
 		pr_out_entry_end(dl);
 	}
 	if (array)
@@ -5887,9 +5908,11 @@ static void resource_show(struct resource *resource,
 	if (list_empty(&resource->resource_list))
 		return;
 
-	if (ctx->pending_change)
-		pr_out_str(dl, "size_valid", resource->size_valid ?
-			   "true" : "false");
+	if (ctx->pending_change) {
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "size_valid", "size_valid %s",
+			     resource->size_valid ? "true" : "false");
+	}
 	pr_out_array_start(dl, "resources");
 	list_for_each_entry(child_resource, &resource->resource_list, list) {
 		pr_out_entry_start(dl);
@@ -6104,18 +6127,16 @@ static void pr_out_region_handle_start(struct dl *dl, struct nlattr **tb)
 	char buf[256];
 
 	sprintf(buf, "%s/%s/%s", bus_name, dev_name, region_name);
-	if (dl->json_output) {
-		jsonw_name(dl->jw, buf);
-		jsonw_start_object(dl->jw);
-	} else {
+	if (dl->json_output)
+		open_json_object(buf);
+	else
 		pr_out("%s:", buf);
-	}
 }
 
 static void pr_out_region_handle_end(struct dl *dl)
 {
 	if (dl->json_output)
-		jsonw_end_object(dl->jw);
+		close_json_object();
 	else
 		pr_out("\n");
 }
@@ -6123,18 +6144,16 @@ static void pr_out_region_handle_end(struct dl *dl)
 static void pr_out_region_snapshots_start(struct dl *dl, bool array)
 {
 	__pr_out_indent_newline(dl);
-	if (dl->json_output) {
-		jsonw_name(dl->jw, "snapshot");
-		jsonw_start_array(dl->jw);
-	} else {
+	if (dl->json_output)
+		open_json_array(PRINT_JSON, "snapshot");
+	else
 		pr_out("snapshot %s", array ? "[" : "");
-	}
 }
 
 static void pr_out_region_snapshots_end(struct dl *dl, bool array)
 {
 	if (dl->json_output)
-		jsonw_end_array(dl->jw);
+		close_json_array(PRINT_JSON, NULL);
 	else if (array)
 		pr_out("]");
 }
@@ -6149,7 +6168,7 @@ static void pr_out_region_snapshots_id(struct dl *dl, struct nlattr **tb, int in
 	snapshot_id = mnl_attr_get_u32(tb[DEVLINK_ATTR_REGION_SNAPSHOT_ID]);
 
 	if (dl->json_output)
-		jsonw_uint(dl->jw, snapshot_id);
+		print_uint(PRINT_JSON, NULL, NULL, snapshot_id);
 	else
 		pr_out("%s%u", index ? " " : "", snapshot_id);
 }
@@ -6397,24 +6416,25 @@ static int fmsg_value_show(struct dl *dl, int type, struct nlattr *nl_data)
 	uint8_t *data;
 	uint32_t len;
 
+	check_indent_newline(dl);
 	switch (type) {
 	case MNL_TYPE_FLAG:
-		pr_out_bool_value(dl, mnl_attr_get_u8(nl_data));
+		print_bool(PRINT_ANY, NULL, "%s", mnl_attr_get_u8(nl_data));
 		break;
 	case MNL_TYPE_U8:
-		pr_out_uint_value(dl, mnl_attr_get_u8(nl_data));
+		print_uint(PRINT_ANY, NULL, "%u", mnl_attr_get_u8(nl_data));
 		break;
 	case MNL_TYPE_U16:
-		pr_out_uint_value(dl, mnl_attr_get_u16(nl_data));
+		print_uint(PRINT_ANY, NULL, "%u", mnl_attr_get_u16(nl_data));
 		break;
 	case MNL_TYPE_U32:
-		pr_out_uint_value(dl, mnl_attr_get_u32(nl_data));
+		print_uint(PRINT_ANY, NULL, "%u", mnl_attr_get_u32(nl_data));
 		break;
 	case MNL_TYPE_U64:
-		pr_out_uint64_value(dl, mnl_attr_get_u64(nl_data));
+		print_u64(PRINT_ANY, NULL, "%"PRIu64, mnl_attr_get_u64(nl_data));
 		break;
 	case MNL_TYPE_NUL_STRING:
-		pr_out_str_value(dl, mnl_attr_get_str(nl_data));
+		print_string(PRINT_ANY, NULL, "%s", mnl_attr_get_str(nl_data));
 		break;
 	case MNL_TYPE_BINARY:
 		len = mnl_attr_get_payload_len(nl_data);
@@ -6427,12 +6447,23 @@ static int fmsg_value_show(struct dl *dl, int type, struct nlattr *nl_data)
 	return MNL_CB_OK;
 }
 
+static void pr_out_fmsg_name(struct dl *dl, char **name)
+{
+	if (!*name)
+		return;
+
+	pr_out_name(dl, *name);
+	free(*name);
+	*name = NULL;
+}
+
 struct nest_entry {
 	int attr_type;
 	struct list_head list;
 };
 
 struct fmsg_cb_data {
+	char *name;
 	struct dl *dl;
 	uint8_t value_type;
 	struct list_head entry_list;
@@ -6462,6 +6493,56 @@ static int cmd_fmsg_nest_queue(struct fmsg_cb_data *fmsg_data,
 	return MNL_CB_OK;
 }
 
+static void pr_out_fmsg_group_start(struct dl *dl, char **name)
+{
+	__pr_out_newline();
+	pr_out_fmsg_name(dl, name);
+	__pr_out_newline();
+	__pr_out_indent_inc();
+}
+
+static void pr_out_fmsg_group_end(struct dl *dl)
+{
+	__pr_out_newline();
+	__pr_out_indent_dec();
+}
+
+static void pr_out_fmsg_start_object(struct dl *dl, char **name)
+{
+	if (dl->json_output) {
+		pr_out_fmsg_name(dl, name);
+		open_json_object(NULL);
+	} else {
+		pr_out_fmsg_group_start(dl, name);
+	}
+}
+
+static void pr_out_fmsg_end_object(struct dl *dl)
+{
+	if (dl->json_output)
+		close_json_object();
+	else
+		pr_out_fmsg_group_end(dl);
+}
+
+static void pr_out_fmsg_start_array(struct dl *dl, char **name)
+{
+	if (dl->json_output) {
+		pr_out_fmsg_name(dl, name);
+		open_json_array(PRINT_JSON, NULL);
+	} else {
+		pr_out_fmsg_group_start(dl, name);
+	}
+}
+
+static void pr_out_fmsg_end_array(struct dl *dl)
+{
+	if (dl->json_output)
+		close_json_array(PRINT_JSON, NULL);
+	else
+		pr_out_fmsg_group_end(dl);
+}
+
 static int cmd_fmsg_nest(struct fmsg_cb_data *fmsg_data, uint8_t nest_value,
 			 bool start)
 {
@@ -6476,26 +6557,17 @@ static int cmd_fmsg_nest(struct fmsg_cb_data *fmsg_data, uint8_t nest_value,
 	switch (value) {
 	case DEVLINK_ATTR_FMSG_OBJ_NEST_START:
 		if (start)
-			pr_out_entry_start(dl);
+			pr_out_fmsg_start_object(dl, &fmsg_data->name);
 		else
-			pr_out_entry_end(dl);
+			pr_out_fmsg_end_object(dl);
 		break;
 	case DEVLINK_ATTR_FMSG_PAIR_NEST_START:
 		break;
 	case DEVLINK_ATTR_FMSG_ARR_NEST_START:
-		if (dl->json_output) {
-			if (start)
-				jsonw_start_array(dl->jw);
-			else
-				jsonw_end_array(dl->jw);
-		} else {
-			if (start) {
-				__pr_out_newline();
-				__pr_out_indent_inc();
-			} else {
-				__pr_out_indent_dec();
-			}
-		}
+		if (start)
+			pr_out_fmsg_start_array(dl, &fmsg_data->name);
+		else
+			pr_out_fmsg_end_array(dl);
 		break;
 	default:
 		return -EINVAL;
@@ -6533,12 +6605,16 @@ static int cmd_fmsg_object_cb(const struct nlmsghdr *nlh, void *data)
 				return err;
 			break;
 		case DEVLINK_ATTR_FMSG_OBJ_NAME:
-			pr_out_name(dl, mnl_attr_get_str(nla_object));
+			free(fmsg_data->name);
+			fmsg_data->name = strdup(mnl_attr_get_str(nla_object));
+			if (!fmsg_data->name)
+				return -ENOMEM;
 			break;
 		case DEVLINK_ATTR_FMSG_OBJ_VALUE_TYPE:
 			fmsg_data->value_type = mnl_attr_get_u8(nla_object);
 			break;
 		case DEVLINK_ATTR_FMSG_OBJ_VALUE_DATA:
+			pr_out_fmsg_name(dl, &fmsg_data->name);
 			err = fmsg_value_show(dl, fmsg_data->value_type,
 					      nla_object);
 			if (err != MNL_CB_OK)
@@ -6549,6 +6625,20 @@ static int cmd_fmsg_object_cb(const struct nlmsghdr *nlh, void *data)
 		}
 	}
 	return MNL_CB_OK;
+}
+
+static void cmd_fmsg_init(struct dl *dl, struct fmsg_cb_data *data)
+{
+	/* FMSG is dynamic: opening of an object or array causes a
+	 * newline. JSON starts with an { or [, but plain text should
+	 * not start with a new line. Ensure this by setting
+	 * g_new_line_count to 1: avoiding newline before the first
+	 * print.
+	 */
+	g_new_line_count = 1;
+	data->name = NULL;
+	data->dl = dl;
+	INIT_LIST_HEAD(&data->entry_list);
 }
 
 static int cmd_health_object_common(struct dl *dl, uint8_t cmd, uint16_t flags)
@@ -6564,9 +6654,9 @@ static int cmd_health_object_common(struct dl *dl, uint8_t cmd, uint16_t flags)
 	if (err)
 		return err;
 
-	data.dl = dl;
-	INIT_LIST_HEAD(&data.entry_list);
+	cmd_fmsg_init(dl, &data);
 	err = _mnlg_socket_sndrcv(dl->nlg, nlh, cmd_fmsg_object_cb, &data);
+	free(data.name);
 	return err;
 }
 
@@ -6618,8 +6708,11 @@ static const char *health_state_name(uint8_t state)
 	}
 }
 
-static void format_logtime(uint64_t time_ms, char *ts_date, char *ts_time)
+static void pr_out_dump_reporter_format_logtime(struct dl *dl, const struct nlattr *attr)
 {
+	char dump_date[HEALTH_REPORTER_TIMESTAMP_FMT_LEN];
+	char dump_time[HEALTH_REPORTER_TIMESTAMP_FMT_LEN];
+	uint64_t time_ms = mnl_attr_get_u64(attr);
 	struct sysinfo s_info;
 	struct tm *info;
 	time_t now, sec;
@@ -6637,16 +6730,37 @@ static void format_logtime(uint64_t time_ms, char *ts_date, char *ts_time)
 	sec = now - s_info.uptime + time_ms / 1000;
 	info = localtime(&sec);
 out:
-	strftime(ts_date, HEALTH_REPORTER_TIMESTAMP_FMT_LEN, "%Y-%m-%d", info);
-	strftime(ts_time, HEALTH_REPORTER_TIMESTAMP_FMT_LEN, "%H:%M:%S", info);
+	strftime(dump_date, HEALTH_REPORTER_TIMESTAMP_FMT_LEN, "%Y-%m-%d", info);
+	strftime(dump_time, HEALTH_REPORTER_TIMESTAMP_FMT_LEN, "%H:%M:%S", info);
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "last_dump_date", "last_dump_date %s", dump_date);
+	print_string(PRINT_ANY, "last_dump_time", " last_dump_time %s", dump_time);
+}
+
+static void pr_out_dump_report_timestamp(struct dl *dl, const struct nlattr *attr)
+{
+	char dump_date[HEALTH_REPORTER_TIMESTAMP_FMT_LEN];
+	char dump_time[HEALTH_REPORTER_TIMESTAMP_FMT_LEN];
+	time_t tv_sec;
+	struct tm *tm;
+	uint64_t ts;
+
+	ts = mnl_attr_get_u64(attr);
+	tv_sec = ts / 1000000000;
+	tm = localtime(&tv_sec);
+
+	strftime(dump_date, HEALTH_REPORTER_TIMESTAMP_FMT_LEN, "%Y-%m-%d", tm);
+	strftime(dump_time, HEALTH_REPORTER_TIMESTAMP_FMT_LEN, "%H:%M:%S", tm);
+
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "last_dump_date", "last_dump_date %s", dump_date);
+	print_string(PRINT_ANY, "last_dump_time", " last_dump_time %s", dump_time);
 }
 
 static void pr_out_health(struct dl *dl, struct nlattr **tb_health)
 {
 	struct nlattr *tb[DEVLINK_ATTR_MAX + 1] = {};
 	enum devlink_health_reporter_state state;
-	const struct nlattr *attr;
-	uint64_t time_ms;
 	int err;
 
 	err = mnl_attr_parse_nested(tb_health[DEVLINK_ATTR_HEALTH_REPORTER],
@@ -6662,35 +6776,30 @@ static void pr_out_health(struct dl *dl, struct nlattr **tb_health)
 
 	pr_out_handle_start_arr(dl, tb_health);
 
-	pr_out_str(dl, "reporter",
-		   mnl_attr_get_str(tb[DEVLINK_ATTR_HEALTH_REPORTER_NAME]));
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "reporter", "reporter %s",
+		     mnl_attr_get_str(tb[DEVLINK_ATTR_HEALTH_REPORTER_NAME]));
 	if (!dl->json_output) {
 		__pr_out_newline();
 		__pr_out_indent_inc();
 	}
 	state = mnl_attr_get_u8(tb[DEVLINK_ATTR_HEALTH_REPORTER_STATE]);
-	pr_out_str(dl, "state", health_state_name(state));
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "state", "state %s", health_state_name(state));
 	pr_out_u64(dl, "error",
 		   mnl_attr_get_u64(tb[DEVLINK_ATTR_HEALTH_REPORTER_ERR_COUNT]));
 	pr_out_u64(dl, "recover",
 		   mnl_attr_get_u64(tb[DEVLINK_ATTR_HEALTH_REPORTER_RECOVER_COUNT]));
-	if (tb[DEVLINK_ATTR_HEALTH_REPORTER_DUMP_TS]) {
-		char dump_date[HEALTH_REPORTER_TIMESTAMP_FMT_LEN];
-		char dump_time[HEALTH_REPORTER_TIMESTAMP_FMT_LEN];
-
-		attr = tb[DEVLINK_ATTR_HEALTH_REPORTER_DUMP_TS];
-		time_ms = mnl_attr_get_u64(attr);
-		format_logtime(time_ms, dump_date, dump_time);
-
-		pr_out_str(dl, "last_dump_date", dump_date);
-		pr_out_str(dl, "last_dump_time", dump_time);
-	}
+	if (tb[DEVLINK_ATTR_HEALTH_REPORTER_DUMP_TS_NS])
+		pr_out_dump_report_timestamp(dl, tb[DEVLINK_ATTR_HEALTH_REPORTER_DUMP_TS_NS]);
+	else if (tb[DEVLINK_ATTR_HEALTH_REPORTER_DUMP_TS])
+		pr_out_dump_reporter_format_logtime(dl, tb[DEVLINK_ATTR_HEALTH_REPORTER_DUMP_TS]);
 	if (tb[DEVLINK_ATTR_HEALTH_REPORTER_GRACEFUL_PERIOD])
 		pr_out_u64(dl, "grace_period",
 			   mnl_attr_get_u64(tb[DEVLINK_ATTR_HEALTH_REPORTER_GRACEFUL_PERIOD]));
 	if (tb[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_RECOVER])
-		pr_out_bool(dl, "auto_recover",
-			    mnl_attr_get_u8(tb[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_RECOVER]));
+		print_bool(PRINT_ANY, "auto_recover", " auto_recover %s",
+			   mnl_attr_get_u8(tb[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_RECOVER]));
 
 	__pr_out_indent_dec();
 	pr_out_handle_end(dl);
@@ -6817,8 +6926,11 @@ static void pr_out_trap_metadata(struct dl *dl, struct nlattr *attr)
 	struct nlattr *attr_metadata;
 
 	pr_out_array_start(dl, "metadata");
-	mnl_attr_for_each_nested(attr_metadata, attr)
-		pr_out_str_value(dl, trap_metadata_name(attr_metadata));
+	mnl_attr_for_each_nested(attr_metadata, attr) {
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, NULL, "%s",
+			     trap_metadata_name(attr_metadata));
+	}
 	pr_out_array_end(dl);
 }
 
@@ -6832,12 +6944,14 @@ static void pr_out_trap(struct dl *dl, struct nlattr **tb, bool array)
 	else
 		__pr_out_handle_start(dl, tb, true, false);
 
-	pr_out_str(dl, "name", mnl_attr_get_str(tb[DEVLINK_ATTR_TRAP_NAME]));
-	pr_out_str(dl, "type", trap_type_name(type));
-	pr_out_bool(dl, "generic", !!tb[DEVLINK_ATTR_TRAP_GENERIC]);
-	pr_out_str(dl, "action", trap_action_name(action));
-	pr_out_str(dl, "group",
-		   mnl_attr_get_str(tb[DEVLINK_ATTR_TRAP_GROUP_NAME]));
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "name", "name %s",
+		     mnl_attr_get_str(tb[DEVLINK_ATTR_TRAP_NAME]));
+	print_string(PRINT_ANY, "type", " type %s", trap_type_name(type));
+	print_bool(PRINT_ANY, "generic", " generic %s", !!tb[DEVLINK_ATTR_TRAP_GENERIC]);
+	print_string(PRINT_ANY, "action", " action %s", trap_action_name(action));
+	print_string(PRINT_ANY, "group", " group %s",
+		     mnl_attr_get_str(tb[DEVLINK_ATTR_TRAP_GROUP_NAME]));
 	if (dl->verbose)
 		pr_out_trap_metadata(dl, tb[DEVLINK_ATTR_TRAP_METADATA]);
 	pr_out_stats(dl, tb[DEVLINK_ATTR_STATS]);
@@ -6919,9 +7033,10 @@ static void pr_out_trap_group(struct dl *dl, struct nlattr **tb, bool array)
 	else
 		__pr_out_handle_start(dl, tb, true, false);
 
-	pr_out_str(dl, "name",
-		   mnl_attr_get_str(tb[DEVLINK_ATTR_TRAP_GROUP_NAME]));
-	pr_out_bool(dl, "generic", !!tb[DEVLINK_ATTR_TRAP_GENERIC]);
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "name", "name %s",
+		     mnl_attr_get_str(tb[DEVLINK_ATTR_TRAP_GROUP_NAME]));
+	print_bool(PRINT_ANY, "generic", " generic %s", !!tb[DEVLINK_ATTR_TRAP_GENERIC]);
 	pr_out_stats(dl, tb[DEVLINK_ATTR_STATS]);
 	pr_out_handle_end(dl);
 }
@@ -7025,7 +7140,7 @@ static int cmd_trap(struct dl *dl)
 static void help(void)
 {
 	pr_err("Usage: devlink [ OPTIONS ] OBJECT { COMMAND | help }\n"
-	       "       devlink [ -f[orce] ] -b[atch] filename\n"
+	       "       devlink [ -f[orce] ] -b[atch] filename -N[etns] netnsname\n"
 	       "where  OBJECT := { dev | port | sb | monitor | dpipe | resource | region | health | trap }\n"
 	       "       OPTIONS := { -V[ersion] | -n[o-nice-names] | -j[son] | -p[retty] | -v[erbose] -s[tatistics] }\n");
 }
@@ -7085,18 +7200,9 @@ static int dl_init(struct dl *dl)
 		pr_err("Failed to create index map\n");
 		goto err_ifname_map_create;
 	}
-	if (dl->json_output) {
-		dl->jw = jsonw_new(stdout);
-		if (!dl->jw) {
-			pr_err("Failed to create JSON writer\n");
-			goto err_json_new;
-		}
-		jsonw_pretty(dl->jw, dl->pretty_output);
-	}
+	new_json_obj_plain(dl->json_output);
 	return 0;
 
-err_json_new:
-	ifname_map_fini(dl);
 err_ifname_map_create:
 	mnlg_socket_close(dl->nlg);
 	return err;
@@ -7104,8 +7210,7 @@ err_ifname_map_create:
 
 static void dl_fini(struct dl *dl)
 {
-	if (dl->json_output)
-		jsonw_destroy(&dl->jw);
+	delete_json_obj_plain();
 	ifname_map_fini(dl);
 	mnlg_socket_close(dl->nlg);
 }
@@ -7175,6 +7280,7 @@ int main(int argc, char **argv)
 		{ "pretty",		no_argument,		NULL, 'p' },
 		{ "verbose",		no_argument,		NULL, 'v' },
 		{ "statistics",		no_argument,		NULL, 's' },
+		{ "Netns",		required_argument,	NULL, 'N' },
 		{ NULL, 0, NULL, 0 }
 	};
 	const char *batch_file = NULL;
@@ -7190,7 +7296,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	while ((opt = getopt_long(argc, argv, "Vfb:njpvs",
+	while ((opt = getopt_long(argc, argv, "Vfb:njpvsN:",
 				  long_options, NULL)) >= 0) {
 
 		switch (opt) {
@@ -7211,13 +7317,19 @@ int main(int argc, char **argv)
 			dl->json_output = true;
 			break;
 		case 'p':
-			dl->pretty_output = true;
+			pretty = true;
 			break;
 		case 'v':
 			dl->verbose = true;
 			break;
 		case 's':
 			dl->stats = true;
+			break;
+		case 'N':
+			if (netns_switch(optarg)) {
+				ret = EXIT_FAILURE;
+				goto dl_free;
+			}
 			break;
 		default:
 			pr_err("Unknown option.\n");

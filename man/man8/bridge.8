@@ -71,7 +71,7 @@ bridge \- show / manipulate bridge addresses and devices
 .B dst
 .IR IPADDR " ] [ "
 .B src_vni
-.IR SRC_VNI " ] ["
+.IR VNI " ] ["
 .B vni
 .IR VNI " ] ["
 .B port
@@ -91,6 +91,17 @@ bridge \- show / manipulate bridge addresses and devices
 .IR VID " ] [ "
 .B state
 .IR STATE " ]"
+
+.ti -8
+.B bridge fdb get
+.I LLADDR " [ "
+.B dev
+.IR DEV " ] [ "
+.B br
+.IR BRDEV " ] [ "
+.B vlan
+.IR VID  " ] ["
+.BR self " ] [ " master " ]"
 
 .ti -8
 .BR "bridge mdb" " { " add " | " del " } "
@@ -487,7 +498,7 @@ the IP address of the destination
 VXLAN tunnel endpoint where the Ethernet MAC ADDRESS resides.
 
 .TP
-.BI src_vni " SRC VNI"
+.BI src_vni " VNI"
 the src VNI Network Identifier (or VXLAN Segment ID)
 this entry belongs to. Used only when the vxlan device is in
 external or collect metadata mode. If omitted the value specified at
@@ -549,6 +560,35 @@ With the
 .B -statistics
 option, the command becomes verbose. It prints out the last updated
 and last used time for each entry.
+
+.SS bridge fdb get - get bridge forwarding entry.
+
+lookup a bridge forwarding table entry.
+
+.TP
+.BI "LLADDR"
+the Ethernet MAC address.
+
+.TP
+.BI dev " DEV"
+the interface to which this address is associated.
+
+.TP
+.BI brport " DEV"
+the bridge port to which this address is associated. same as dev above.
+
+.TP
+.BI br " DEV"
+the bridge to which this address is associated.
+
+.TP
+.B self
+- the address is associated with the port drivers fdb. Usually hardware.
+
+.TP
+.B master
+- the address is associated with master devices fdb. Usually software (default).
+.sp
 
 .SH bridge mdb - multicast group database management
 

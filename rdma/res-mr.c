@@ -17,11 +17,8 @@ static int res_mr_line(struct rd *rd, const char *name, int idx,
 	uint32_t mrn = 0;
 	uint32_t pid = 0;
 
-	if (!nla_line[RDMA_NLDEV_ATTR_RES_MRLEN] ||
-	    (!nla_line[RDMA_NLDEV_ATTR_RES_PID] &&
-	     !nla_line[RDMA_NLDEV_ATTR_RES_KERN_NAME])) {
+	if (!nla_line[RDMA_NLDEV_ATTR_RES_MRLEN])
 		return MNL_CB_ERROR;
-	}
 
 	if (nla_line[RDMA_NLDEV_ATTR_RES_RKEY])
 		rkey = mnl_attr_get_u32(nla_line[RDMA_NLDEV_ATTR_RES_RKEY]);
@@ -60,10 +57,7 @@ static int res_mr_line(struct rd *rd, const char *name, int idx,
 		/* discard const from mnl_attr_get_str */
 		comm = (char *)mnl_attr_get_str(
 			nla_line[RDMA_NLDEV_ATTR_RES_KERN_NAME]);
-
-	if (rd->json_output)
-		jsonw_start_array(rd->jw);
-
+	open_json_object(NULL);
 	print_dev(rd, idx, name);
 	res_print_uint(rd, "mrn", mrn, nla_line[RDMA_NLDEV_ATTR_RES_MRN]);
 	print_key(rd, "rkey", rkey, nla_line[RDMA_NLDEV_ATTR_RES_RKEY]);

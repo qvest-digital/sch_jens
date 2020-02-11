@@ -220,7 +220,7 @@ static int flower_parse_matching_flags(char *str,
 }
 
 static int flower_parse_u16(char *str, int value_type, int mask_type,
-			    struct nlmsghdr *n)
+			    struct nlmsghdr *n, bool be)
 {
 	__u16 value, mask;
 	char *slash;
@@ -239,6 +239,10 @@ static int flower_parse_u16(char *str, int value_type, int mask_type,
 		mask = UINT16_MAX;
 	}
 
+	if (be) {
+		value = htons(value);
+		mask = htons(mask);
+	}
 	addattr16(n, MAX_MSG, value_type, value);
 	addattr16(n, MAX_MSG, mask_type, mask);
 
@@ -284,7 +288,8 @@ static int flower_parse_ct_zone(char *str, struct nlmsghdr *n)
 	return flower_parse_u16(str,
 				TCA_FLOWER_KEY_CT_ZONE,
 				TCA_FLOWER_KEY_CT_ZONE_MASK,
-				n);
+				n,
+				false);
 }
 
 static int flower_parse_ct_labels(char *str, struct nlmsghdr *n)
@@ -632,6 +637,27 @@ static int flower_port_attr_type(__u8 ip_proto, enum flower_endpoint endpoint)
 		return -1;
 }
 
+static int flower_port_attr_mask_type(__u8 ip_proto,
+				      enum flower_endpoint endpoint)
+{
+	switch (ip_proto) {
+	case IPPROTO_TCP:
+		return endpoint == FLOWER_ENDPOINT_SRC ?
+			TCA_FLOWER_KEY_TCP_SRC_MASK :
+			TCA_FLOWER_KEY_TCP_DST_MASK;
+	case IPPROTO_UDP:
+		return endpoint == FLOWER_ENDPOINT_SRC ?
+			TCA_FLOWER_KEY_UDP_SRC_MASK :
+			TCA_FLOWER_KEY_UDP_DST_MASK;
+	case IPPROTO_SCTP:
+		return endpoint == FLOWER_ENDPOINT_SRC ?
+			TCA_FLOWER_KEY_SCTP_SRC_MASK :
+			TCA_FLOWER_KEY_SCTP_DST_MASK;
+	default:
+		return -1;
+	}
+}
+
 static int flower_port_range_attr_type(__u8 ip_proto, enum flower_endpoint type,
 				       __be16 *min_port_type,
 				       __be16 *max_port_type)
@@ -676,13 +702,17 @@ static int flower_parse_port(char *str, __u8 ip_proto,
 			     enum flower_endpoint endpoint,
 			     struct nlmsghdr *n)
 {
+	char *slash = NULL;
 	__be16 min = 0;
 	__be16 max = 0;
 	int ret;
 
 	ret = parse_range(str, &min, &max);
-	if (ret)
-		return -1;
+	if (ret) {
+		slash = strchr(str, '/');
+		if (!slash)
+			return -1;
+	}
 
 	if (min && max) {
 		__be16 min_port_type, max_port_type;
@@ -697,13 +727,24 @@ static int flower_parse_port(char *str, __u8 ip_proto,
 
 		addattr16(n, MAX_MSG, min_port_type, min);
 		addattr16(n, MAX_MSG, max_port_type, max);
-	} else if (min && !max) {
+	} else if (slash || (min && !max)) {
 		int type;
 
 		type = flower_port_attr_type(ip_proto, endpoint);
 		if (type < 0)
 			return -1;
-		addattr16(n, MAX_MSG, type, min);
+
+		if (!slash) {
+			addattr16(n, MAX_MSG, type, min);
+		} else {
+			int mask_type;
+
+			mask_type = flower_port_attr_mask_type(ip_proto,
+							       endpoint);
+			if (mask_type < 0)
+				return -1;
+			return flower_parse_u16(str, type, mask_type, n, true);
+		}
 	} else {
 		return -1;
 	}
@@ -1558,7 +1599,8 @@ static void flower_print_eth_addr(char *name, struct rtattr *addr_attr,
 			sprintf(out + done, "/%d", bits);
 	}
 
-	sprintf(namefrm, "\n  %s %%s", name);
+	print_nl();
+	sprintf(namefrm, "  %s %%s", name);
 	print_string(PRINT_ANY, name, namefrm, out);
 }
 
@@ -1583,7 +1625,8 @@ static void flower_print_eth_type(__be16 *p_eth_type,
 	else
 		sprintf(out, "%04x", ntohs(eth_type));
 
-	print_string(PRINT_ANY, "eth_type", "\n  eth_type %s", out);
+	print_nl();
+	print_string(PRINT_ANY, "eth_type", "  eth_type %s", out);
 	*p_eth_type = eth_type;
 }
 
@@ -1610,7 +1653,8 @@ static void flower_print_ip_proto(__u8 *p_ip_proto,
 	else
 		sprintf(out, "%02x", ip_proto);
 
-	print_string(PRINT_ANY, "ip_proto", "\n  ip_proto %s", out);
+	print_nl();
+	print_string(PRINT_ANY, "ip_proto", "  ip_proto %s", out);
 	*p_ip_proto = ip_proto;
 }
 
@@ -1641,7 +1685,8 @@ static void flower_print_matching_flags(char *name,
 			continue;
 		if (mtf_mask & flags_str[i].flag) {
 			if (++count == 1) {
-				print_string(PRINT_FP, NULL, "\n  %s ", name);
+				print_nl();
+				print_string(PRINT_FP, NULL, "  %s ", name);
 				open_json_object(name);
 			} else {
 				print_string(PRINT_FP, NULL, "/", NULL);
@@ -1700,7 +1745,8 @@ static void flower_print_ip_addr(char *name, __be16 eth_type,
 	else if (bits < len * 8)
 		sprintf(out + done, "/%d", bits);
 
-	sprintf(namefrm, "\n  %s %%s", name);
+	print_nl();
+	sprintf(namefrm, "  %s %%s", name);
 	print_string(PRINT_ANY, name, namefrm, out);
 }
 static void flower_print_ip4_addr(char *name, struct rtattr *addr_attr,
@@ -1710,15 +1756,10 @@ static void flower_print_ip4_addr(char *name, struct rtattr *addr_attr,
 				    addr_attr, mask_attr, 0, 0);
 }
 
-static void flower_print_port(char *name, struct rtattr *attr)
+static void flower_print_port(char *name, struct rtattr *attr,
+			      struct rtattr *mask_attr)
 {
-	SPRINT_BUF(namefrm);
-
-	if (!attr)
-		return;
-
-	sprintf(namefrm,"\n  %s %%u", name);
-	print_hu(PRINT_ANY, name, namefrm, rta_getattr_be16(attr));
+	print_masked_be16(name, attr, mask_attr, true);
 }
 
 static void flower_print_port_range(char *name, struct rtattr *min_attr,
@@ -1739,7 +1780,8 @@ static void flower_print_port_range(char *name, struct rtattr *min_attr,
 
 		done = sprintf(out, "%u", rta_getattr_be16(min_attr));
 		sprintf(out + done, "-%u", rta_getattr_be16(max_attr));
-		sprintf(namefrm, "\n  %s %%s", name);
+		print_nl();
+		sprintf(namefrm, "  %s %%s", name);
 		print_string(PRINT_ANY, name, namefrm, out);
 	}
 }
@@ -1758,8 +1800,8 @@ static void flower_print_tcp_flags(const char *name, struct rtattr *flags_attr,
 	if (mask_attr)
 		sprintf(out + done, "/%x", rta_getattr_be16(mask_attr));
 
-	print_string(PRINT_FP, NULL, "%s  ", _SL_);
-	sprintf(namefrm, "%s %%s", name);
+	print_nl();
+	sprintf(namefrm, "  %s %%s", name);
 	print_string(PRINT_ANY, name, namefrm, out);
 }
 
@@ -1793,7 +1835,8 @@ static void flower_print_ct_state(struct rtattr *flags_attr,
 					flower_ct_states[i].str);
 	}
 
-	print_string(PRINT_ANY, "ct_state", "\n  ct_state %s", out);
+	print_nl();
+	print_string(PRINT_ANY, "ct_state", "  ct_state %s", out);
 }
 
 static void flower_print_ct_label(struct rtattr *attr,
@@ -1828,7 +1871,8 @@ static void flower_print_ct_label(struct rtattr *attr,
 	}
 	*p = '\0';
 
-	print_string(PRINT_ANY, "ct_label", "\n  ct_label %s", out);
+	print_nl();
+	print_string(PRINT_ANY, "ct_label", "  ct_label %s", out);
 }
 
 static void flower_print_ct_zone(struct rtattr *attr,
@@ -1850,7 +1894,8 @@ static void flower_print_key_id(const char *name, struct rtattr *attr)
 	if (!attr)
 		return;
 
-	sprintf(namefrm,"\n  %s %%u", name);
+	print_nl();
+	sprintf(namefrm, "  %s %%u", name);
 	print_uint(PRINT_ANY, name, namefrm, rta_getattr_be32(attr));
 }
 
@@ -1898,7 +1943,7 @@ static void flower_print_geneve_opts(const char *name, struct rtattr *attr,
 static void flower_print_geneve_parts(const char *name, struct rtattr *attr,
 				      char *key, char *mask)
 {
-	char *namefrm = "\n  geneve_opt %s";
+	char *namefrm = "  geneve_opt %s";
 	char *key_token, *mask_token, *out;
 	int len;
 
@@ -1916,6 +1961,7 @@ static void flower_print_geneve_parts(const char *name, struct rtattr *attr,
 	}
 
 	out[len - 1] = '\0';
+	print_nl();
 	print_string(PRINT_FP, name, namefrm, out);
 	free(out);
 }
@@ -1979,7 +2025,8 @@ static void flower_print_masked_u8(const char *name, struct rtattr *attr,
 	if (mask != UINT8_MAX)
 		sprintf(out + done, "/%d", mask);
 
-	sprintf(namefrm,"\n  %s %%s", name);
+	print_nl();
+	sprintf(namefrm, "  %s %%s", name);
 	print_string(PRINT_ANY, name, namefrm, out);
 }
 
@@ -1995,7 +2042,8 @@ static void flower_print_u32(const char *name, struct rtattr *attr)
 	if (!attr)
 		return;
 
-	sprintf(namefrm,"\n  %s %%u", name);
+	print_nl();
+	sprintf(namefrm, "  %s %%u", name);
 	print_uint(PRINT_ANY, name, namefrm, rta_getattr_u32(attr));
 }
 
@@ -2041,7 +2089,8 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 	if (tb[TCA_FLOWER_INDEV]) {
 		struct rtattr *attr = tb[TCA_FLOWER_INDEV];
 
-		print_string(PRINT_ANY, "indev", "\n  indev %s",
+		print_nl();
+		print_string(PRINT_ANY, "indev", "  indev %s",
 			     rta_getattr_str(attr));
 	}
 
@@ -2050,14 +2099,16 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 	if (tb[TCA_FLOWER_KEY_VLAN_ID]) {
 		struct rtattr *attr = tb[TCA_FLOWER_KEY_VLAN_ID];
 
-		print_uint(PRINT_ANY, "vlan_id", "\n  vlan_id %u",
+		print_nl();
+		print_uint(PRINT_ANY, "vlan_id", "  vlan_id %u",
 			   rta_getattr_u16(attr));
 	}
 
 	if (tb[TCA_FLOWER_KEY_VLAN_PRIO]) {
 		struct rtattr *attr = tb[TCA_FLOWER_KEY_VLAN_PRIO];
 
-		print_uint(PRINT_ANY, "vlan_prio", "\n  vlan_prio %d",
+		print_nl();
+		print_uint(PRINT_ANY, "vlan_prio", "  vlan_prio %d",
 			   rta_getattr_u8(attr));
 	}
 
@@ -2065,7 +2116,8 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 		SPRINT_BUF(buf);
 		struct rtattr *attr = tb[TCA_FLOWER_KEY_VLAN_ETH_TYPE];
 
-		print_string(PRINT_ANY, "vlan_ethtype", "\n  vlan_ethtype %s",
+		print_nl();
+		print_string(PRINT_ANY, "vlan_ethtype", "  vlan_ethtype %s",
 			     ll_proto_n2a(rta_getattr_u16(attr),
 			     buf, sizeof(buf)));
 	}
@@ -2073,14 +2125,16 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 	if (tb[TCA_FLOWER_KEY_CVLAN_ID]) {
 		struct rtattr *attr = tb[TCA_FLOWER_KEY_CVLAN_ID];
 
-		print_uint(PRINT_ANY, "cvlan_id", "\n  cvlan_id %u",
+		print_nl();
+		print_uint(PRINT_ANY, "cvlan_id", "  cvlan_id %u",
 			   rta_getattr_u16(attr));
 	}
 
 	if (tb[TCA_FLOWER_KEY_CVLAN_PRIO]) {
 		struct rtattr *attr = tb[TCA_FLOWER_KEY_CVLAN_PRIO];
 
-		print_uint(PRINT_ANY, "cvlan_prio", "\n  cvlan_prio %d",
+		print_nl();
+		print_uint(PRINT_ANY, "cvlan_prio", " cvlan_prio %d",
 			   rta_getattr_u8(attr));
 	}
 
@@ -2088,7 +2142,8 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 		SPRINT_BUF(buf);
 		struct rtattr *attr = tb[TCA_FLOWER_KEY_CVLAN_ETH_TYPE];
 
-		print_string(PRINT_ANY, "cvlan_ethtype", "\n  cvlan_ethtype %s",
+		print_nl();
+		print_string(PRINT_ANY, "cvlan_ethtype", "  cvlan_ethtype %s",
 			     ll_proto_n2a(rta_getattr_u16(attr),
 			     buf, sizeof(buf)));
 	}
@@ -2124,11 +2179,13 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 			     tb[TCA_FLOWER_KEY_IPV6_SRC_MASK]);
 
 	nl_type = flower_port_attr_type(ip_proto, FLOWER_ENDPOINT_DST);
+	nl_mask_type = flower_port_attr_mask_type(ip_proto, FLOWER_ENDPOINT_DST);
 	if (nl_type >= 0)
-		flower_print_port("dst_port", tb[nl_type]);
+		flower_print_port("dst_port", tb[nl_type], tb[nl_mask_type]);
 	nl_type = flower_port_attr_type(ip_proto, FLOWER_ENDPOINT_SRC);
+	nl_mask_type = flower_port_attr_mask_type(ip_proto, FLOWER_ENDPOINT_SRC);
 	if (nl_type >= 0)
-		flower_print_port("src_port", tb[nl_type]);
+		flower_print_port("src_port", tb[nl_type], tb[nl_mask_type]);
 
 	if (!flower_port_range_attr_type(ip_proto, FLOWER_ENDPOINT_DST,
 					 &min_port_type, &max_port_type))
@@ -2188,7 +2245,8 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 
 	flower_print_key_id("enc_key_id", tb[TCA_FLOWER_KEY_ENC_KEY_ID]);
 
-	flower_print_port("enc_dst_port", tb[TCA_FLOWER_KEY_ENC_UDP_DST_PORT]);
+	flower_print_port("enc_dst_port", tb[TCA_FLOWER_KEY_ENC_UDP_DST_PORT],
+			  tb[TCA_FLOWER_KEY_ENC_UDP_DST_PORT_MASK]);
 
 	flower_print_ip_attr("enc_tos", tb[TCA_FLOWER_KEY_ENC_IP_TOS],
 			    tb[TCA_FLOWER_KEY_ENC_IP_TOS_MASK]);
@@ -2215,13 +2273,17 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 	if (tb[TCA_FLOWER_FLAGS]) {
 		__u32 flags = rta_getattr_u32(tb[TCA_FLOWER_FLAGS]);
 
-		if (flags & TCA_CLS_FLAGS_SKIP_HW)
-			print_bool(PRINT_ANY, "skip_hw", "\n  skip_hw", true);
-		if (flags & TCA_CLS_FLAGS_SKIP_SW)
-			print_bool(PRINT_ANY, "skip_sw", "\n  skip_sw", true);
-
+		if (flags & TCA_CLS_FLAGS_SKIP_HW) {
+			print_nl();
+			print_bool(PRINT_ANY, "skip_hw", "  skip_hw", true);
+		}
+		if (flags & TCA_CLS_FLAGS_SKIP_SW) {
+			print_nl();
+			print_bool(PRINT_ANY, "skip_sw", "  skip_sw", true);
+		}
 		if (flags & TCA_CLS_FLAGS_IN_HW) {
-			print_bool(PRINT_ANY, "in_hw", "\n  in_hw", true);
+			print_nl();
+			print_bool(PRINT_ANY, "in_hw", "  in_hw", true);
 
 			if (tb[TCA_FLOWER_IN_HW_COUNT]) {
 				__u32 count = rta_getattr_u32(tb[TCA_FLOWER_IN_HW_COUNT]);
@@ -2229,9 +2291,10 @@ static int flower_print_opt(struct filter_util *qu, FILE *f,
 				print_uint(PRINT_ANY, "in_hw_count",
 					   " in_hw_count %u", count);
 			}
+		} else if (flags & TCA_CLS_FLAGS_NOT_IN_HW) {
+			print_nl();
+			print_bool(PRINT_ANY, "not_in_hw", "  not_in_hw", true);
 		}
-		else if (flags & TCA_CLS_FLAGS_NOT_IN_HW)
-			print_bool(PRINT_ANY, "not_in_hw", "\n  not_in_hw", true);
 	}
 
 	if (tb[TCA_FLOWER_ACT])

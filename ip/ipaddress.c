@@ -484,6 +484,24 @@ static void print_vfinfo(FILE *fp, struct ifinfomsg *ifi, struct rtattr *vfinfo)
 				   vf_spoofchk->setting);
 	}
 
+	if (vf[IFLA_VF_IB_NODE_GUID]) {
+		struct ifla_vf_guid *guid = RTA_DATA(vf[IFLA_VF_IB_NODE_GUID]);
+		uint64_t node_guid = ntohll(guid->guid);
+
+		print_string(PRINT_ANY, "node guid", ", NODE_GUID %s",
+			     ll_addr_n2a((const unsigned char *)&node_guid,
+					 sizeof(node_guid), ARPHRD_INFINIBAND,
+					 b1, sizeof(b1)));
+	}
+	if (vf[IFLA_VF_IB_PORT_GUID]) {
+		struct ifla_vf_guid *guid = RTA_DATA(vf[IFLA_VF_IB_PORT_GUID]);
+		uint64_t port_guid = ntohll(guid->guid);
+
+		print_string(PRINT_ANY, "port guid", ", PORT_GUID %s",
+			     ll_addr_n2a((const unsigned char *)&port_guid,
+					 sizeof(port_guid), ARPHRD_INFINIBAND,
+					 b1, sizeof(b1)));
+	}
 	if (vf[IFLA_VF_LINK_STATE]) {
 		struct ifla_vf_link_state *vf_linkstate =
 			RTA_DATA(vf[IFLA_VF_LINK_STATE]);
@@ -879,7 +897,7 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 	if (filter.up && !(ifi->ifi_flags&IFF_UP))
 		return -1;
 
-	parse_rtattr(tb, IFLA_MAX, IFLA_RTA(ifi), len);
+	parse_rtattr_flags(tb, IFLA_MAX, IFLA_RTA(ifi), len, NLA_F_NESTED);
 
 	name = get_ifname_rta(ifi->ifi_index, tb[IFLA_IFNAME]);
 	if (!name)
@@ -1135,6 +1153,22 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 			open_json_object(NULL);
 			print_vfinfo(fp, ifi, i);
 			close_json_object();
+		}
+		close_json_array(PRINT_JSON, NULL);
+	}
+
+	if (tb[IFLA_PROP_LIST]) {
+		struct rtattr *i, *proplist = tb[IFLA_PROP_LIST];
+		int rem = RTA_PAYLOAD(proplist);
+
+		open_json_array(PRINT_JSON, "altnames");
+		for (i = RTA_DATA(proplist); RTA_OK(i, rem);
+		     i = RTA_NEXT(i, rem)) {
+			if (i->rta_type != IFLA_ALT_IFNAME)
+				continue;
+			print_string(PRINT_FP, NULL, "%s    altname ", _SL_);
+			print_string(PRINT_ANY, NULL,
+				     "%s", rta_getattr_str(i));
 		}
 		close_json_array(PRINT_JSON, NULL);
 	}
@@ -1599,7 +1633,8 @@ static int show_handler(struct rtnl_ctrl_data *ctrl,
 	struct ifaddrmsg *ifa = NLMSG_DATA(n);
 
 	open_json_object(NULL);
-	print_int(PRINT_ANY, "index", "if%d:\n", ifa->ifa_index);
+	print_int(PRINT_ANY, "index", "if%d:", ifa->ifa_index);
+	print_nl();
 	print_addrinfo(n, stdout);
 	close_json_object();
 	return 0;

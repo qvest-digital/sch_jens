@@ -11,7 +11,7 @@ Rules-Requires-Root: no
 Build-Depends: bison,
                debhelper (>= 10~),
                flex,
-               iptables-dev,
+               libxtables-dev,
                libatm1-dev,
                libbsd-dev,
                libcap-dev,

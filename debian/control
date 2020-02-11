@@ -6,7 +6,7 @@ Uploaders: Luca Boccassi <bluca@debian.org>
 Homepage: https://wiki.linuxfoundation.org/networking/iproute2
 Vcs-Browser: https://salsa.debian.org/debian/iproute2.git
 Vcs-Git: https://salsa.debian.org/debian/iproute2.git
-Standards-Version: 4.4.0
+Standards-Version: 4.5.0
 Rules-Requires-Root: no
 Build-Depends: bison,
                debhelper (>= 10~),

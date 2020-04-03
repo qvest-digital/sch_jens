@@ -70,6 +70,7 @@ TCMODULES += q_codel.o
 TCMODULES += q_fq_codel.o
 TCMODULES += q_fq.o
 TCMODULES += q_pie.o
+TCMODULES += q_fq_pie.o
 TCMODULES += q_cake.o
 TCMODULES += q_hhf.o
 TCMODULES += q_clsact.o
@@ -79,6 +80,7 @@ TCMODULES += q_cbs.o
 TCMODULES += q_etf.o
 TCMODULES += q_taprio.o
 TCMODULES += q_plug.o
+TCMODULES += q_ets.o
 
 TCSO :=
 ifeq ($(TC_CONFIG_ATM),y)

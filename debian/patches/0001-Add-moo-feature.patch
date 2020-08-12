@@ -29,9 +29,9 @@ Subject: Add moo feature
  static const struct cmd {
  	const char *cmd;
  	int (*func)(int argc, char **argv);
-@@ -104,6 +118,7 @@
- 	{ "sr",		do_seg6 },
+@@ -105,6 +119,7 @@
  	{ "nexthop",	do_ipnh },
+ 	{ "mptcp",	do_mptcp },
  	{ "help",	do_help },
 +	{ "moo",	do_moo }, 
  	{ 0 }

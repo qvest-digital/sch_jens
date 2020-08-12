@@ -19,18 +19,25 @@
 #include <limits.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <signal.h>
+#include <time.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <sys/sysinfo.h>
 #define _LINUX_SYSINFO_H /* avoid collision with musl header */
 #include <linux/genetlink.h>
 #include <linux/devlink.h>
+#include <linux/netlink.h>
 #include <libmnl/libmnl.h>
 #include <netinet/ether.h>
+#include <sys/select.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 
-#include "SNAPSHOT.h"
+#include "version.h"
 #include "list.h"
 #include "mnlg.h"
-#include "json_writer.h"
+#include "json_print.h"
 #include "utils.h"
 #include "namespace.h"
 
@@ -292,6 +299,7 @@ static void ifname_map_free(struct ifname_map *ifname_map)
 #define DL_OPT_TRAP_POLICER_ID		BIT(34)
 #define DL_OPT_TRAP_POLICER_RATE	BIT(35)
 #define DL_OPT_TRAP_POLICER_BURST	BIT(36)
+#define DL_OPT_HEALTH_REPORTER_AUTO_DUMP     BIT(37)
 
 struct dl_opts {
 	uint64_t present; /* flags of present items */
@@ -328,6 +336,7 @@ struct dl_opts {
 	const char *reporter_name;
 	uint64_t reporter_graceful_period;
 	bool reporter_auto_recover;
+	bool reporter_auto_dump;
 	const char *trap_name;
 	const char *trap_group_name;
 	enum devlink_trap_action trap_action;
@@ -1147,6 +1156,8 @@ static int trap_action_get(const char *actionstr,
 		*p_action = DEVLINK_TRAP_ACTION_DROP;
 	} else if (strcmp(actionstr, "trap") == 0) {
 		*p_action = DEVLINK_TRAP_ACTION_TRAP;
+	} else if (strcmp(actionstr, "mirror") == 0) {
+		*p_action = DEVLINK_TRAP_ACTION_MIRROR;
 	} else {
 		pr_err("Unknown trap action \"%s\"\n", actionstr);
 		return -EINVAL;
@@ -1474,6 +1485,13 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 			if (err)
 				return err;
 			o_found |= DL_OPT_HEALTH_REPORTER_AUTO_RECOVER;
+		} else if (dl_argv_match(dl, "auto_dump") &&
+			(o_all & DL_OPT_HEALTH_REPORTER_AUTO_DUMP)) {
+			dl_arg_inc(dl);
+			err = dl_argv_bool(dl, &opts->reporter_auto_dump);
+			if (err)
+				return err;
+			o_found |= DL_OPT_HEALTH_REPORTER_AUTO_DUMP;
 		} else if (dl_argv_match(dl, "trap") &&
 			   (o_all & DL_OPT_TRAP_NAME)) {
 			dl_arg_inc(dl);
@@ -1656,6 +1674,9 @@ static void dl_opts_put(struct nlmsghdr *nlh, struct dl *dl)
 	if (opts->present & DL_OPT_HEALTH_REPORTER_AUTO_RECOVER)
 		mnl_attr_put_u8(nlh, DEVLINK_ATTR_HEALTH_REPORTER_AUTO_RECOVER,
 				opts->reporter_auto_recover);
+	if (opts->present & DL_OPT_HEALTH_REPORTER_AUTO_DUMP)
+		mnl_attr_put_u8(nlh, DEVLINK_ATTR_HEALTH_REPORTER_AUTO_DUMP,
+				opts->reporter_auto_dump);
 	if (opts->present & DL_OPT_TRAP_NAME)
 		mnl_attr_put_strz(nlh, DEVLINK_ATTR_TRAP_NAME,
 				  opts->trap_name);
@@ -2336,6 +2357,11 @@ static const struct param_val_conv param_val_conv[] = {
 		.name = "fw_load_policy",
 		.vstr = "flash",
 		.vuint = DEVLINK_PARAM_FW_LOAD_POLICY_VALUE_FLASH,
+	},
+	{
+		.name = "fw_load_policy",
+		.vstr = "disk",
+		.vuint = DEVLINK_PARAM_FW_LOAD_POLICY_VALUE_DISK,
 	},
 	{
 		.name = "reset_dev_on_drv_probe",
@@ -6464,6 +6490,23 @@ static int cmd_region_read(struct dl *dl)
 	return err;
 }
 
+static int cmd_region_snapshot_new_cb(const struct nlmsghdr *nlh, void *data)
+{
+	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+	struct nlattr *tb[DEVLINK_ATTR_MAX + 1] = {};
+	struct dl *dl = data;
+
+	mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
+	if (!tb[DEVLINK_ATTR_BUS_NAME] || !tb[DEVLINK_ATTR_DEV_NAME] ||
+	    !tb[DEVLINK_ATTR_REGION_NAME] ||
+	    !tb[DEVLINK_ATTR_REGION_SNAPSHOT_ID])
+		return MNL_CB_ERROR;
+
+	pr_out_region(dl, tb);
+
+	return MNL_CB_OK;
+}
+
 static int cmd_region_snapshot_new(struct dl *dl)
 {
 	struct nlmsghdr *nlh;
@@ -6472,12 +6515,15 @@ static int cmd_region_snapshot_new(struct dl *dl)
 	nlh = mnlg_msg_prepare(dl->nlg, DEVLINK_CMD_REGION_NEW,
 			       NLM_F_REQUEST | NLM_F_ACK);
 
-	err = dl_argv_parse_put(nlh, dl, DL_OPT_HANDLE_REGION |
-				DL_OPT_REGION_SNAPSHOT_ID, 0);
+	err = dl_argv_parse_put(nlh, dl, DL_OPT_HANDLE_REGION,
+				DL_OPT_REGION_SNAPSHOT_ID);
 	if (err)
 		return err;
 
-	return _mnlg_socket_sndrcv(dl->nlg, nlh, NULL, NULL);
+	pr_out_section_start(dl, "regions");
+	err = _mnlg_socket_sndrcv(dl->nlg, nlh, cmd_region_snapshot_new_cb, dl);
+	pr_out_section_end(dl);
+	return err;
 }
 
 static void cmd_region_help(void)
@@ -6525,7 +6571,8 @@ static int cmd_health_set_params(struct dl *dl)
 			       NLM_F_REQUEST | NLM_F_ACK);
 	err = dl_argv_parse(dl, DL_OPT_HANDLE | DL_OPT_HEALTH_REPORTER_NAME,
 			    DL_OPT_HEALTH_REPORTER_GRACEFUL_PERIOD |
-			    DL_OPT_HEALTH_REPORTER_AUTO_RECOVER);
+			    DL_OPT_HEALTH_REPORTER_AUTO_RECOVER |
+			    DL_OPT_HEALTH_REPORTER_AUTO_DUMP);
 	if (err)
 		return err;
 
@@ -6939,6 +6986,9 @@ static void pr_out_health(struct dl *dl, struct nlattr **tb_health)
 	if (tb[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_RECOVER])
 		print_bool(PRINT_ANY, "auto_recover", " auto_recover %s",
 			   mnl_attr_get_u8(tb[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_RECOVER]));
+	if (tb[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_DUMP])
+		print_bool(PRINT_ANY, "auto_dump", " auto_dump %s",
+			   mnl_attr_get_u8(tb[DEVLINK_ATTR_HEALTH_REPORTER_AUTO_DUMP]));
 
 	__pr_out_indent_dec();
 	pr_out_handle_end(dl);
@@ -6995,6 +7045,7 @@ static void cmd_health_help(void)
 	pr_err("       devlink health set DEV reporter REPORTER_NAME\n");
 	pr_err("                          [ grace_period MSEC ]\n");
 	pr_err("                          [ auto_recover { true | false } ]\n");
+	pr_err("                          [ auto_dump    { true | false } ]\n");
 }
 
 static int cmd_health(struct dl *dl)
@@ -7036,6 +7087,8 @@ static const char *trap_type_name(uint8_t type)
 		return "drop";
 	case DEVLINK_TRAP_TYPE_EXCEPTION:
 		return "exception";
+	case DEVLINK_TRAP_TYPE_CONTROL:
+		return "control";
 	default:
 		return "<unknown type>";
 	}
@@ -7048,6 +7101,8 @@ static const char *trap_action_name(uint8_t action)
 		return "drop";
 	case DEVLINK_TRAP_ACTION_TRAP:
 		return "trap";
+	case DEVLINK_TRAP_ACTION_MIRROR:
+		return "mirror";
 	default:
 		return "<unknown action>";
 	}
@@ -7122,9 +7177,9 @@ static int cmd_trap_show_cb(const struct nlmsghdr *nlh, void *data)
 
 static void cmd_trap_help(void)
 {
-	pr_err("Usage: devlink trap set DEV trap TRAP [ action { trap | drop } ]\n");
+	pr_err("Usage: devlink trap set DEV trap TRAP [ action { trap | drop | mirror } ]\n");
 	pr_err("       devlink trap show [ DEV trap TRAP ]\n");
-	pr_err("       devlink trap group set DEV group GROUP [ action { trap | drop } ]\n");
+	pr_err("       devlink trap group set DEV group GROUP [ action { trap | drop | mirror } ]\n");
 	pr_err("                              [ policer POLICER ] [ nopolicer ]\n");
 	pr_err("       devlink trap group show [ DEV group GROUP ]\n");
 	pr_err("       devlink trap policer set DEV policer POLICER [ rate RATE ] [ burst BURST ]\n");
@@ -7551,7 +7606,7 @@ int main(int argc, char **argv)
 
 		switch (opt) {
 		case 'V':
-			printf("devlink utility, iproute2-ss%s\n", SNAPSHOT);
+			printf("devlink utility, iproute2-%s\n", version);
 			ret = EXIT_SUCCESS;
 			goto dl_free;
 		case 'f':

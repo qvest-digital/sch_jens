@@ -18,11 +18,12 @@
 #include <string.h>
 #include <errno.h>
 
-#include "SNAPSHOT.h"
+#include "version.h"
 #include "utils.h"
 #include "ip_common.h"
 #include "namespace.h"
 #include "color.h"
+#include "rt_names.h"
 
 int preferred_family = AF_UNSPEC;
 int human_readable;
@@ -36,7 +37,6 @@ int timestamp;
 int force;
 int max_flush_loops = 10;
 int batch_mode;
-int numeric;
 bool do_all;
 
 struct rtnl_handle rth = { .fd = -1 };
@@ -51,7 +51,7 @@ static void usage(void)
 		"where  OBJECT := { link | address | addrlabel | route | rule | neigh | ntable |\n"
 		"                   tunnel | tuntap | maddress | mroute | mrule | monitor | xfrm |\n"
 		"                   netns | l2tp | fou | macsec | tcp_metrics | token | netconf | ila |\n"
-		"                   vrf | sr | nexthop }\n"
+		"                   vrf | sr | nexthop | mptcp }\n"
 		"       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n"
 		"                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n"
 		"                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n"
@@ -103,6 +103,7 @@ static const struct cmd {
 	{ "vrf",	do_ipvrf},
 	{ "sr",		do_seg6 },
 	{ "nexthop",	do_ipnh },
+	{ "mptcp",	do_mptcp },
 	{ "help",	do_help },
 	{ 0 }
 };
@@ -254,7 +255,7 @@ int main(int argc, char **argv)
 			++timestamp;
 			++timestamp_short;
 		} else if (matches(opt, "-Version") == 0) {
-			printf("ip utility, iproute2-ss%s\n", SNAPSHOT);
+			printf("ip utility, iproute2-%s\n", version);
 			exit(0);
 		} else if (matches(opt, "-force") == 0) {
 			++force;

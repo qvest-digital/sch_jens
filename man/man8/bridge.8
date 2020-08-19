@@ -28,10 +28,9 @@ bridge \- show / manipulate bridge addresses and devices
 \fB\-o\fR[\fIneline\fr] }
 
 .ti -8
-.BR "bridge link set"
+.B "bridge link set"
 .B dev
-.IR DEV
-.IR " [ "
+.IR DEV " [ "
 .B cost
 .IR COST " ] [ "
 .B priority
@@ -71,18 +70,18 @@ bridge \- show / manipulate bridge addresses and devices
 .B dst
 .IR IPADDR " ] [ "
 .B src_vni
-.IR SRC_VNI " ] ["
+.IR VNI " ] ["
 .B vni
 .IR VNI " ] ["
 .B port
 .IR PORT " ] ["
 .B via
-.IR DEVICE " ]"
+.IR DEVICE " ] ["
+.B src_vni
+.IR VNI " ]"
 
 .ti -8
-.BR "bridge fdb" " [ " show " ] [ "
-.B dev
-.IR DEV " ] [ "
+.BR "bridge fdb" " [ [ " show " ] [ "
 .B br
 .IR BRDEV " ] [ "
 .B brport
@@ -90,14 +89,31 @@ bridge \- show / manipulate bridge addresses and devices
 .B vlan
 .IR VID " ] [ "
 .B state
-.IR STATE " ]"
+.IR STATE " ] ["
+.B dynamic
+.IR "] ]"
+
+.ti -8
+.BR "bridge fdb get" " ["
+.B to
+.IR "]"
+.I LLADDR "[ "
+.B br
+.IR BRDEV " ]"
+.B { brport | dev }
+.IR DEV " [ "
+.B vlan
+.IR VID  " ] [ "
+.B vni
+.IR VNI " ] ["
+.BR self " ] [ " master " ] [ " dynamic " ]"
 
 .ti -8
 .BR "bridge mdb" " { " add " | " del " } "
 .B dev
-.IR DEV
+.I DEV
 .B port
-.IR PORT
+.I PORT
 .B grp
 .IR GROUP " [ "
 .BR permanent " | " temp " ] [ "
@@ -112,10 +128,10 @@ bridge \- show / manipulate bridge addresses and devices
 .ti -8
 .BR "bridge vlan" " { " add " | " del " } "
 .B dev
-.IR DEV
+.I DEV
 .B vid
 .IR VID " [ "
-.BR tunnel_info
+.B tunnel_info
 .IR TUNNEL_ID " ] [ "
 .BR pvid " ] [ " untagged " ] [ "
 .BR self " ] [ " master " ] "
@@ -155,7 +171,7 @@ to the specified network namespace
 Actually it just simplifies executing of:
 
 .B ip netns exec
-.IR NETNS
+.I NETNS
 .B bridge
 .RI "[ " OPTIONS " ] " OBJECT " { " COMMAND " | "
 .BR help " }"
@@ -172,7 +188,7 @@ Read commands from provided file or standard input and invoke them.
 First failure will cause termination of bridge command.
 
 .TP
-.BR "\-force"
+.B "\-force"
 Don't terminate bridge command on errors in batch mode.
 If there were any errors during execution of the commands, the application
 return code will be non zero.
@@ -278,36 +294,49 @@ the STP path cost of the specified port.
 .BI priority " PRIO "
 the STP port priority. The priority value is an unsigned 8-bit quantity
 (number between 0 and 255). This metric is used in the designated port an
-droot port selectio algorithms.
+droot port selection algorithms.
 
 .TP
 .BI state " STATE "
-the operation state of the port. This is primarily used by user space STP/RSTP
-implementation. One may enter a lowercased port state name, or one of the
+the operation state of the port. Except state 0 (disable STP or BPDU filter feature),
+this is primarily used by user space STP/RSTP
+implementation. One may enter port state name (case insensitive), or one of the
 numbers below. Negative inputs are ignored, and unrecognized names return an
 error.
 
 .B 0
-- port is DISABLED. Make this port completely inactive.
+- port is in STP
+.B DISABLED
+state. Make this port completely inactive for STP. This is also called
+BPDU filter and could be used to disable STP on an untrusted port, like
+a leaf virtual devices.
 .sp
 
 .B 1
-- STP LISTENING state. Only valid if STP is enabled on the bridge. In this
+- port is in STP
+.B LISTENING
+state. Only valid if STP is enabled on the bridge. In this
 state the port listens for STP BPDUs and drops all other traffic frames.
 .sp
 
 .B 2
-- STP LEARNING state. Only valid if STP is enabled on the bridge. In this
+- port is in STP
+.B LEARNING
+state. Only valid if STP is enabled on the bridge. In this
 state the port will accept traffic only for the purpose of updating MAC
 address tables.
 .sp
 
 .B 3
-- STP FORWARDING state. Port is fully active.
+- port is in STP
+.B FORWARDING
+state. Port is fully active.
 .sp
 
 .B 4
-- STP BLOCKING state. Only valid if STP is enabled on the bridge. This state
+- port is in STP
+.B BLOCKING
+state. Only valid if STP is enabled on the bridge. This state
 is used during the STP election process. In this state, port will only process
 STP BPDUs.
 .sp
@@ -316,12 +345,25 @@ STP BPDUs.
 .BR "guard on " or " guard off "
 Controls whether STP BPDUs will be processed by the bridge port. By default,
 the flag is turned off allowed BPDU processing. Turning this flag on will
-cause the port to stop processing STP BPDUs.
+disables
+the bridge port if a STP BPDU packet is received.
+
+If running Spanning Tree on bridge, hostile devices on the network
+may send BPDU on a port and cause network failure. Setting
+.B guard on
+will detect and stop this by disabling the port.
+The port will be restarted if link is brought down, or
+removed and reattached.  For example if guard is enable on
+eth0:
+
+.B ip link set dev eth0 down; ip link set dev eth0 up
 
 .TP
 .BR "hairpin on " or " hairpin off "
 Controls whether traffic may be send back out of the port on which it was
-received. By default, this flag is turned off and the bridge will not forward
+received. This option is also called reflective relay mode, and is used to support
+basic VEPA (Virtual Ethernet Port Aggregator) capabilities.
+By default, this flag is turned off and the bridge will not forward
 traffic back out of the receiving port.
 
 .TP
@@ -334,6 +376,11 @@ enabled on the bridge. By default the flag is off.
 .BR "root_block on " or " root_block off "
 Controls whether a given port is allowed to become root port or not. Only used
 when STP is enabled on the bridge. By default the flag is off.
+
+This feature is also called root port guard.
+If BPDU is received from a leaf (edge) port, it should not
+be elected as root port. This could be used if using STP on a bridge and the downstream bridges are not fully
+trusted; this prevents a hostile guest from rerouting traffic.
 
 .TP
 .BR "learning on " or " learning off "
@@ -351,7 +398,7 @@ bridge FDB.
 Controls whether a given port will flood unicast traffic for which there is no FDB entry. By default this flag is on.
 
 .TP
-.BI hwmode
+.B hwmode
 Some network interface cards support HW bridge functionality and they may be
 configured in different modes. Currently support modes are:
 
@@ -371,6 +418,32 @@ there is no MDB entry. By default this flag is on.
 .BR "mcast_to_unicast on " or " mcast_to_unicast off "
 Controls whether a given port will replicate packets using unicast
 instead of multicast. By default this flag is off.
+
+This is done by copying the packet per host and
+changing the multicast destination MAC to a unicast one accordingly.
+
+.B mcast_to_unicast
+works on top of the multicast snooping feature of
+the bridge. Which means unicast copies are only delivered to hosts which
+are interested in it and signalized this via IGMP/MLD reports
+previously.
+
+This feature is intended for interface types which have a more reliable
+and/or efficient way to deliver unicast packets than broadcast ones
+(e.g. WiFi).
+
+However, it should only be enabled on interfaces where no IGMPv2/MLDv1
+report suppression takes place. IGMP/MLD report suppression issue is usually
+overcome by the network daemon (supplicant) enabling AP isolation and
+by that separating all STAs.
+
+Delivery of STA-to-STA IP multicast is made possible again by
+enabling and utilizing the bridge hairpin mode, which considers the
+incoming port as a potential outgoing port, too (see
+.B hairpin
+option).
+Hairpin mode is performed after multicast snooping, therefore leading to
+only deliver reports to STAs running a multicast router.
 
 .TP
 .BR "neigh_suppress on " or " neigh_suppress off "
@@ -394,24 +467,27 @@ If the port loses carrier all traffic will be redirected to the
 configured backup port
 
 .TP
-.BR nobackup_port
+.B nobackup_port
 Removes the currently configured backup port
 
 .TP
-.BI self
+.B self
 link setting is configured on specified physical device
 
 .TP
-.BI master
+.B master
 link setting is configured on the software bridge (default)
 
 .TP
 .BR "\-t" , " \-timestamp"
 display current time when using monitor option.
 
-.SS bridge link show - list bridge port configuration.
+.SS bridge link show - list ports configuration for all bridges.
 
-This command displays the current bridge port configuration and flags.
+This command displays port configuration and flags for all bridges.
+
+To display port configuration and flags for a specific bridge, use the
+"ip link show master <bridge_device>" command.
 
 .SH bridge fdb - forwarding database management
 
@@ -428,7 +504,7 @@ and delete old ones.
 This command creates a new fdb entry.
 
 .TP
-.BI "LLADDR"
+.B LLADDR
 the Ethernet MAC address.
 
 .TP
@@ -458,7 +534,7 @@ the interface to which this address is associated.
 .B router
 - the destination address is associated with a router.
 Valid if the referenced device is a VXLAN type device and has
-route shortcircuit enabled.
+route short circuit enabled.
 .sp
 
 .B use
@@ -487,7 +563,7 @@ the IP address of the destination
 VXLAN tunnel endpoint where the Ethernet MAC ADDRESS resides.
 
 .TP
-.BI src_vni " SRC VNI"
+.BI src_vni " VNI"
 the src VNI Network Identifier (or VXLAN Segment ID)
 this entry belongs to. Used only when the vxlan device is in
 external or collect metadata mode. If omitted the value specified at
@@ -549,6 +625,35 @@ With the
 .B -statistics
 option, the command becomes verbose. It prints out the last updated
 and last used time for each entry.
+
+.SS bridge fdb get - get bridge forwarding entry.
+
+lookup a bridge forwarding table entry.
+
+.TP
+.B LLADDR
+the Ethernet MAC address.
+
+.TP
+.BI dev " DEV"
+the interface to which this address is associated.
+
+.TP
+.BI brport " DEV"
+the bridge port to which this address is associated. same as dev above.
+
+.TP
+.BI br " DEV"
+the bridge to which this address is associated.
+
+.TP
+.B self
+- the address is associated with the port drivers fdb. Usually hardware.
+
+.TP
+.B master
+- the address is associated with master devices fdb. Usually software (default).
+.sp
 
 .SH bridge mdb - multicast group database management
 
@@ -650,21 +755,21 @@ dst_metadata for every packet that belongs to this vlan (applicable to
 bridge ports with vlan_tunnel flag set).
 
 .TP
-.BI pvid
+.B pvid
 the vlan specified is to be considered a PVID at ingress.
 Any untagged frames will be assigned to this VLAN.
 
 .TP
-.BI untagged
+.B untagged
 the vlan specified is to be treated as untagged on egress.
 
 .TP
-.BI self
+.B self
 the vlan is configured on the specified physical device. Required if the
 device is the bridge device.
 
 .TP
-.BI master
+.B master
 the vlan is configured on the software bridge (default).
 
 .SS bridge vlan delete - delete a vlan filter entry

@@ -4,14 +4,14 @@ Priority: optional
 Maintainer: Alexander Wirt <formorer@debian.org>
 Uploaders: Luca Boccassi <bluca@debian.org>
 Homepage: https://wiki.linuxfoundation.org/networking/iproute2
-Vcs-Browser: https://salsa.debian.org/debian/iproute2.git
+Vcs-Browser: https://salsa.debian.org/debian/iproute2
 Vcs-Git: https://salsa.debian.org/debian/iproute2.git
-Standards-Version: 4.4.0
+Standards-Version: 4.5.0
 Rules-Requires-Root: no
 Build-Depends: bison,
-               debhelper (>= 10~),
+               debhelper-compat (= 12),
                flex,
-               iptables-dev,
+               libxtables-dev,
                libatm1-dev,
                libbsd-dev,
                libcap-dev,

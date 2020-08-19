@@ -16,7 +16,16 @@
 #include "utils.h"
 
 static unsigned int filter_index, filter_vlan;
-static int show_vlan_tunnel_info = 0;
+
+enum vlan_show_subject {
+	VLAN_SHOW_VLAN,
+	VLAN_SHOW_TUNNELINFO,
+};
+
+#define VLAN_ID_LEN 9
+
+#define __stringify_1(x...) #x
+#define __stringify(x...) __stringify_1(x)
 
 static void usage(void)
 {
@@ -71,8 +80,8 @@ static int add_tunnel_info(struct nlmsghdr *n, int reqsize,
 
 	tinfo = addattr_nest(n, reqsize, IFLA_BRIDGE_VLAN_TUNNEL_INFO);
 	addattr32(n, reqsize, IFLA_BRIDGE_VLAN_TUNNEL_ID, tun_id);
-	addattr32(n, reqsize, IFLA_BRIDGE_VLAN_TUNNEL_VID, vid);
-	addattr32(n, reqsize, IFLA_BRIDGE_VLAN_TUNNEL_FLAGS, flags);
+	addattr16(n, reqsize, IFLA_BRIDGE_VLAN_TUNNEL_VID, vid);
+	addattr16(n, reqsize, IFLA_BRIDGE_VLAN_TUNNEL_FLAGS, flags);
 
 	addattr_nest_end(n, tinfo);
 
@@ -252,12 +261,14 @@ static int filter_vlan_check(__u16 vid, __u16 flags)
 	return 1;
 }
 
-static void open_vlan_port(int ifi_index, const char *fmt)
+static void open_vlan_port(int ifi_index, enum vlan_show_subject subject)
 {
 	open_json_object(NULL);
-	print_color_string(PRINT_ANY, COLOR_IFNAME, "ifname", fmt,
+	print_color_string(PRINT_ANY, COLOR_IFNAME, "ifname",
+			   "%-" __stringify(IFNAMSIZ) "s  ",
 			   ll_index_to_name(ifi_index));
-	open_json_array(PRINT_JSON, "vlans");
+	open_json_array(PRINT_JSON,
+			subject == VLAN_SHOW_VLAN ? "vlans": "tunnels");
 }
 
 static void close_vlan_port(void)
@@ -266,34 +277,34 @@ static void close_vlan_port(void)
 	close_json_object();
 }
 
-static void print_range(const char *name, __u16 start, __u16 id)
+static unsigned int print_range(const char *name, __u32 start, __u32 id)
 {
 	char end[64];
+	int width;
 
 	snprintf(end, sizeof(end), "%sEnd", name);
 
-	print_hu(PRINT_ANY, name, "\t %hu", start);
+	width = print_uint(PRINT_ANY, name, "%u", start);
 	if (start != id)
-		print_hu(PRINT_ANY, end, "-%hu", id);
+		width += print_uint(PRINT_ANY, end, "-%u", id);
 
+	return width;
 }
 
-static void print_vlan_tunnel_info(FILE *fp, struct rtattr *tb, int ifindex)
+static void print_vlan_tunnel_info(struct rtattr *tb, int ifindex)
 {
 	struct rtattr *i, *list = tb;
 	int rem = RTA_PAYLOAD(list);
 	__u16 last_vid_start = 0;
 	__u32 last_tunid_start = 0;
+	bool opened = false;
 
-	if (!filter_vlan)
-		open_vlan_port(ifindex, "%s");
-
-	open_json_array(PRINT_JSON, "tunnel");
 	for (i = RTA_DATA(list); RTA_OK(i, rem); i = RTA_NEXT(i, rem)) {
 		struct rtattr *ttb[IFLA_BRIDGE_VLAN_TUNNEL_MAX+1];
 		__u32 tunnel_id = 0;
 		__u16 tunnel_vid = 0;
 		__u16 tunnel_flags = 0;
+		unsigned int width;
 		int vcheck_ret;
 
 		if (i->rta_type != IFLA_BRIDGE_VLAN_TUNNEL_INFO)
@@ -304,7 +315,7 @@ static void print_vlan_tunnel_info(FILE *fp, struct rtattr *tb, int ifindex)
 
 		if (ttb[IFLA_BRIDGE_VLAN_TUNNEL_VID])
 			tunnel_vid =
-				rta_getattr_u32(ttb[IFLA_BRIDGE_VLAN_TUNNEL_VID]);
+				rta_getattr_u16(ttb[IFLA_BRIDGE_VLAN_TUNNEL_VID]);
 		else
 			continue;
 
@@ -314,7 +325,7 @@ static void print_vlan_tunnel_info(FILE *fp, struct rtattr *tb, int ifindex)
 
 		if (ttb[IFLA_BRIDGE_VLAN_TUNNEL_FLAGS])
 			tunnel_flags =
-				rta_getattr_u32(ttb[IFLA_BRIDGE_VLAN_TUNNEL_FLAGS]);
+				rta_getattr_u16(ttb[IFLA_BRIDGE_VLAN_TUNNEL_FLAGS]);
 
 		if (!(tunnel_flags & BRIDGE_VLAN_INFO_RANGE_END)) {
 			last_vid_start = tunnel_vid;
@@ -327,72 +338,38 @@ static void print_vlan_tunnel_info(FILE *fp, struct rtattr *tb, int ifindex)
 		else if (vcheck_ret == 0)
 			continue;
 
-		if (tunnel_flags & BRIDGE_VLAN_INFO_RANGE_BEGIN)
-			continue;
-
-		if (filter_vlan)
-			open_vlan_port(ifindex, "%s");
+		if (!opened) {
+			open_vlan_port(ifindex, VLAN_SHOW_TUNNELINFO);
+			opened = true;
+		} else {
+			print_string(PRINT_FP, NULL,
+				     "%-" __stringify(IFNAMSIZ) "s  ", "");
+		}
 
 		open_json_object(NULL);
-		print_range("vlan", last_vid_start, tunnel_vid);
+		width = print_range("vlan", last_vid_start, tunnel_vid);
+		if (width <= VLAN_ID_LEN) {
+			char buf[VLAN_ID_LEN + 1];
+
+			snprintf(buf, sizeof(buf), "%-*s",
+				 VLAN_ID_LEN - width, "");
+			print_string(PRINT_FP, NULL, "%s  ", buf);
+		} else {
+			fprintf(stderr, "BUG: vlan range too wide, %u\n",
+				width);
+		}
 		print_range("tunid", last_tunid_start, tunnel_id);
 		close_json_object();
-
-		print_string(PRINT_FP, NULL, "%s", _SL_);
-		if (filter_vlan)
-			close_vlan_port();
+		print_nl();
 	}
 
-	if (!filter_vlan)
+	if (opened)
 		close_vlan_port();
-}
-
-static int print_vlan_tunnel(struct nlmsghdr *n, void *arg)
-{
-	struct ifinfomsg *ifm = NLMSG_DATA(n);
-	struct rtattr *tb[IFLA_MAX+1];
-	int len = n->nlmsg_len;
-	FILE *fp = arg;
-
-	if (n->nlmsg_type != RTM_NEWLINK) {
-		fprintf(stderr, "Not RTM_NEWLINK: %08x %08x %08x\n",
-			n->nlmsg_len, n->nlmsg_type, n->nlmsg_flags);
-		return 0;
-	}
-
-	len -= NLMSG_LENGTH(sizeof(*ifm));
-	if (len < 0) {
-		fprintf(stderr, "BUG: wrong nlmsg len %d\n", len);
-		return -1;
-	}
-
-	if (ifm->ifi_family != AF_BRIDGE)
-		return 0;
-
-	if (filter_index && filter_index != ifm->ifi_index)
-		return 0;
-
-	parse_rtattr(tb, IFLA_MAX, IFLA_RTA(ifm), len);
-
-	/* if AF_SPEC isn't there, vlan table is not preset for this port */
-	if (!tb[IFLA_AF_SPEC]) {
-		if (!filter_vlan && !is_json_context()) {
-			color_fprintf(fp, COLOR_IFNAME, "%s",
-				      ll_index_to_name(ifm->ifi_index));
-			fprintf(fp, "\tNone\n");
-		}
-		return 0;
-	}
-
-	print_vlan_tunnel_info(fp, tb[IFLA_AF_SPEC], ifm->ifi_index);
-
-	fflush(fp);
-	return 0;
 }
 
 static int print_vlan(struct nlmsghdr *n, void *arg)
 {
-	FILE *fp = arg;
+	enum vlan_show_subject *subject = arg;
 	struct ifinfomsg *ifm = NLMSG_DATA(n);
 	int len = n->nlmsg_len;
 	struct rtattr *tb[IFLA_MAX+1];
@@ -416,21 +393,18 @@ static int print_vlan(struct nlmsghdr *n, void *arg)
 		return 0;
 
 	parse_rtattr(tb, IFLA_MAX, IFLA_RTA(ifm), len);
-
-	/* if AF_SPEC isn't there, vlan table is not preset for this port */
-	if (!tb[IFLA_AF_SPEC]) {
-		if (!filter_vlan && !is_json_context()) {
-			color_fprintf(fp, COLOR_IFNAME, "%s",
-				      ll_index_to_name(ifm->ifi_index));
-			fprintf(fp, "\tNone\n");
-		}
+	if (!tb[IFLA_AF_SPEC])
 		return 0;
+
+	switch (*subject) {
+	case VLAN_SHOW_VLAN:
+		print_vlan_info(tb[IFLA_AF_SPEC], ifm->ifi_index);
+		break;
+	case VLAN_SHOW_TUNNELINFO:
+		print_vlan_tunnel_info(tb[IFLA_AF_SPEC], ifm->ifi_index);
+		break;
 	}
 
-	print_vlan_info(tb[IFLA_AF_SPEC], ifm->ifi_index);
-	print_string(PRINT_FP, NULL, "%s", _SL_);
-
-	fflush(fp);
 	return 0;
 }
 
@@ -451,20 +425,23 @@ static void print_vlan_flags(__u16 flags)
 static void print_one_vlan_stats(const struct bridge_vlan_xstats *vstats)
 {
 	open_json_object(NULL);
-	print_hu(PRINT_ANY, "vid", " %hu", vstats->vid);
 
+	print_hu(PRINT_ANY, "vid", "%hu", vstats->vid);
 	print_vlan_flags(vstats->flags);
+	print_nl();
 
-	print_lluint(PRINT_ANY, "rx_bytes",
-		     "\n                   RX: %llu bytes",
+	print_string(PRINT_FP, NULL, "%-" __stringify(IFNAMSIZ) "s    ", "");
+	print_lluint(PRINT_ANY, "rx_bytes", "RX: %llu bytes",
 		     vstats->rx_bytes);
 	print_lluint(PRINT_ANY, "rx_packets", " %llu packets\n",
-		vstats->rx_packets);
-	print_lluint(PRINT_ANY, "tx_bytes",
-		     "                   TX: %llu bytes",
+		     vstats->rx_packets);
+
+	print_string(PRINT_FP, NULL, "%-" __stringify(IFNAMSIZ) "s    ", "");
+	print_lluint(PRINT_ANY, "tx_bytes", "TX: %llu bytes",
 		     vstats->tx_bytes);
 	print_lluint(PRINT_ANY, "tx_packets", " %llu packets\n",
-		vstats->tx_packets);
+		     vstats->tx_packets);
+
 	close_json_object();
 }
 
@@ -499,10 +476,11 @@ static void print_vlan_stats_attr(struct rtattr *attr, int ifindex)
 
 		/* found vlan stats, first time print the interface name */
 		if (!found_vlan) {
-			open_vlan_port(ifindex, "%-16s");
+			open_vlan_port(ifindex, VLAN_SHOW_VLAN);
 			found_vlan = true;
 		} else {
-			print_string(PRINT_FP, NULL, "%-16s", "");
+			print_string(PRINT_FP, NULL,
+				     "%-" __stringify(IFNAMSIZ) "s  ", "");
 		}
 		print_one_vlan_stats(vstats);
 	}
@@ -543,7 +521,7 @@ static int print_vlan_stats(struct nlmsghdr *n, void *arg)
 	return 0;
 }
 
-static int vlan_show(int argc, char **argv)
+static int vlan_show(int argc, char **argv, int subject)
 {
 	char *filter_dev = NULL;
 	int ret = 0;
@@ -576,24 +554,22 @@ static int vlan_show(int argc, char **argv)
 					     (compress_vlans ?
 					      RTEXT_FILTER_BRVLAN_COMPRESSED :
 					      RTEXT_FILTER_BRVLAN)) < 0) {
-			perror("Cannont send dump request");
+			perror("Cannot send dump request");
 			exit(1);
 		}
 
 		if (!is_json_context()) {
-			if (show_vlan_tunnel_info)
-				printf("port\tvlan ids\ttunnel id\n");
-			else
-				printf("port\tvlan ids\n");
+			printf("%-" __stringify(IFNAMSIZ) "s  %-"
+			       __stringify(VLAN_ID_LEN) "s", "port",
+			       "vlan-id");
+			if (subject == VLAN_SHOW_TUNNELINFO)
+				printf("  tunnel-id");
+			printf("\n");
 		}
 
-		if (show_vlan_tunnel_info)
-			ret = rtnl_dump_filter(&rth, print_vlan_tunnel,
-					       stdout);
-		else
-			ret = rtnl_dump_filter(&rth, print_vlan, stdout);
+		ret = rtnl_dump_filter(&rth, print_vlan, &subject);
 		if (ret < 0) {
-			fprintf(stderr, "Dump ternminated\n");
+			fprintf(stderr, "Dump terminated\n");
 			exit(1);
 		}
 	} else {
@@ -601,12 +577,13 @@ static int vlan_show(int argc, char **argv)
 
 		filt_mask = IFLA_STATS_FILTER_BIT(IFLA_STATS_LINK_XSTATS);
 		if (rtnl_statsdump_req_filter(&rth, AF_UNSPEC, filt_mask) < 0) {
-			perror("Cannont send dump request");
+			perror("Cannot send dump request");
 			exit(1);
 		}
 
 		if (!is_json_context())
-			printf("%-16s vlan id\n", "port");
+			printf("%-" __stringify(IFNAMSIZ) "s  vlan-id\n",
+			       "port");
 
 		if (rtnl_dump_filter(&rth, print_vlan_stats, stdout) < 0) {
 			fprintf(stderr, "Dump terminated\n");
@@ -615,7 +592,7 @@ static int vlan_show(int argc, char **argv)
 
 		filt_mask = IFLA_STATS_FILTER_BIT(IFLA_STATS_LINK_XSTATS_SLAVE);
 		if (rtnl_statsdump_req_filter(&rth, AF_UNSPEC, filt_mask) < 0) {
-			perror("Cannont send slave dump request");
+			perror("Cannot send slave dump request");
 			exit(1);
 		}
 
@@ -635,8 +612,7 @@ void print_vlan_info(struct rtattr *tb, int ifindex)
 	struct rtattr *i, *list = tb;
 	int rem = RTA_PAYLOAD(list);
 	__u16 last_vid_start = 0;
-
-	open_vlan_port(ifindex, "%s");
+	bool opened = false;
 
 	for (i = RTA_DATA(list); RTA_OK(i, rem); i = RTA_NEXT(i, rem)) {
 		struct bridge_vlan_info *vinfo;
@@ -655,14 +631,24 @@ void print_vlan_info(struct rtattr *tb, int ifindex)
 		else if (vcheck_ret == 0)
 			continue;
 
+		if (!opened) {
+			open_vlan_port(ifindex, VLAN_SHOW_VLAN);
+			opened = true;
+		} else {
+			print_string(PRINT_FP, NULL, "%-"
+				     __stringify(IFNAMSIZ) "s  ", "");
+		}
+
 		open_json_object(NULL);
 		print_range("vlan", last_vid_start, vinfo->vid);
 
 		print_vlan_flags(vinfo->flags);
 		close_json_object();
-		print_string(PRINT_FP, NULL, "%s", _SL_);
+		print_nl();
 	}
-	close_vlan_port();
+
+	if (opened)
+		close_vlan_port();
 }
 
 int do_vlan(int argc, char **argv)
@@ -677,15 +663,14 @@ int do_vlan(int argc, char **argv)
 		if (matches(*argv, "show") == 0 ||
 		    matches(*argv, "lst") == 0 ||
 		    matches(*argv, "list") == 0)
-			return vlan_show(argc-1, argv+1);
+			return vlan_show(argc-1, argv+1, VLAN_SHOW_VLAN);
 		if (matches(*argv, "tunnelshow") == 0) {
-			show_vlan_tunnel_info = 1;
-			return vlan_show(argc-1, argv+1);
+			return vlan_show(argc-1, argv+1, VLAN_SHOW_TUNNELINFO);
 		}
 		if (matches(*argv, "help") == 0)
 			usage();
 	} else {
-		return vlan_show(0, NULL);
+		return vlan_show(0, NULL, VLAN_SHOW_VLAN);
 	}
 
 	fprintf(stderr, "Command \"%s\" is unknown, try \"bridge vlan help\".\n", *argv);

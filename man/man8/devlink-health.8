@@ -18,47 +18,48 @@ devlink-health \- devlink health reporting and recovery
 \fB\-V\fR[\fIersion\fR] }
 
 .ti -8
-.BR "devlink health show"
+.B devlink health show
 .RI "[ " DEV ""
 .B reporter
 .RI ""REPORTER " ] "
 
 .ti -8
-.BR "devlink health recover"
+.B devlink health recover
 .RI "" DEV ""
 .B reporter
 .RI "" REPORTER ""
 
 .ti -8
-.BR "devlink health diagnose"
+.B devlink health diagnose
 .RI "" DEV ""
 .B reporter
 .RI "" REPORTER ""
 
 .ti -8
-.BR "devlink health dump show"
+.B devlink health dump show
 .RI "" DEV ""
 .B  reporter
 .RI "" REPORTER ""
 
 .ti -8
-.BR "devlink health dump clear"
+.B devlink health dump clear
 .RI "" DEV ""
 .B reporter
 .RI "" REPORTER ""
 
 .ti -8
-.BR "devlink health set"
+.B devlink health set
 .RI "" DEV ""
 .B reporter
 .RI "" REPORTER ""
-.RI " { "
-.B grace_period | auto_recover
-.RI " } { "
-.RI "" msec ""
-.RI "|"
-.RI "" boolean ""
-.RI " } "
+[
+.BI "grace_period " MSEC "
+] [
+.BR auto_recover " { " true " | " false " } "
+] [
+.BR auto_dump " { " true " | " false " } "
+]
+
 .ti -8
 .B devlink health help
 
@@ -130,15 +131,9 @@ the next "devlink health dump show" command.
 .I "REPORTER"
 - specifies the reporter's name registered on the devlink device.
 
-.SS devlink health set - Enable the user to configure:
-.PD 0
-1) grace_period [msec] - Time interval between consecutive auto recoveries.
-.P
-2) auto_recover [true/false] - Indicates whether the devlink should execute automatic recover on error.
-.P
-Please note that this command is not supported on a reporter which
-doesn't support a recovery method.
-.PD
+.SS devlink health set - Configure health reporter.
+Please note that some params are not supported on a reporter which
+doesn't support a recovery or dump method.
 
 .PP
 .I "DEV"
@@ -147,6 +142,18 @@ doesn't support a recovery method.
 .PP
 .I "REPORTER"
 - specifies the reporter's name registered on the devlink device.
+
+.TP
+.BI grace_period " MSEC "
+Time interval between consecutive auto recoveries.
+
+.TP
+.BR auto_recover " { " true " | " false " } "
+Indicates whether the devlink should execute automatic recover on error.
+
+.TP
+.BR auto_dump " { " true " | " false " } "
+Indicates whether the devlink should execute automatic dump on error.
 
 .SH "EXAMPLES"
 .PP

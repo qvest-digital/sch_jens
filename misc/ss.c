@@ -29,16 +29,17 @@
 #include <limits.h>
 #include <stdarg.h>
 
+#include "ss_util.h"
 #include "utils.h"
 #include "rt_names.h"
 #include "ll_map.h"
 #include "libnetlink.h"
 #include "namespace.h"
-#include "SNAPSHOT.h"
+#include "version.h"
+#include "rt_names.h"
+#include "cg_map.h"
 
 #include <linux/tcp.h>
-#include <linux/sock_diag.h>
-#include <linux/inet_diag.h>
 #include <linux/unix_diag.h>
 #include <linux/netdevice.h>	/* for MAX_ADDR_LEN */
 #include <linux/filter.h>
@@ -51,6 +52,8 @@
 #include <linux/tipc.h>
 #include <linux/tipc_netlink.h>
 #include <linux/tipc_sockets_diag.h>
+#include <linux/tls.h>
+#include <linux/mptcp.h>
 
 /* AF_VSOCK/PF_VSOCK is only provided since glibc 2.18 */
 #ifndef PF_VSOCK
@@ -60,23 +63,9 @@
 #define AF_VSOCK PF_VSOCK
 #endif
 
-#define MAGIC_SEQ 123456
 #define BUF_CHUNK (1024 * 1024)	/* Buffer chunk allocation size */
 #define BUF_CHUNKS_MAX 5	/* Maximum number of allocated buffer chunks */
 #define LEN_ALIGN(x) (((x) + 1) & ~1)
-
-#define DIAG_REQUEST(_req, _r)						    \
-	struct {							    \
-		struct nlmsghdr nlh;					    \
-		_r;							    \
-	} _req = {							    \
-		.nlh = {						    \
-			.nlmsg_type = SOCK_DIAG_BY_FAMILY,		    \
-			.nlmsg_flags = NLM_F_ROOT|NLM_F_MATCH|NLM_F_REQUEST,\
-			.nlmsg_seq = MAGIC_SEQ,				    \
-			.nlmsg_len = sizeof(_req),			    \
-		},							    \
-	}
 
 #if HAVE_SELINUX
 #include <selinux/selinux.h>
@@ -120,7 +109,7 @@ static int follow_events;
 static int sctp_ino;
 static int show_tipcinfo;
 static int show_tos;
-int numeric;
+static int show_cgroup;
 int oneline;
 
 enum col_id {
@@ -796,6 +785,7 @@ struct sockstat {
 	char *name;
 	char *peer_name;
 	__u32		    mark;
+	__u64		    cgroup_id;
 };
 
 struct dctcpstat {
@@ -1134,10 +1124,10 @@ static void buf_free_all(void)
 	buffer.chunks = 0;
 }
 
-/* Get current screen width, default to 80 columns if TIOCGWINSZ fails */
+/* Get current screen width, returns -1 if TIOCGWINSZ fails */
 static int render_screen_width(void)
 {
-	int width = 80;
+	int width = -1;
 
 	if (isatty(STDOUT_FILENO)) {
 		struct winsize w;
@@ -1158,9 +1148,15 @@ static int render_screen_width(void)
  */
 static void render_calc_width(void)
 {
-	int screen_width = render_screen_width();
+	int screen_width, first, len = 0, linecols = 0;
 	struct column *c, *eol = columns - 1;
-	int first, len = 0, linecols = 0;
+	bool compact_output = false;
+
+	screen_width = render_screen_width();
+	if (screen_width == -1) {
+		screen_width = INT_MAX;
+		compact_output = true;
+	}
 
 	/* First pass: set width for each column to measured content length */
 	for (first = 1, c = columns; c - columns < COL_MAX; c++) {
@@ -1180,6 +1176,11 @@ static void render_calc_width(void)
 
 		if (c->width)
 			first = 0;
+	}
+
+	if (compact_output) {
+		/* Compact output, skip extending columns. */
+		return;
 	}
 
 	/* Second pass: find out newlines and distribute available spacing */
@@ -1289,6 +1290,11 @@ static void render(void)
 
 		token = buf_token_next(token);
 	}
+	/* Deal with final end-of-line when the last non-empty field printed
+	 * is not the last field.
+	 */
+	if (line_started)
+		printf("\n");
 
 	buf_free_all();
 	current_field = columns;
@@ -1400,6 +1406,9 @@ static void sock_details_print(struct sockstat *s)
 
 	if (s->mark)
 		out(" fwmark:0x%x", s->mark);
+
+	if (s->cgroup_id)
+		out(" cgroup:%s", cg_id_to_path(s->cgroup_id));
 }
 
 static void sock_addr_print(const char *addr, char *delim, const char *port,
@@ -1626,6 +1635,7 @@ struct aafilter {
 	unsigned int	iface;
 	__u32		mark;
 	__u32		mask;
+	__u64		cgroup_id;
 	struct aafilter *next;
 };
 
@@ -1660,7 +1670,7 @@ static int unix_match(const inet_prefix *a, const inet_prefix *p)
 		return 1;
 	if (addr == NULL)
 		addr = "";
-	return !fnmatch(pattern, addr, 0);
+	return !fnmatch(pattern, addr, FNM_CASEFOLD);
 }
 
 static int run_ssfilter(struct ssfilter *f, struct sockstat *s)
@@ -1753,6 +1763,12 @@ static int run_ssfilter(struct ssfilter *f, struct sockstat *s)
 		struct aafilter *a = (void *)f->pred;
 
 		return (s->mark & a->mask) == a->mark;
+	}
+		case SSF_CGROUPCOND:
+	{
+		struct aafilter *a = (void *)f->pred;
+
+		return s->cgroup_id == a->cgroup_id;
 	}
 		/* Yup. It is recursion. Sorry. */
 		case SSF_AND:
@@ -1942,6 +1958,23 @@ static int ssfilter_bytecompile(struct ssfilter *f, char **bytecode)
 		((struct instr *)*bytecode)[0] = (struct instr) {
 			{ INET_DIAG_BC_MARK_COND, inslen, inslen + 4 },
 			{ a->mark, a->mask},
+		};
+
+		return inslen;
+	}
+		case SSF_CGROUPCOND:
+	{
+		struct aafilter *a = (void *)f->pred;
+		struct instr {
+			struct inet_diag_bc_op op;
+			__u64 cgroup_id;
+		} __attribute__((packed));
+		int inslen = sizeof(struct instr);
+
+		if (!(*bytecode = malloc(inslen))) abort();
+		((struct instr *)*bytecode)[0] = (struct instr) {
+			{ INET_DIAG_BC_CGROUP_COND, inslen, inslen + 4 },
+			a->cgroup_id,
 		};
 
 		return inslen;
@@ -2283,6 +2316,22 @@ void *parse_markmask(const char *markmask)
 	return res;
 }
 
+void *parse_cgroupcond(const char *path)
+{
+	struct aafilter *res;
+	__u64 id;
+
+	id = get_cgroup2_id(path);
+	if (!id)
+		return NULL;
+
+	res = malloc(sizeof(*res));
+	if (res)
+		res->cgroup_id = id;
+
+	return res;
+}
+
 static void proc_ctx_print(struct sockstat *s)
 {
 	char *buf;
@@ -2361,14 +2410,23 @@ static int proc_inet_split_line(char *line, char **loc, char **rem, char **data)
 	return 0;
 }
 
+/*
+ * Display bandwidth in standard units
+ * See: https://en.wikipedia.org/wiki/Data-rate_units
+ * bw is in bits per second
+ */
 static char *sprint_bw(char *buf, double bw)
 {
 	if (numeric)
 		sprintf(buf, "%.0f", bw);
-	else if (bw > 1000000.)
-		sprintf(buf, "%.1fM", bw / 1000000.);
-	else if (bw > 1000.)
-		sprintf(buf, "%.1fK", bw / 1000.);
+	else if (bw >= 1e12)
+		sprintf(buf, "%.3gT", bw / 1e12);
+	else if (bw >= 1e9)
+		sprintf(buf, "%.3gG", bw / 1e9);
+	else if (bw >= 1e6)
+		sprintf(buf, "%.3gM", bw / 1e6);
+	else if (bw >= 1e3)
+		sprintf(buf, "%.3gk", bw / 1e3);
 	else
 		sprintf(buf, "%g", bw);
 
@@ -2753,6 +2811,125 @@ static void print_md5sig(struct tcp_diag_md5sig *sig)
 	print_escape_buf(sig->tcpm_key, sig->tcpm_keylen, " ,");
 }
 
+static void tcp_tls_version(struct rtattr *attr)
+{
+	u_int16_t val;
+
+	if (!attr)
+		return;
+	val = rta_getattr_u16(attr);
+
+	switch (val) {
+	case TLS_1_2_VERSION:
+		out(" version: 1.2");
+		break;
+	case TLS_1_3_VERSION:
+		out(" version: 1.3");
+		break;
+	default:
+		out(" version: unknown(%hu)", val);
+		break;
+	}
+}
+
+static void tcp_tls_cipher(struct rtattr *attr)
+{
+	u_int16_t val;
+
+	if (!attr)
+		return;
+	val = rta_getattr_u16(attr);
+
+	switch (val) {
+	case TLS_CIPHER_AES_GCM_128:
+		out(" cipher: aes-gcm-128");
+		break;
+	case TLS_CIPHER_AES_GCM_256:
+		out(" cipher: aes-gcm-256");
+		break;
+	}
+}
+
+static void tcp_tls_conf(const char *name, struct rtattr *attr)
+{
+	u_int16_t val;
+
+	if (!attr)
+		return;
+	val = rta_getattr_u16(attr);
+
+	switch (val) {
+	case TLS_CONF_BASE:
+		out(" %s: none", name);
+		break;
+	case TLS_CONF_SW:
+		out(" %s: sw", name);
+		break;
+	case TLS_CONF_HW:
+		out(" %s: hw", name);
+		break;
+	case TLS_CONF_HW_RECORD:
+		out(" %s: hw-record", name);
+		break;
+	default:
+		out(" %s: unknown(%hu)", name, val);
+		break;
+	}
+}
+
+static void mptcp_subflow_info(struct rtattr *tb[])
+{
+	u_int32_t flags = 0;
+
+	if (tb[MPTCP_SUBFLOW_ATTR_FLAGS]) {
+		char caps[32 + 1] = { 0 }, *cap = &caps[0];
+
+		flags = rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_FLAGS]);
+
+		if (flags & MPTCP_SUBFLOW_FLAG_MCAP_REM)
+			*cap++ = 'M';
+		if (flags & MPTCP_SUBFLOW_FLAG_MCAP_LOC)
+			*cap++ = 'm';
+		if (flags & MPTCP_SUBFLOW_FLAG_JOIN_REM)
+			*cap++ = 'J';
+		if (flags & MPTCP_SUBFLOW_FLAG_JOIN_LOC)
+			*cap++ = 'j';
+		if (flags & MPTCP_SUBFLOW_FLAG_BKUP_REM)
+			*cap++ = 'B';
+		if (flags & MPTCP_SUBFLOW_FLAG_BKUP_LOC)
+			*cap++ = 'b';
+		if (flags & MPTCP_SUBFLOW_FLAG_FULLY_ESTABLISHED)
+			*cap++ = 'e';
+		if (flags & MPTCP_SUBFLOW_FLAG_CONNECTED)
+			*cap++ = 'c';
+		if (flags & MPTCP_SUBFLOW_FLAG_MAPVALID)
+			*cap++ = 'v';
+		if (flags)
+			out(" flags:%s", caps);
+	}
+	if (tb[MPTCP_SUBFLOW_ATTR_TOKEN_REM] &&
+	    tb[MPTCP_SUBFLOW_ATTR_TOKEN_LOC] &&
+	    tb[MPTCP_SUBFLOW_ATTR_ID_REM] &&
+	    tb[MPTCP_SUBFLOW_ATTR_ID_LOC])
+		out(" token:%04x(id:%hhu)/%04x(id:%hhu)",
+		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_TOKEN_REM]),
+		    rta_getattr_u8(tb[MPTCP_SUBFLOW_ATTR_ID_REM]),
+		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_TOKEN_LOC]),
+		    rta_getattr_u8(tb[MPTCP_SUBFLOW_ATTR_ID_LOC]));
+	if (tb[MPTCP_SUBFLOW_ATTR_MAP_SEQ])
+		out(" seq:%llx",
+		    rta_getattr_u64(tb[MPTCP_SUBFLOW_ATTR_MAP_SEQ]));
+	if (tb[MPTCP_SUBFLOW_ATTR_MAP_SFSEQ])
+		out(" sfseq:%x",
+		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_MAP_SFSEQ]));
+	if (tb[MPTCP_SUBFLOW_ATTR_SSN_OFFSET])
+		out(" ssnoff:%x",
+		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_SSN_OFFSET]));
+	if (tb[MPTCP_SUBFLOW_ATTR_MAP_DATALEN])
+		out(" maplen:%x",
+		    rta_getattr_u32(tb[MPTCP_SUBFLOW_ATTR_MAP_DATALEN]));
+}
+
 #define TCPI_HAS_OPT(info, opt) !!(info->tcpi_options & (opt))
 
 static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
@@ -2908,6 +3085,36 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
 			print_md5sig(sig++);
 		}
 	}
+	if (tb[INET_DIAG_ULP_INFO]) {
+		struct rtattr *ulpinfo[INET_ULP_INFO_MAX + 1] = { 0 };
+
+		parse_rtattr_nested(ulpinfo, INET_ULP_INFO_MAX,
+				    tb[INET_DIAG_ULP_INFO]);
+
+		if (ulpinfo[INET_ULP_INFO_NAME])
+			out(" tcp-ulp-%s",
+			    rta_getattr_str(ulpinfo[INET_ULP_INFO_NAME]));
+
+		if (ulpinfo[INET_ULP_INFO_TLS]) {
+			struct rtattr *tlsinfo[TLS_INFO_MAX + 1] = { 0 };
+
+			parse_rtattr_nested(tlsinfo, TLS_INFO_MAX,
+					    ulpinfo[INET_ULP_INFO_TLS]);
+
+			tcp_tls_version(tlsinfo[TLS_INFO_VERSION]);
+			tcp_tls_cipher(tlsinfo[TLS_INFO_CIPHER]);
+			tcp_tls_conf("rxconf", tlsinfo[TLS_INFO_RXCONF]);
+			tcp_tls_conf("txconf", tlsinfo[TLS_INFO_TXCONF]);
+		}
+		if (ulpinfo[INET_ULP_INFO_MPTCP]) {
+			struct rtattr *sfinfo[MPTCP_SUBFLOW_ATTR_MAX + 1] =
+				{ 0 };
+
+			parse_rtattr_nested(sfinfo, MPTCP_SUBFLOW_ATTR_MAX,
+					    ulpinfo[INET_ULP_INFO_MPTCP]);
+			mptcp_subflow_info(sfinfo);
+		}
+	}
 }
 
 static const char *format_host_sa(struct sockaddr_storage *sa)
@@ -2990,6 +3197,9 @@ static void parse_diag_msg(struct nlmsghdr *nlh, struct sockstat *s)
 	s->mark = 0;
 	if (tb[INET_DIAG_MARK])
 		s->mark = rta_getattr_u32(tb[INET_DIAG_MARK]);
+	s->cgroup_id = 0;
+	if (tb[INET_DIAG_CGROUP_ID])
+		s->cgroup_id = rta_getattr_u64(tb[INET_DIAG_CGROUP_ID]);
 	if (tb[INET_DIAG_PROTOCOL])
 		s->raw_prot = rta_getattr_u8(tb[INET_DIAG_PROTOCOL]);
 	else
@@ -3055,6 +3265,11 @@ static int inet_show_sock(struct nlmsghdr *nlh,
 			out(" tclass:%#x", rta_getattr_u8(tb[INET_DIAG_TCLASS]));
 		if (tb[INET_DIAG_CLASS_ID])
 			out(" class_id:%#x", rta_getattr_u32(tb[INET_DIAG_CLASS_ID]));
+	}
+
+	if (show_cgroup) {
+		if (tb[INET_DIAG_CGROUP_ID])
+			out(" cgroup:%s", cg_id_to_path(rta_getattr_u64(tb[INET_DIAG_CGROUP_ID])));
 	}
 
 	if (show_mem || (show_tcpinfo && s->type != IPPROTO_UDP)) {
@@ -4882,6 +5097,7 @@ static void _usage(FILE *dest)
 "       --tipcinfo      show internal tipc socket information\n"
 "   -s, --summary       show socket usage summary\n"
 "       --tos           show tos and priority information\n"
+"       --cgroup        show cgroup information\n"
 "   -b, --bpf           show bpf filter socket information\n"
 "   -E, --events        continually display sockets as they are destroyed\n"
 "   -Z, --context       display process SELinux security contexts\n"
@@ -4992,6 +5208,8 @@ static int scan_state(const char *state)
 /* Values of 'x' are already used so a non-character is used */
 #define OPT_XDPSOCK 260
 
+#define OPT_CGROUP 261
+
 static const struct option long_opts[] = {
 	{ "numeric", 0, 0, 'n' },
 	{ "resolve", 0, 0, 'r' },
@@ -5028,6 +5246,7 @@ static const struct option long_opts[] = {
 	{ "net", 1, 0, 'N' },
 	{ "tipcinfo", 0, 0, OPT_TIPCINFO},
 	{ "tos", 0, 0, OPT_TOS },
+	{ "cgroup", 0, 0, OPT_CGROUP },
 	{ "kill", 0, 0, 'K' },
 	{ "no-header", 0, 0, 'H' },
 	{ "xdp", 0, 0, OPT_XDPSOCK},
@@ -5192,7 +5411,7 @@ int main(int argc, char *argv[])
 			break;
 		case 'v':
 		case 'V':
-			printf("ss utility, iproute2-ss%s\n", SNAPSHOT);
+			printf("ss utility, iproute2-%s\n", version);
 			exit(0);
 		case 'z':
 			show_sock_ctx++;
@@ -5214,6 +5433,9 @@ int main(int argc, char *argv[])
 			break;
 		case OPT_TOS:
 			show_tos = 1;
+			break;
+		case OPT_CGROUP:
+			show_cgroup = 1;
 			break;
 		case 'K':
 			current_filter.kill = 1;

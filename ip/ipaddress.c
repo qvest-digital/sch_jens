@@ -30,7 +30,6 @@
 #include <linux/sockios.h>
 #include <linux/net_namespace.h>
 
-#include "utils.h"
 #include "rt_names.h"
 #include "utils.h"
 #include "ll_map.h"
@@ -484,6 +483,24 @@ static void print_vfinfo(FILE *fp, struct ifinfomsg *ifi, struct rtattr *vfinfo)
 				   vf_spoofchk->setting);
 	}
 
+	if (vf[IFLA_VF_IB_NODE_GUID]) {
+		struct ifla_vf_guid *guid = RTA_DATA(vf[IFLA_VF_IB_NODE_GUID]);
+		uint64_t node_guid = ntohll(guid->guid);
+
+		print_string(PRINT_ANY, "node guid", ", NODE_GUID %s",
+			     ll_addr_n2a((const unsigned char *)&node_guid,
+					 sizeof(node_guid), ARPHRD_INFINIBAND,
+					 b1, sizeof(b1)));
+	}
+	if (vf[IFLA_VF_IB_PORT_GUID]) {
+		struct ifla_vf_guid *guid = RTA_DATA(vf[IFLA_VF_IB_PORT_GUID]);
+		uint64_t port_guid = ntohll(guid->guid);
+
+		print_string(PRINT_ANY, "port guid", ", PORT_GUID %s",
+			     ll_addr_n2a((const unsigned char *)&port_guid,
+					 sizeof(port_guid), ARPHRD_INFINIBAND,
+					 b1, sizeof(b1)));
+	}
 	if (vf[IFLA_VF_LINK_STATE]) {
 		struct ifla_vf_link_state *vf_linkstate =
 			RTA_DATA(vf[IFLA_VF_LINK_STATE]);
@@ -879,7 +896,7 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 	if (filter.up && !(ifi->ifi_flags&IFF_UP))
 		return -1;
 
-	parse_rtattr(tb, IFLA_MAX, IFLA_RTA(ifi), len);
+	parse_rtattr_flags(tb, IFLA_MAX, IFLA_RTA(ifi), len, NLA_F_NESTED);
 
 	name = get_ifname_rta(ifi->ifi_index, tb[IFLA_IFNAME]);
 	if (!name)
@@ -992,6 +1009,24 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 						       RTA_PAYLOAD(tb[IFLA_BROADCAST]),
 						       ifi->ifi_type,
 						       b1, sizeof(b1)));
+		}
+		if (tb[IFLA_PERM_ADDRESS]) {
+			unsigned int len = RTA_PAYLOAD(tb[IFLA_PERM_ADDRESS]);
+
+			if (!tb[IFLA_ADDRESS] ||
+			    RTA_PAYLOAD(tb[IFLA_ADDRESS]) != len ||
+			    memcmp(RTA_DATA(tb[IFLA_PERM_ADDRESS]),
+				   RTA_DATA(tb[IFLA_ADDRESS]), len)) {
+				print_string(PRINT_FP, NULL, " permaddr ", NULL);
+				print_color_string(PRINT_ANY,
+						   COLOR_MAC,
+						   "permaddr",
+						   "%s",
+						   ll_addr_n2a(RTA_DATA(tb[IFLA_PERM_ADDRESS]),
+							       RTA_PAYLOAD(tb[IFLA_PERM_ADDRESS]),
+							       ifi->ifi_type,
+							       b1, sizeof(b1)));
+			}
 		}
 	}
 
@@ -1139,6 +1174,22 @@ int print_linkinfo(struct nlmsghdr *n, void *arg)
 		close_json_array(PRINT_JSON, NULL);
 	}
 
+	if (tb[IFLA_PROP_LIST]) {
+		struct rtattr *i, *proplist = tb[IFLA_PROP_LIST];
+		int rem = RTA_PAYLOAD(proplist);
+
+		open_json_array(PRINT_JSON, "altnames");
+		for (i = RTA_DATA(proplist); RTA_OK(i, rem);
+		     i = RTA_NEXT(i, rem)) {
+			if (i->rta_type != IFLA_ALT_IFNAME)
+				continue;
+			print_string(PRINT_FP, NULL, "%s    altname ", _SL_);
+			print_string(PRINT_ANY, NULL,
+				     "%s", rta_getattr_str(i));
+		}
+		close_json_array(PRINT_JSON, NULL);
+	}
+
 	print_string(PRINT_FP, NULL, "%s", "\n");
 	fflush(fp);
 	return 1;
@@ -1181,52 +1232,65 @@ static unsigned int get_ifa_flags(struct ifaddrmsg *ifa,
 		ifa->ifa_flags;
 }
 
-/* Mapping from argument to address flag mask */
-static const struct {
+/* Mapping from argument to address flag mask and attributes */
+static const struct ifa_flag_data_t {
 	const char *name;
-	unsigned long value;
-} ifa_flag_names[] = {
-	{ "secondary",		IFA_F_SECONDARY },
-	{ "temporary",		IFA_F_SECONDARY },
-	{ "nodad",		IFA_F_NODAD },
-	{ "optimistic",		IFA_F_OPTIMISTIC },
-	{ "dadfailed",		IFA_F_DADFAILED },
-	{ "home",		IFA_F_HOMEADDRESS },
-	{ "deprecated",		IFA_F_DEPRECATED },
-	{ "tentative",		IFA_F_TENTATIVE },
-	{ "permanent",		IFA_F_PERMANENT },
-	{ "mngtmpaddr",		IFA_F_MANAGETEMPADDR },
-	{ "noprefixroute",	IFA_F_NOPREFIXROUTE },
-	{ "autojoin",		IFA_F_MCAUTOJOIN },
-	{ "stable-privacy",	IFA_F_STABLE_PRIVACY },
+	unsigned long mask;
+	bool readonly;
+	bool v6only;
+} ifa_flag_data[] = {
+	{ .name = "secondary",		.mask = IFA_F_SECONDARY,	.readonly = true,	.v6only = false},
+	{ .name = "temporary",		.mask = IFA_F_SECONDARY,	.readonly = true,	.v6only = false},
+	{ .name = "nodad",		.mask = IFA_F_NODAD,	 	.readonly = false,	.v6only = true},
+	{ .name = "optimistic",		.mask = IFA_F_OPTIMISTIC,	.readonly = false,	.v6only = true},
+	{ .name = "dadfailed",		.mask = IFA_F_DADFAILED,	.readonly = true,	.v6only = true},
+	{ .name = "home",		.mask = IFA_F_HOMEADDRESS,	.readonly = false,	.v6only = true},
+	{ .name = "deprecated",		.mask = IFA_F_DEPRECATED,	.readonly = true,	.v6only = true},
+	{ .name = "tentative",		.mask = IFA_F_TENTATIVE,	.readonly = true,	.v6only = true},
+	{ .name = "permanent",		.mask = IFA_F_PERMANENT,	.readonly = true,	.v6only = true},
+	{ .name = "mngtmpaddr",		.mask = IFA_F_MANAGETEMPADDR,	.readonly = false,	.v6only = true},
+	{ .name = "noprefixroute",	.mask = IFA_F_NOPREFIXROUTE,	.readonly = false,	.v6only = true},
+	{ .name = "autojoin",		.mask = IFA_F_MCAUTOJOIN,	.readonly = false,	.v6only = true},
+	{ .name = "stable-privacy",	.mask = IFA_F_STABLE_PRIVACY, 	.readonly = true,	.v6only = true},
 };
+
+/* Returns a pointer to the data structure for a particular interface flag, or null if no flag could be found */
+static const struct ifa_flag_data_t* lookup_flag_data_by_name(const char* flag_name) {
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(ifa_flag_data); ++i) {
+		if (strcmp(flag_name, ifa_flag_data[i].name) == 0)
+			return &ifa_flag_data[i];
+	}
+        return NULL;
+}
 
 static void print_ifa_flags(FILE *fp, const struct ifaddrmsg *ifa,
 			    unsigned int flags)
 {
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(ifa_flag_names); i++) {
-		unsigned long mask = ifa_flag_names[i].value;
+	for (i = 0; i < ARRAY_SIZE(ifa_flag_data); i++) {
+		const struct ifa_flag_data_t* flag_data = &ifa_flag_data[i];
 
-		if (mask == IFA_F_PERMANENT) {
-			if (!(flags & mask))
+		if (flag_data->mask == IFA_F_PERMANENT) {
+			if (!(flags & flag_data->mask))
 				print_bool(PRINT_ANY,
 					   "dynamic", "dynamic ", true);
-		} else if (flags & mask) {
-			if (mask == IFA_F_SECONDARY &&
+		} else if (flags & flag_data->mask) {
+			if (flag_data->mask == IFA_F_SECONDARY &&
 			    ifa->ifa_family == AF_INET6) {
 				print_bool(PRINT_ANY,
 					   "temporary", "temporary ", true);
 			} else {
 				print_string(PRINT_FP, NULL,
-					     "%s ", ifa_flag_names[i].name);
+					     "%s ", flag_data->name);
 				print_bool(PRINT_JSON,
-					   ifa_flag_names[i].name, NULL, true);
+					   flag_data->name, NULL, true);
 			}
 		}
 
-		flags &= ~mask;
+		flags &= ~flag_data->mask;
 	}
 
 	if (flags) {
@@ -1245,7 +1309,6 @@ static void print_ifa_flags(FILE *fp, const struct ifaddrmsg *ifa,
 static int get_filter(const char *arg)
 {
 	bool inv = false;
-	unsigned int i;
 
 	if (arg[0] == '-') {
 		inv = true;
@@ -1261,18 +1324,16 @@ static int get_filter(const char *arg)
 		arg = "secondary";
 	}
 
-	for (i = 0; i < ARRAY_SIZE(ifa_flag_names); i++) {
-		if (strcmp(arg, ifa_flag_names[i].name))
-			continue;
+	const struct ifa_flag_data_t* flag_data = lookup_flag_data_by_name(arg);
+	if (flag_data == NULL)
+		return -1;
 
-		if (inv)
-			filter.flags &= ~ifa_flag_names[i].value;
-		else
-			filter.flags |= ifa_flag_names[i].value;
-		filter.flagmask |= ifa_flag_names[i].value;
-		return 0;
-	}
-	return -1;
+	if (inv)
+		filter.flags &= ~flag_data->mask;
+	else
+		filter.flags |= flag_data->mask;
+	filter.flagmask |= flag_data->mask;
+	return 0;
 }
 
 static int ifa_label_match_rta(int ifindex, const struct rtattr *rta)
@@ -1599,7 +1660,8 @@ static int show_handler(struct rtnl_ctrl_data *ctrl,
 	struct ifaddrmsg *ifa = NLMSG_DATA(n);
 
 	open_json_object(NULL);
-	print_int(PRINT_ANY, "index", "if%d:\n", ifa->ifa_index);
+	print_int(PRINT_ANY, "index", "if%d:", ifa->ifa_index);
+	print_nl();
 	print_addrinfo(n, stdout);
 	close_json_object();
 	return 0;
@@ -2277,25 +2339,15 @@ static int ipaddr_modify(int cmd, int flags, int argc, char **argv)
 			preferred_lftp = *argv;
 			if (set_lifetime(&preferred_lft, *argv))
 				invarg("preferred_lft value", *argv);
-		} else if (strcmp(*argv, "home") == 0) {
-			if (req.ifa.ifa_family == AF_INET6)
-				ifa_flags |= IFA_F_HOMEADDRESS;
-			else
-				fprintf(stderr, "Warning: home option can be set only for IPv6 addresses\n");
-		} else if (strcmp(*argv, "nodad") == 0) {
-			if (req.ifa.ifa_family == AF_INET6)
-				ifa_flags |= IFA_F_NODAD;
-			else
-				fprintf(stderr, "Warning: nodad option can be set only for IPv6 addresses\n");
-		} else if (strcmp(*argv, "mngtmpaddr") == 0) {
-			if (req.ifa.ifa_family == AF_INET6)
-				ifa_flags |= IFA_F_MANAGETEMPADDR;
-			else
-				fprintf(stderr, "Warning: mngtmpaddr option can be set only for IPv6 addresses\n");
-		} else if (strcmp(*argv, "noprefixroute") == 0) {
-			ifa_flags |= IFA_F_NOPREFIXROUTE;
-		} else if (strcmp(*argv, "autojoin") == 0) {
-			ifa_flags |= IFA_F_MCAUTOJOIN;
+		} else if (lookup_flag_data_by_name(*argv)) {
+			const struct ifa_flag_data_t* flag_data = lookup_flag_data_by_name(*argv);
+			if (flag_data->readonly) {
+				fprintf(stderr, "Warning: %s option is not mutable from userspace\n", flag_data->name);
+			} else if (flag_data->v6only && req.ifa.ifa_family != AF_INET6) {
+				fprintf(stderr, "Warning: %s option can be set only for IPv6 addresses\n", flag_data->name);
+			} else {
+				ifa_flags |= flag_data->mask;
+			}
 		} else {
 			if (strcmp(*argv, "local") == 0)
 				NEXT_ARG();

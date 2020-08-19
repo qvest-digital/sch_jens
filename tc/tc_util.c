@@ -385,6 +385,11 @@ int get_size(unsigned int *size, const char *str)
 	}
 
 	*size = sz;
+
+	/* detect if an overflow happened */
+	if (*size != floor(sz))
+		return -1;
+
 	return 0;
 }
 
@@ -745,21 +750,21 @@ void print_tm(FILE *f, const struct tcf_t *tm)
 {
 	int hz = get_user_hz();
 
-	if (tm->install != 0) {
-		print_uint(PRINT_JSON, "installed", NULL, tm->install);
-		print_uint(PRINT_FP, NULL, " installed %u sec",
-			   (unsigned int)(tm->install/hz));
-	}
-	if (tm->lastuse != 0) {
-		print_uint(PRINT_JSON, "last_used", NULL, tm->lastuse);
-		print_uint(PRINT_FP, NULL, " used %u sec",
-			   (unsigned int)(tm->lastuse/hz));
-	}
-	if (tm->expires != 0) {
-		print_uint(PRINT_JSON, "expires", NULL, tm->expires);
-		print_uint(PRINT_FP, NULL, " expires %u sec",
-			   (unsigned int)(tm->expires/hz));
-	}
+	if (tm->install != 0)
+		print_uint(PRINT_ANY, "installed", " installed %u sec",
+			   tm->install / hz);
+
+	if (tm->lastuse != 0)
+		print_uint(PRINT_ANY, "last_used", " used %u sec",
+			   tm->lastuse / hz);
+
+	if (tm->firstuse != 0)
+		print_uint(PRINT_ANY, "first_used", " firstused %u sec",
+			   tm->firstuse / hz);
+
+	if (tm->expires != 0)
+		print_uint(PRINT_ANY, "expires", " expires %u sec",
+			   tm->expires / hz);
 }
 
 static void print_tcstats_basic_hw(struct rtattr **tbs, char *prefix)
@@ -783,7 +788,7 @@ static void print_tcstats_basic_hw(struct rtattr **tbs, char *prefix)
 			   sizeof(bs)));
 
 		if (bs.bytes >= bs_hw.bytes && bs.packets >= bs_hw.packets) {
-			print_string(PRINT_FP, NULL, "%s", _SL_);
+			print_nl();
 			print_string(PRINT_FP, NULL, "%s", prefix);
 			print_lluint(PRINT_ANY, "sw_bytes",
 				     "Sent software %llu bytes",
@@ -793,7 +798,7 @@ static void print_tcstats_basic_hw(struct rtattr **tbs, char *prefix)
 		}
 	}
 
-	print_string(PRINT_FP, NULL, "%s", _SL_);
+	print_nl();
 	print_string(PRINT_FP, NULL, "%s", prefix);
 	print_lluint(PRINT_ANY, "hw_bytes", "Sent hardware %llu bytes",
 		     bs_hw.bytes);
@@ -809,17 +814,28 @@ void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtat
 
 	if (tbs[TCA_STATS_BASIC]) {
 		struct gnet_stats_basic bs = {0};
+		__u64 packets64 = 0;
 
-		memcpy(&bs, RTA_DATA(tbs[TCA_STATS_BASIC]), MIN(RTA_PAYLOAD(tbs[TCA_STATS_BASIC]), sizeof(bs)));
+		if (tbs[TCA_STATS_PKT64])
+			packets64 = rta_getattr_u64(tbs[TCA_STATS_PKT64]);
+
+		memcpy(&bs, RTA_DATA(tbs[TCA_STATS_BASIC]),
+		       MIN(RTA_PAYLOAD(tbs[TCA_STATS_BASIC]), sizeof(bs)));
 		print_string(PRINT_FP, NULL, "%s", prefix);
 		print_lluint(PRINT_ANY, "bytes", "Sent %llu bytes", bs.bytes);
-		print_uint(PRINT_ANY, "packets", " %u pkt", bs.packets);
+		if (packets64)
+			print_lluint(PRINT_ANY, "packets",
+				     " %llu pkt", packets64);
+		else
+			print_uint(PRINT_ANY, "packets",
+				   " %u pkt", bs.packets);
 	}
 
 	if (tbs[TCA_STATS_QUEUE]) {
 		struct gnet_stats_queue q = {0};
 
-		memcpy(&q, RTA_DATA(tbs[TCA_STATS_QUEUE]), MIN(RTA_PAYLOAD(tbs[TCA_STATS_QUEUE]), sizeof(q)));
+		memcpy(&q, RTA_DATA(tbs[TCA_STATS_QUEUE]),
+		       MIN(RTA_PAYLOAD(tbs[TCA_STATS_QUEUE]), sizeof(q)));
 		print_uint(PRINT_ANY, "drops", " (dropped %u", q.drops);
 		print_uint(PRINT_ANY, "overlimits", ", overlimits %u",
 			   q.overlimits);
@@ -855,9 +871,10 @@ void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtat
 	if (tbs[TCA_STATS_QUEUE]) {
 		struct gnet_stats_queue q = {0};
 
-		memcpy(&q, RTA_DATA(tbs[TCA_STATS_QUEUE]), MIN(RTA_PAYLOAD(tbs[TCA_STATS_QUEUE]), sizeof(q)));
+		memcpy(&q, RTA_DATA(tbs[TCA_STATS_QUEUE]),
+		       MIN(RTA_PAYLOAD(tbs[TCA_STATS_QUEUE]), sizeof(q)));
 		if (!tbs[TCA_STATS_RATE_EST])
-			print_string(PRINT_FP, NULL, "\n", "");
+			print_nl();
 		print_uint(PRINT_JSON, "backlog", NULL, q.backlog);
 		print_string(PRINT_FP, NULL, "%s", prefix);
 		print_string(PRINT_FP, NULL, "backlog %s",
@@ -870,7 +887,8 @@ void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtat
 		*xstats = tbs[TCA_STATS_APP] ? : NULL;
 }
 
-void print_tcstats_attr(FILE *fp, struct rtattr *tb[], char *prefix, struct rtattr **xstats)
+void print_tcstats_attr(FILE *fp, struct rtattr *tb[], char *prefix,
+			struct rtattr **xstats)
 {
 	SPRINT_BUF(b1);
 
@@ -885,25 +903,29 @@ void print_tcstats_attr(FILE *fp, struct rtattr *tb[], char *prefix, struct rtat
 		struct tc_stats st = {};
 
 		/* handle case where kernel returns more/less than we know about */
-		memcpy(&st, RTA_DATA(tb[TCA_STATS]), MIN(RTA_PAYLOAD(tb[TCA_STATS]), sizeof(st)));
+		memcpy(&st, RTA_DATA(tb[TCA_STATS]),
+		       MIN(RTA_PAYLOAD(tb[TCA_STATS]), sizeof(st)));
 
-		fprintf(fp, "%sSent %llu bytes %u pkts (dropped %u, overlimits %u) ",
-			prefix, (unsigned long long)st.bytes, st.packets, st.drops,
-			st.overlimits);
+		fprintf(fp,
+			"%sSent %llu bytes %u pkts (dropped %u, overlimits %u) ",
+			prefix, (unsigned long long)st.bytes,
+			st.packets, st.drops, st.overlimits);
 
 		if (st.bps || st.pps || st.qlen || st.backlog) {
 			fprintf(fp, "\n%s", prefix);
 			if (st.bps || st.pps) {
 				fprintf(fp, "rate ");
 				if (st.bps)
-					fprintf(fp, "%s ", sprint_rate(st.bps, b1));
+					fprintf(fp, "%s ",
+						sprint_rate(st.bps, b1));
 				if (st.pps)
 					fprintf(fp, "%upps ", st.pps);
 			}
 			if (st.qlen || st.backlog) {
 				fprintf(fp, "backlog ");
 				if (st.backlog)
-					fprintf(fp, "%s ", sprint_size(st.backlog, b1));
+					fprintf(fp, "%s ",
+						sprint_size(st.backlog, b1));
 				if (st.qlen)
 					fprintf(fp, "%up ", st.qlen);
 			}
@@ -983,5 +1005,17 @@ void print_masked_u8(const char *name, struct rtattr *attr,
 		     struct rtattr *mask_attr, bool newline)
 {
 	print_masked_type(UINT8_MAX,  __rta_getattr_u8_u32, name, attr,
+			  mask_attr, newline);
+}
+
+static __u32 __rta_getattr_be16_u32(const struct rtattr *attr)
+{
+	return rta_getattr_be16(attr);
+}
+
+void print_masked_be16(const char *name, struct rtattr *attr,
+		       struct rtattr *mask_attr, bool newline)
+{
+	print_masked_type(UINT16_MAX, __rta_getattr_be16_u32, name, attr,
 			  mask_attr, newline);
 }

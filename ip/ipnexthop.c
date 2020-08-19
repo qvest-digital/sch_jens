@@ -59,13 +59,13 @@ static int nh_dump_filter(struct nlmsghdr *nlh, int reqlen)
 	}
 
 	if (filter.groups) {
-		addattr_l(nlh, reqlen, NHA_GROUPS, NULL, 0);
+		err = addattr_l(nlh, reqlen, NHA_GROUPS, NULL, 0);
 		if (err)
 			return err;
 	}
 
 	if (filter.master) {
-		addattr32(nlh, reqlen, NHA_MASTER, filter.master);
+		err = addattr32(nlh, reqlen, NHA_MASTER, filter.master);
 		if (err)
 			return err;
 	}
@@ -224,7 +224,7 @@ int print_nexthop(struct nlmsghdr *n, void *arg)
 
 	open_json_object(NULL);
 
-	if (n->nlmsg_type == RTM_DELROUTE)
+	if (n->nlmsg_type == RTM_DELNEXTHOP)
 		print_bool(PRINT_ANY, "deleted", "Deleted ", true);
 
 	if (tb[NHA_ID])

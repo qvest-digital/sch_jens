@@ -824,20 +824,29 @@ int nodev(const char *dev)
 	return -1;
 }
 
-int check_ifname(const char *name)
+static int __check_ifname(const char *name)
 {
-	/* These checks mimic kernel checks in dev_valid_name */
 	if (*name == '\0')
 		return -1;
-	if (strlen(name) >= IFNAMSIZ)
-		return -1;
-
 	while (*name) {
 		if (*name == '/' || isspace(*name))
 			return -1;
 		++name;
 	}
 	return 0;
+}
+
+int check_ifname(const char *name)
+{
+	/* These checks mimic kernel checks in dev_valid_name */
+	if (strlen(name) >= IFNAMSIZ)
+		return -1;
+	return __check_ifname(name);
+}
+
+int check_altifname(const char *name)
+{
+	return __check_ifname(name);
 }
 
 /* buf is assumed to be IFNAMSIZ */
@@ -1442,7 +1451,7 @@ int get_guid(__u64 *guid, const char *arg)
 		if (tmp > 255)
 			return -1;
 
-		 *guid |= tmp << (56 - 8 * i);
+		*guid |= tmp << (56 - 8 * i);
 	}
 
 	return 0;
@@ -1619,9 +1628,9 @@ static void print_time(char *buf, int len, __u32 time)
 	double tmp = time;
 
 	if (tmp >= TIME_UNITS_PER_SEC)
-		snprintf(buf, len, "%.1fs", tmp/TIME_UNITS_PER_SEC);
+		snprintf(buf, len, "%.3gs", tmp/TIME_UNITS_PER_SEC);
 	else if (tmp >= TIME_UNITS_PER_SEC/1000)
-		snprintf(buf, len, "%.1fms", tmp/(TIME_UNITS_PER_SEC/1000));
+		snprintf(buf, len, "%.3gms", tmp/(TIME_UNITS_PER_SEC/1000));
 	else
 		snprintf(buf, len, "%uus", time);
 }
@@ -1672,11 +1681,11 @@ static void print_time64(char *buf, int len, __s64 time)
 	double nsec = time;
 
 	if (time >= NSEC_PER_SEC)
-		snprintf(buf, len, "%.3fs", nsec/NSEC_PER_SEC);
+		snprintf(buf, len, "%.3gs", nsec/NSEC_PER_SEC);
 	else if (time >= NSEC_PER_MSEC)
-		snprintf(buf, len, "%.3fms", nsec/NSEC_PER_MSEC);
+		snprintf(buf, len, "%.3gms", nsec/NSEC_PER_MSEC);
 	else if (time >= NSEC_PER_USEC)
-		snprintf(buf, len, "%.3fus", nsec/NSEC_PER_USEC);
+		snprintf(buf, len, "%.3gus", nsec/NSEC_PER_USEC);
 	else
 		snprintf(buf, len, "%lldns", time);
 }

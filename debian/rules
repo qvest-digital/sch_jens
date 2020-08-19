@@ -1,5 +1,7 @@
 #!/usr/bin/make -f
 
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
 # for DEB_* variables
 include /usr/share/dpkg/default.mk
 

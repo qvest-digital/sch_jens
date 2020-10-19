@@ -33,6 +33,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <rt_names.h>
 
 #include "version.h"
 #include "list.h"
@@ -300,6 +301,7 @@ static void ifname_map_free(struct ifname_map *ifname_map)
 #define DL_OPT_TRAP_POLICER_RATE	BIT(35)
 #define DL_OPT_TRAP_POLICER_BURST	BIT(36)
 #define DL_OPT_HEALTH_REPORTER_AUTO_DUMP     BIT(37)
+#define DL_OPT_PORT_FUNCTION_HW_ADDR BIT(38)
 
 struct dl_opts {
 	uint64_t present; /* flags of present items */
@@ -345,6 +347,8 @@ struct dl_opts {
 	uint32_t trap_policer_id;
 	uint64_t trap_policer_rate;
 	uint64_t trap_policer_burst;
+	char port_function_hw_addr[MAX_ADDR_LEN];
+	uint32_t port_function_hw_addr_len;
 };
 
 struct dl {
@@ -436,6 +440,127 @@ static void __pr_out_indent_newline(struct dl *dl)
 		pr_out(" ");
 }
 
+static bool is_binary_eol(int i)
+{
+	return !(i%16);
+}
+
+static void pr_out_binary_value(struct dl *dl, uint8_t *data, uint32_t len)
+{
+	int i = 0;
+
+	while (i < len) {
+		if (dl->json_output)
+			print_int(PRINT_JSON, NULL, NULL, data[i]);
+		else
+			pr_out("%02x ", data[i]);
+		i++;
+		if (!dl->json_output && is_binary_eol(i))
+			__pr_out_newline();
+	}
+	if (!dl->json_output && !is_binary_eol(i))
+		__pr_out_newline();
+}
+
+static void pr_out_name(struct dl *dl, const char *name)
+{
+	__pr_out_indent_newline(dl);
+	if (dl->json_output)
+		print_string(PRINT_JSON, name, NULL, NULL);
+	else
+		pr_out("%s:", name);
+}
+
+static void pr_out_u64(struct dl *dl, const char *name, uint64_t val)
+{
+	__pr_out_indent_newline(dl);
+	if (val == (uint64_t) -1)
+		return print_string_name_value(name, "unlimited");
+
+	if (dl->json_output)
+		print_u64(PRINT_JSON, name, NULL, val);
+	else
+		pr_out("%s %"PRIu64, name, val);
+}
+
+static void pr_out_section_start(struct dl *dl, const char *name)
+{
+	if (dl->json_output) {
+		open_json_object(NULL);
+		open_json_object(name);
+	}
+}
+
+static void pr_out_section_end(struct dl *dl)
+{
+	if (dl->json_output) {
+		if (dl->arr_last.present)
+			close_json_array(PRINT_JSON, NULL);
+		close_json_object();
+		close_json_object();
+	}
+}
+
+static void pr_out_array_start(struct dl *dl, const char *name)
+{
+	if (dl->json_output) {
+		open_json_array(PRINT_JSON, name);
+	} else {
+		__pr_out_indent_inc();
+		__pr_out_newline();
+		pr_out("%s:", name);
+		__pr_out_indent_inc();
+		__pr_out_newline();
+	}
+}
+
+static void pr_out_array_end(struct dl *dl)
+{
+	if (dl->json_output) {
+		close_json_array(PRINT_JSON, NULL);
+	} else {
+		__pr_out_indent_dec();
+		__pr_out_indent_dec();
+	}
+}
+
+static void pr_out_object_start(struct dl *dl, const char *name)
+{
+	if (dl->json_output) {
+		open_json_object(name);
+	} else {
+		__pr_out_indent_inc();
+		__pr_out_newline();
+		pr_out("%s:", name);
+		__pr_out_indent_inc();
+		__pr_out_newline();
+	}
+}
+
+static void pr_out_object_end(struct dl *dl)
+{
+	if (dl->json_output) {
+		close_json_object();
+	} else {
+		__pr_out_indent_dec();
+		__pr_out_indent_dec();
+	}
+}
+
+static void pr_out_entry_start(struct dl *dl)
+{
+	if (dl->json_output)
+		open_json_object(NULL);
+}
+
+static void pr_out_entry_end(struct dl *dl)
+{
+	if (dl->json_output)
+		close_json_object();
+	else
+		__pr_out_newline();
+}
+
 static void check_indent_newline(struct dl *dl)
 {
 	__pr_out_indent_newline(dl);
@@ -456,6 +581,8 @@ static const enum mnl_attr_data_type devlink_policy[DEVLINK_ATTR_MAX + 1] = {
 	[DEVLINK_ATTR_PORT_NETDEV_IFINDEX] = MNL_TYPE_U32,
 	[DEVLINK_ATTR_PORT_NETDEV_NAME] = MNL_TYPE_NUL_STRING,
 	[DEVLINK_ATTR_PORT_IBDEV_NAME] = MNL_TYPE_NUL_STRING,
+	[DEVLINK_ATTR_PORT_LANES] = MNL_TYPE_U32,
+	[DEVLINK_ATTR_PORT_SPLITTABLE] = MNL_TYPE_U8,
 	[DEVLINK_ATTR_SB_INDEX] = MNL_TYPE_U32,
 	[DEVLINK_ATTR_SB_SIZE] = MNL_TYPE_U32,
 	[DEVLINK_ATTR_SB_INGRESS_POOL_COUNT] = MNL_TYPE_U16,
@@ -523,6 +650,7 @@ static const enum mnl_attr_data_type devlink_policy[DEVLINK_ATTR_MAX + 1] = {
 	[DEVLINK_ATTR_REGION_CHUNK_LEN] = MNL_TYPE_U64,
 	[DEVLINK_ATTR_INFO_DRIVER_NAME] = MNL_TYPE_STRING,
 	[DEVLINK_ATTR_INFO_SERIAL_NUMBER] = MNL_TYPE_STRING,
+	[DEVLINK_ATTR_INFO_BOARD_SERIAL_NUMBER] = MNL_TYPE_STRING,
 	[DEVLINK_ATTR_INFO_VERSION_FIXED] = MNL_TYPE_NESTED,
 	[DEVLINK_ATTR_INFO_VERSION_RUNNING] = MNL_TYPE_NESTED,
 	[DEVLINK_ATTR_INFO_VERSION_STORED] = MNL_TYPE_NESTED,
@@ -588,6 +716,30 @@ static int attr_stats_cb(const struct nlattr *attr, void *data)
 
 	type = mnl_attr_get_type(attr);
 	if (mnl_attr_validate(attr, devlink_stats_policy[type]) < 0)
+		return MNL_CB_ERROR;
+
+	tb[type] = attr;
+	return MNL_CB_OK;
+}
+
+static const enum mnl_attr_data_type
+devlink_function_policy[DEVLINK_PORT_FUNCTION_ATTR_MAX + 1] = {
+	[DEVLINK_PORT_FUNCTION_ATTR_HW_ADDR ] = MNL_TYPE_BINARY,
+};
+
+static int function_attr_cb(const struct nlattr *attr, void *data)
+{
+	const struct nlattr **tb = data;
+	int type;
+
+	/* Allow the tool to work on top of newer kernels that might contain
+	 * more attributes.
+	 */
+	if (mnl_attr_type_valid(attr, DEVLINK_PORT_FUNCTION_ATTR_MAX) < 0)
+		return MNL_CB_OK;
+
+	type = mnl_attr_get_type(attr);
+	if (mnl_attr_validate(attr, devlink_function_policy[type]) < 0)
 		return MNL_CB_ERROR;
 
 	tb[type] = attr;
@@ -1165,6 +1317,17 @@ static int trap_action_get(const char *actionstr,
 	return 0;
 }
 
+static int hw_addr_parse(const char *addrstr, char *hw_addr, uint32_t *len)
+{
+	int alen;
+
+	alen = ll_addr_a2n(hw_addr, MAX_ADDR_LEN, addrstr);
+	if (alen < 0)
+		return -EINVAL;
+	*len = alen;
+	return 0;
+}
+
 struct dl_args_metadata {
 	uint64_t o_flag;
 	char err_msg[DL_ARGS_REQUIRED_MAX_ERR_LEN];
@@ -1195,6 +1358,7 @@ static const struct dl_args_metadata dl_args_required[] = {
 	{DL_OPT_HEALTH_REPORTER_NAME, "Reporter's name is expected."},
 	{DL_OPT_TRAP_NAME,            "Trap's name is expected."},
 	{DL_OPT_TRAP_GROUP_NAME,      "Trap group's name is expected."},
+	{DL_OPT_PORT_FUNCTION_HW_ADDR, "Port function's hardware address is expected."},
 };
 
 static int dl_args_finding_required_validate(uint64_t o_required,
@@ -1561,6 +1725,20 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 			if (err)
 				return err;
 			o_found |= DL_OPT_TRAP_POLICER_BURST;
+		} else if (dl_argv_match(dl, "hw_addr") &&
+			   (o_all & DL_OPT_PORT_FUNCTION_HW_ADDR)) {
+			const char *addrstr;
+
+			dl_arg_inc(dl);
+			err = dl_argv_str(dl, &addrstr);
+			if (err)
+				return err;
+			err = hw_addr_parse(addrstr, opts->port_function_hw_addr,
+					    &opts->port_function_hw_addr_len);
+			if (err)
+				return err;
+			o_found |= DL_OPT_PORT_FUNCTION_HW_ADDR;
+
 		} else {
 			pr_err("Unknown option \"%s\"\n", dl_argv(dl));
 			return -EINVAL;
@@ -1575,6 +1753,18 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 	}
 
 	return dl_args_finding_required_validate(o_required, o_found);
+}
+
+static void
+dl_function_attr_put(struct nlmsghdr *nlh, const struct dl_opts *opts)
+{
+	struct nlattr *nest;
+
+	nest = mnl_attr_nest_start(nlh, DEVLINK_ATTR_PORT_FUNCTION);
+	mnl_attr_put(nlh, DEVLINK_PORT_FUNCTION_ATTR_HW_ADDR,
+		     opts->port_function_hw_addr_len,
+		     opts->port_function_hw_addr);
+	mnl_attr_nest_end(nlh, nest);
 }
 
 static void dl_opts_put(struct nlmsghdr *nlh, struct dl *dl)
@@ -1700,6 +1890,8 @@ static void dl_opts_put(struct nlmsghdr *nlh, struct dl *dl)
 	if (opts->present & DL_OPT_TRAP_POLICER_BURST)
 		mnl_attr_put_u64(nlh, DEVLINK_ATTR_TRAP_POLICER_BURST,
 				 opts->trap_policer_burst);
+	if (opts->present & DL_OPT_PORT_FUNCTION_HW_ADDR)
+		dl_function_attr_put(nlh, opts);
 }
 
 static int dl_argv_parse_put(struct nlmsghdr *nlh, struct dl *dl,
@@ -1923,7 +2115,19 @@ static void __pr_out_port_handle_start(struct dl *dl, const char *bus_name,
 			open_json_object(buf);
 		}
 	} else {
-		pr_out("%s:", buf);
+		if (array) {
+			if (should_arr_last_port_handle_end(dl, bus_name, dev_name, port_index))
+				__pr_out_indent_dec();
+			if (should_arr_last_port_handle_start(dl, bus_name,
+							      dev_name, port_index)) {
+				pr_out("%s:", buf);
+				__pr_out_newline();
+				__pr_out_indent_inc();
+				arr_last_port_handle_set(dl, bus_name, dev_name, port_index);
+			}
+		} else {
+			pr_out("%s:", buf);
+		}
 	}
 }
 
@@ -1957,49 +2161,6 @@ static void pr_out_port_handle_end(struct dl *dl)
 		close_json_object();
 	else
 		pr_out("\n");
-}
-
-static void pr_out_u64(struct dl *dl, const char *name, uint64_t val)
-{
-	__pr_out_indent_newline(dl);
-	if (val == (uint64_t) -1)
-		return print_string_name_value(name, "unlimited");
-
-	if (dl->json_output)
-		print_u64(PRINT_JSON, name, NULL, val);
-	else
-		pr_out("%s %"PRIu64, name, val);
-}
-
-static bool is_binary_eol(int i)
-{
-	return !(i%16);
-}
-
-static void pr_out_binary_value(struct dl *dl, uint8_t *data, uint32_t len)
-{
-	int i = 0;
-
-	while (i < len) {
-		if (dl->json_output)
-			print_int(PRINT_JSON, NULL, NULL, data[i]);
-		else
-			pr_out("%02x ", data[i]);
-		i++;
-		if (!dl->json_output && is_binary_eol(i))
-			__pr_out_newline();
-	}
-	if (!dl->json_output && !is_binary_eol(i))
-		__pr_out_newline();
-}
-
-static void pr_out_name(struct dl *dl, const char *name)
-{
-	__pr_out_indent_newline(dl);
-	if (dl->json_output)
-		print_string(PRINT_JSON, name, NULL, NULL);
-	else
-		pr_out("%s:", name);
 }
 
 static void pr_out_region_chunk_start(struct dl *dl, uint64_t addr)
@@ -2041,84 +2202,6 @@ static void pr_out_region_chunk(struct dl *dl, uint8_t *data, uint32_t len,
 		i++;
 	}
 	pr_out_region_chunk_end(dl);
-}
-
-static void pr_out_section_start(struct dl *dl, const char *name)
-{
-	if (dl->json_output) {
-		open_json_object(NULL);
-		open_json_object(name);
-	}
-}
-
-static void pr_out_section_end(struct dl *dl)
-{
-	if (dl->json_output) {
-		if (dl->arr_last.present)
-			close_json_array(PRINT_JSON, NULL);
-		close_json_object();
-		close_json_object();
-	}
-}
-
-static void pr_out_array_start(struct dl *dl, const char *name)
-{
-	if (dl->json_output) {
-		open_json_array(PRINT_JSON, name);
-	} else {
-		__pr_out_indent_inc();
-		__pr_out_newline();
-		pr_out("%s:", name);
-		__pr_out_indent_inc();
-		__pr_out_newline();
-	}
-}
-
-static void pr_out_array_end(struct dl *dl)
-{
-	if (dl->json_output) {
-		close_json_array(PRINT_JSON, NULL);
-	} else {
-		__pr_out_indent_dec();
-		__pr_out_indent_dec();
-	}
-}
-
-static void pr_out_object_start(struct dl *dl, const char *name)
-{
-	if (dl->json_output) {
-		open_json_object(name);
-	} else {
-		__pr_out_indent_inc();
-		__pr_out_newline();
-		pr_out("%s:", name);
-		__pr_out_indent_inc();
-		__pr_out_newline();
-	}
-}
-
-static void pr_out_object_end(struct dl *dl)
-{
-	if (dl->json_output) {
-		close_json_object();
-	} else {
-		__pr_out_indent_dec();
-		__pr_out_indent_dec();
-	}
-}
-
-static void pr_out_entry_start(struct dl *dl)
-{
-	if (dl->json_output)
-		open_json_object(NULL);
-}
-
-static void pr_out_entry_end(struct dl *dl)
-{
-	if (dl->json_output)
-		close_json_object();
-	else
-		__pr_out_newline();
 }
 
 static void pr_out_stats(struct dl *dl, struct nlattr *nla_stats)
@@ -2899,6 +2982,16 @@ static void pr_out_info(struct dl *dl, const struct nlmsghdr *nlh,
 		print_string(PRINT_ANY, "serial_number", "serial_number %s",
 			     mnl_attr_get_str(nla_sn));
 	}
+
+	if (tb[DEVLINK_ATTR_INFO_BOARD_SERIAL_NUMBER]) {
+		struct nlattr *nla_bsn = tb[DEVLINK_ATTR_INFO_BOARD_SERIAL_NUMBER];
+
+		if (!dl->json_output)
+			__pr_out_newline();
+		check_indent_newline(dl);
+		print_string(PRINT_ANY, "board.serial_number", "board.serial_number %s",
+			     mnl_attr_get_str(nla_bsn));
+	}
 	__pr_out_indent_dec();
 
 	if (has_versions) {
@@ -2934,6 +3027,7 @@ static int cmd_versions_show_cb(const struct nlmsghdr *nlh, void *data)
 		tb[DEVLINK_ATTR_INFO_VERSION_STORED];
 	has_info = tb[DEVLINK_ATTR_INFO_DRIVER_NAME] ||
 		tb[DEVLINK_ATTR_INFO_SERIAL_NUMBER] ||
+		tb[DEVLINK_ATTR_INFO_BOARD_SERIAL_NUMBER] ||
 		has_versions;
 
 	if (has_info)
@@ -3210,6 +3304,8 @@ static void cmd_port_help(void)
 	pr_err("       devlink port set DEV/PORT_INDEX [ type { eth | ib | auto} ]\n");
 	pr_err("       devlink port split DEV/PORT_INDEX count COUNT\n");
 	pr_err("       devlink port unsplit DEV/PORT_INDEX\n");
+	pr_err("       devlink port function set DEV/PORT_INDEX [ hw_addr ADDR ]\n");
+	pr_err("       devlink port health show [ DEV/PORT_INDEX reporter REPORTER_NAME ]\n");
 }
 
 static const char *port_type_name(uint32_t type)
@@ -3255,6 +3351,37 @@ static void pr_out_port_pfvf_num(struct dl *dl, struct nlattr **tb)
 		fn_num = mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_PCI_VF_NUMBER]);
 		print_uint(PRINT_ANY, "vfnum", " vfnum %u", fn_num);
 	}
+}
+
+static void pr_out_port_function(struct dl *dl, struct nlattr **tb_port)
+{
+	struct nlattr *tb[DEVLINK_PORT_FUNCTION_ATTR_MAX + 1] = {};
+	unsigned char *data;
+	SPRINT_BUF(hw_addr);
+	uint32_t len;
+	int err;
+
+	if (!tb_port[DEVLINK_ATTR_PORT_FUNCTION])
+		return;
+
+	err = mnl_attr_parse_nested(tb_port[DEVLINK_ATTR_PORT_FUNCTION],
+				    function_attr_cb, tb);
+	if (err != MNL_CB_OK)
+		return;
+
+	if (!tb[DEVLINK_PORT_FUNCTION_ATTR_HW_ADDR])
+		return;
+
+	len = mnl_attr_get_payload_len(tb[DEVLINK_PORT_FUNCTION_ATTR_HW_ADDR]);
+	data = mnl_attr_get_payload(tb[DEVLINK_PORT_FUNCTION_ATTR_HW_ADDR]);
+
+	pr_out_object_start(dl, "function");
+	check_indent_newline(dl);
+	print_string(PRINT_ANY, "hw_addr", "hw_addr %s",
+		     ll_addr_n2a(data, len, 0, hw_addr, sizeof(hw_addr)));
+	if (!dl->json_output)
+		__pr_out_indent_dec();
+	pr_out_object_end(dl);
 }
 
 static void pr_out_port(struct dl *dl, struct nlattr **tb)
@@ -3310,6 +3437,14 @@ static void pr_out_port(struct dl *dl, struct nlattr **tb)
 	if (tb[DEVLINK_ATTR_PORT_SPLIT_GROUP])
 		print_uint(PRINT_ANY, "split_group", " split_group %u",
 			   mnl_attr_get_u32(tb[DEVLINK_ATTR_PORT_SPLIT_GROUP]));
+	if (tb[DEVLINK_ATTR_PORT_SPLITTABLE])
+		print_bool(PRINT_ANY, "splittable", " splittable %s",
+			   mnl_attr_get_u8(tb[DEVLINK_ATTR_PORT_SPLITTABLE]));
+	if (tb[DEVLINK_ATTR_PORT_LANES])
+		print_uint(PRINT_ANY, "lanes", " lanes %u",
+			   mnl_attr_get_u32(tb[DEVLINK_ATTR_PORT_LANES]));
+
+	pr_out_port_function(dl, tb);
 	pr_out_port_handle_end(dl);
 }
 
@@ -3395,6 +3530,41 @@ static int cmd_port_unsplit(struct dl *dl)
 	return _mnlg_socket_sndrcv(dl->nlg, nlh, NULL, NULL);
 }
 
+static void cmd_port_function_help(void)
+{
+	pr_err("Usage: devlink port function set DEV/PORT_INDEX [ hw_addr ADDR ]\n");
+}
+
+static int cmd_port_function_set(struct dl *dl)
+{
+	struct nlmsghdr *nlh;
+	int err;
+
+	nlh = mnlg_msg_prepare(dl->nlg, DEVLINK_CMD_PORT_SET, NLM_F_REQUEST | NLM_F_ACK);
+
+	err = dl_argv_parse_put(nlh, dl, DL_OPT_HANDLEP | DL_OPT_PORT_FUNCTION_HW_ADDR, 0);
+	if (err)
+		return err;
+
+	return _mnlg_socket_sndrcv(dl->nlg, nlh, NULL, NULL);
+}
+
+static int cmd_port_function(struct dl *dl)
+{
+	if (dl_argv_match(dl, "help") || dl_no_arg(dl)) {
+		cmd_port_function_help();
+		return 0;
+	} else if (dl_argv_match(dl, "set")) {
+		dl_arg_inc(dl);
+		return cmd_port_function_set(dl);
+	}
+	pr_err("Command \"%s\" not found\n", dl_argv(dl));
+	return -ENOENT;
+}
+
+static int cmd_health(struct dl *dl);
+static int __cmd_health_show(struct dl *dl, bool show_device, bool show_port);
+
 static int cmd_port(struct dl *dl)
 {
 	if (dl_argv_match(dl, "help")) {
@@ -3413,6 +3583,18 @@ static int cmd_port(struct dl *dl)
 	} else if (dl_argv_match(dl, "unsplit")) {
 		dl_arg_inc(dl);
 		return cmd_port_unsplit(dl);
+	} else if (dl_argv_match(dl, "function")) {
+		dl_arg_inc(dl);
+		return cmd_port_function(dl);
+	} else if (dl_argv_match(dl, "health")) {
+		dl_arg_inc(dl);
+		if (dl_argv_match(dl, "list") || dl_no_arg(dl)
+		    || (dl_argv_match(dl, "show") && dl_argc(dl) == 1)) {
+			dl_arg_inc(dl);
+			return __cmd_health_show(dl, false, true);
+		} else {
+			return cmd_health(dl);
+		}
 	}
 	pr_err("Command \"%s\" not found\n", dl_argv(dl));
 	return -ENOENT;
@@ -4345,7 +4527,8 @@ static void pr_out_flash_update(struct dl *dl, struct nlattr **tb)
 }
 
 static void pr_out_region(struct dl *dl, struct nlattr **tb);
-static void pr_out_health(struct dl *dl, struct nlattr **tb_health);
+static void pr_out_health(struct dl *dl, struct nlattr **tb_health,
+			  bool show_device, bool show_port);
 static void pr_out_trap(struct dl *dl, struct nlattr **tb, bool array);
 static void pr_out_trap_group(struct dl *dl, struct nlattr **tb, bool array);
 static void pr_out_trap_policer(struct dl *dl, struct nlattr **tb, bool array);
@@ -4424,7 +4607,7 @@ static int cmd_mon_show_cb(const struct nlmsghdr *nlh, void *data)
 		    !tb[DEVLINK_ATTR_HEALTH_REPORTER])
 			return MNL_CB_ERROR;
 		pr_out_mon_header(genl->cmd);
-		pr_out_health(dl, tb);
+		pr_out_health(dl, tb, true, true);
 		pr_out_mon_footer();
 		break;
 	case DEVLINK_CMD_TRAP_GET: /* fall through */
@@ -4471,6 +4654,7 @@ static int cmd_mon_show_cb(const struct nlmsghdr *nlh, void *data)
 		pr_out_trap_policer(dl, tb, false);
 		break;
 	}
+	fflush(stdout);
 	return MNL_CB_OK;
 }
 
@@ -6569,7 +6753,7 @@ static int cmd_health_set_params(struct dl *dl)
 
 	nlh = mnlg_msg_prepare(dl->nlg, DEVLINK_CMD_HEALTH_REPORTER_SET,
 			       NLM_F_REQUEST | NLM_F_ACK);
-	err = dl_argv_parse(dl, DL_OPT_HANDLE | DL_OPT_HEALTH_REPORTER_NAME,
+	err = dl_argv_parse(dl, DL_OPT_HANDLE | DL_OPT_HANDLEP | DL_OPT_HEALTH_REPORTER_NAME,
 			    DL_OPT_HEALTH_REPORTER_GRACEFUL_PERIOD |
 			    DL_OPT_HEALTH_REPORTER_AUTO_RECOVER |
 			    DL_OPT_HEALTH_REPORTER_AUTO_DUMP);
@@ -6589,7 +6773,8 @@ static int cmd_health_dump_clear(struct dl *dl)
 			       NLM_F_REQUEST | NLM_F_ACK);
 
 	err = dl_argv_parse_put(nlh, dl,
-				DL_OPT_HANDLE | DL_OPT_HEALTH_REPORTER_NAME, 0);
+				DL_OPT_HANDLE | DL_OPT_HANDLEP |
+				DL_OPT_HEALTH_REPORTER_NAME, 0);
 	if (err)
 		return err;
 
@@ -6836,7 +7021,8 @@ static int cmd_health_object_common(struct dl *dl, uint8_t cmd, uint16_t flags)
 	nlh = mnlg_msg_prepare(dl->nlg, cmd, flags | NLM_F_REQUEST | NLM_F_ACK);
 
 	err = dl_argv_parse_put(nlh, dl,
-				DL_OPT_HANDLE | DL_OPT_HEALTH_REPORTER_NAME, 0);
+				DL_OPT_HANDLE | DL_OPT_HANDLEP |
+				DL_OPT_HEALTH_REPORTER_NAME, 0);
 	if (err)
 		return err;
 
@@ -6869,7 +7055,8 @@ static int cmd_health_recover(struct dl *dl)
 			       NLM_F_REQUEST | NLM_F_ACK);
 
 	err = dl_argv_parse_put(nlh, dl,
-				DL_OPT_HANDLE | DL_OPT_HEALTH_REPORTER_NAME, 0);
+				DL_OPT_HANDLE | DL_OPT_HANDLEP |
+				DL_OPT_HEALTH_REPORTER_NAME, 0);
 	if (err)
 		return err;
 
@@ -6943,7 +7130,8 @@ static void pr_out_dump_report_timestamp(struct dl *dl, const struct nlattr *att
 	print_string(PRINT_ANY, "last_dump_time", " last_dump_time %s", dump_time);
 }
 
-static void pr_out_health(struct dl *dl, struct nlattr **tb_health)
+static void pr_out_health(struct dl *dl, struct nlattr **tb_health,
+			  bool print_device, bool print_port)
 {
 	struct nlattr *tb[DEVLINK_ATTR_MAX + 1] = {};
 	enum devlink_health_reporter_state state;
@@ -6960,7 +7148,20 @@ static void pr_out_health(struct dl *dl, struct nlattr **tb_health)
 	    !tb[DEVLINK_ATTR_HEALTH_REPORTER_STATE])
 		return;
 
-	pr_out_handle_start_arr(dl, tb_health);
+	if (!print_device && !print_port)
+		return;
+	if (print_port) {
+		if (!print_device && !tb_health[DEVLINK_ATTR_PORT_INDEX])
+			return;
+		else if (tb_health[DEVLINK_ATTR_PORT_INDEX])
+			pr_out_port_handle_start_arr(dl, tb_health, false);
+	}
+	if (print_device) {
+		if (!print_port && tb_health[DEVLINK_ATTR_PORT_INDEX])
+			return;
+		else if (!tb_health[DEVLINK_ATTR_PORT_INDEX])
+			pr_out_handle_start_arr(dl, tb_health);
+	}
 
 	check_indent_newline(dl);
 	print_string(PRINT_ANY, "reporter", "reporter %s",
@@ -6994,25 +7195,33 @@ static void pr_out_health(struct dl *dl, struct nlattr **tb_health)
 	pr_out_handle_end(dl);
 }
 
+struct health_ctx {
+	struct dl *dl;
+	bool show_device;
+	bool show_port;
+};
+
 static int cmd_health_show_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
 	struct nlattr *tb[DEVLINK_ATTR_MAX + 1] = {};
-	struct dl *dl = data;
+	struct health_ctx *ctx = data;
+	struct dl *dl = ctx->dl;
 
 	mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
 	if (!tb[DEVLINK_ATTR_BUS_NAME] || !tb[DEVLINK_ATTR_DEV_NAME] ||
 	    !tb[DEVLINK_ATTR_HEALTH_REPORTER])
 		return MNL_CB_ERROR;
 
-	pr_out_health(dl, tb);
+	pr_out_health(dl, tb, ctx->show_device, ctx->show_port);
 
 	return MNL_CB_OK;
 }
 
-static int cmd_health_show(struct dl *dl)
+static int __cmd_health_show(struct dl *dl, bool show_device, bool show_port)
 {
 	struct nlmsghdr *nlh;
+	struct health_ctx ctx = { dl, show_device, show_port };
 	uint16_t flags = NLM_F_REQUEST | NLM_F_ACK;
 	int err;
 
@@ -7022,27 +7231,28 @@ static int cmd_health_show(struct dl *dl)
 			       flags);
 
 	if (dl_argc(dl) > 0) {
+		ctx.show_port = true;
 		err = dl_argv_parse_put(nlh, dl,
-					DL_OPT_HANDLE |
+					DL_OPT_HANDLE | DL_OPT_HANDLEP |
 					DL_OPT_HEALTH_REPORTER_NAME, 0);
 		if (err)
 			return err;
 	}
 	pr_out_section_start(dl, "health");
 
-	err = _mnlg_socket_sndrcv(dl->nlg, nlh, cmd_health_show_cb, dl);
+	err = _mnlg_socket_sndrcv(dl->nlg, nlh, cmd_health_show_cb, &ctx);
 	pr_out_section_end(dl);
 	return err;
 }
 
 static void cmd_health_help(void)
 {
-	pr_err("Usage: devlink health show [ dev DEV reporter REPORTER_NAME ]\n");
-	pr_err("       devlink health recover DEV reporter REPORTER_NAME\n");
-	pr_err("       devlink health diagnose DEV reporter REPORTER_NAME\n");
-	pr_err("       devlink health dump show DEV reporter REPORTER_NAME\n");
-	pr_err("       devlink health dump clear DEV reporter REPORTER_NAME\n");
-	pr_err("       devlink health set DEV reporter REPORTER_NAME\n");
+	pr_err("Usage: devlink health show [ { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME ]\n");
+	pr_err("       devlink health recover { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
+	pr_err("       devlink health diagnose { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
+	pr_err("       devlink health dump show { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
+	pr_err("       devlink health dump clear { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
+	pr_err("       devlink health set { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
 	pr_err("                          [ grace_period MSEC ]\n");
 	pr_err("                          [ auto_recover { true | false } ]\n");
 	pr_err("                          [ auto_dump    { true | false } ]\n");
@@ -7056,7 +7266,7 @@ static int cmd_health(struct dl *dl)
 	} else if (dl_argv_match(dl, "show") ||
 		   dl_argv_match(dl, "list") || dl_no_arg(dl)) {
 		dl_arg_inc(dl);
-		return cmd_health_show(dl);
+		return __cmd_health_show(dl, true, true);
 	} else if (dl_argv_match(dl, "recover")) {
 		dl_arg_inc(dl);
 		return cmd_health_recover(dl);

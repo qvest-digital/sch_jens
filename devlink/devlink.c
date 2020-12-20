@@ -33,6 +33,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <rt_names.h>
 
 #include "version.h"
@@ -302,6 +303,7 @@ static void ifname_map_free(struct ifname_map *ifname_map)
 #define DL_OPT_TRAP_POLICER_BURST	BIT(36)
 #define DL_OPT_HEALTH_REPORTER_AUTO_DUMP     BIT(37)
 #define DL_OPT_PORT_FUNCTION_HW_ADDR BIT(38)
+#define DL_OPT_FLASH_OVERWRITE		BIT(39)
 
 struct dl_opts {
 	uint64_t present; /* flags of present items */
@@ -349,6 +351,7 @@ struct dl_opts {
 	uint64_t trap_policer_burst;
 	char port_function_hw_addr[MAX_ADDR_LEN];
 	uint32_t port_function_hw_addr_len;
+	uint32_t overwrite_mask;
 };
 
 struct dl {
@@ -1285,6 +1288,19 @@ eswitch_encap_mode_get(const char *typestr,
 	return 0;
 }
 
+static int flash_overwrite_section_get(const char *sectionstr, uint32_t *mask)
+{
+	if (strcmp(sectionstr, "settings") == 0) {
+		*mask |= DEVLINK_FLASH_OVERWRITE_SETTINGS;
+	} else if (strcmp(sectionstr, "identifiers") == 0) {
+		*mask |= DEVLINK_FLASH_OVERWRITE_IDENTIFIERS;
+	} else {
+		pr_err("Unknown overwrite section \"%s\"\n", sectionstr);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static int param_cmode_get(const char *cmodestr,
 			   enum devlink_param_cmode *cmode)
 {
@@ -1627,6 +1643,21 @@ static int dl_argv_parse(struct dl *dl, uint64_t o_required,
 			if (err)
 				return err;
 			o_found |= DL_OPT_FLASH_COMPONENT;
+
+		} else if (dl_argv_match(dl, "overwrite") &&
+				(o_all & DL_OPT_FLASH_OVERWRITE)) {
+			const char *sectionstr;
+
+			dl_arg_inc(dl);
+			err = dl_argv_str(dl, &sectionstr);
+			if(err)
+				return err;
+			err = flash_overwrite_section_get(sectionstr,
+							  &opts->overwrite_mask);
+			if (err)
+				return err;
+			o_found |= DL_OPT_FLASH_OVERWRITE;
+
 		} else if (dl_argv_match(dl, "reporter") &&
 			   (o_all & DL_OPT_HEALTH_REPORTER_NAME)) {
 			dl_arg_inc(dl);
@@ -1767,6 +1798,18 @@ dl_function_attr_put(struct nlmsghdr *nlh, const struct dl_opts *opts)
 	mnl_attr_nest_end(nlh, nest);
 }
 
+static void
+dl_flash_update_overwrite_put(struct nlmsghdr *nlh, const struct dl_opts *opts)
+{
+	struct nla_bitfield32 overwrite_mask;
+
+	overwrite_mask.selector = DEVLINK_SUPPORTED_FLASH_OVERWRITE_SECTIONS;
+	overwrite_mask.value = opts->overwrite_mask;
+
+	mnl_attr_put(nlh, DEVLINK_ATTR_FLASH_UPDATE_OVERWRITE_MASK,
+		     sizeof(overwrite_mask), &overwrite_mask);
+}
+
 static void dl_opts_put(struct nlmsghdr *nlh, struct dl *dl)
 {
 	struct dl_opts *opts = &dl->opts;
@@ -1854,6 +1897,8 @@ static void dl_opts_put(struct nlmsghdr *nlh, struct dl *dl)
 	if (opts->present & DL_OPT_FLASH_COMPONENT)
 		mnl_attr_put_strz(nlh, DEVLINK_ATTR_FLASH_UPDATE_COMPONENT,
 				  opts->flash_component);
+	if (opts->present & DL_OPT_FLASH_OVERWRITE)
+		dl_flash_update_overwrite_put(nlh, opts);
 	if (opts->present & DL_OPT_HEALTH_REPORTER_NAME)
 		mnl_attr_put_strz(nlh, DEVLINK_ATTR_HEALTH_REPORTER_NAME,
 				  opts->reporter_name);
@@ -1954,7 +1999,7 @@ static void cmd_dev_help(void)
 	pr_err("       devlink dev param show [DEV name PARAMETER]\n");
 	pr_err("       devlink dev reload DEV [ netns { PID | NAME | ID } ]\n");
 	pr_err("       devlink dev info [ DEV ]\n");
-	pr_err("       devlink dev flash DEV file PATH [ component NAME ]\n");
+	pr_err("       devlink dev flash DEV file PATH [ component NAME ] [ overwrite SECTION ]\n");
 }
 
 static bool cmp_arr_last_handle(struct dl *dl, const char *bus_name,
@@ -2699,7 +2744,7 @@ static int cmd_dev_param_set(struct dl *dl)
 	struct param_ctx ctx = {};
 	struct nlmsghdr *nlh;
 	bool conv_exists;
-	uint32_t val_u32;
+	uint32_t val_u32 = 0;
 	uint16_t val_u16;
 	uint8_t val_u8;
 	bool val_bool;
@@ -3066,6 +3111,9 @@ static int cmd_dev_info(struct dl *dl)
 
 struct cmd_dev_flash_status_ctx {
 	struct dl *dl;
+	struct timespec time_of_last_status;
+	uint64_t status_msg_timeout;
+	size_t elapsed_time_msg_len;
 	char *last_msg;
 	char *last_component;
 	uint8_t not_first:1,
@@ -3083,6 +3131,16 @@ static int nullstrcmp(const char *str1, const char *str2)
 	return str1 ? 1 : -1;
 }
 
+static void cmd_dev_flash_clear_elapsed_time(struct cmd_dev_flash_status_ctx *ctx)
+{
+	int i;
+
+	for (i = 0; i < ctx->elapsed_time_msg_len; i++)
+		pr_out_tty("\b \b");
+
+	ctx->elapsed_time_msg_len = 0;
+}
+
 static int cmd_dev_flash_status_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct cmd_dev_flash_status_ctx *ctx = data;
@@ -3094,6 +3152,8 @@ static int cmd_dev_flash_status_cb(const struct nlmsghdr *nlh, void *data)
 	const char *msg = NULL;
 	const char *bus_name;
 	const char *dev_name;
+
+	cmd_dev_flash_clear_elapsed_time(ctx);
 
 	if (genl->cmd != DEVLINK_CMD_FLASH_UPDATE_STATUS &&
 	    genl->cmd != DEVLINK_CMD_FLASH_UPDATE_END)
@@ -3124,12 +3184,19 @@ static int cmd_dev_flash_status_cb(const struct nlmsghdr *nlh, void *data)
 		done = mnl_attr_get_u64(tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_DONE]);
 	if (tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_TOTAL])
 		total = mnl_attr_get_u64(tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_TOTAL]);
+	if (tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_TIMEOUT])
+		ctx->status_msg_timeout = mnl_attr_get_u64(tb[DEVLINK_ATTR_FLASH_UPDATE_STATUS_TIMEOUT]);
+	else
+		ctx->status_msg_timeout = 0;
 
 	if (!nullstrcmp(msg, ctx->last_msg) &&
 	    !nullstrcmp(component, ctx->last_component) &&
 	    ctx->last_pc && ctx->not_first) {
 		pr_out_tty("\b\b\b\b\b"); /* clean percentage */
 	} else {
+		/* only update the last status timestamp if the message changed */
+		clock_gettime(CLOCK_MONOTONIC, &ctx->time_of_last_status);
+
 		if (ctx->not_first)
 			pr_out("\n");
 		if (component) {
@@ -3155,11 +3222,78 @@ static int cmd_dev_flash_status_cb(const struct nlmsghdr *nlh, void *data)
 	return MNL_CB_STOP;
 }
 
+static void cmd_dev_flash_time_elapsed(struct cmd_dev_flash_status_ctx *ctx)
+{
+	struct timespec now, res;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+
+	res.tv_sec = now.tv_sec - ctx->time_of_last_status.tv_sec;
+	res.tv_nsec = now.tv_nsec - ctx->time_of_last_status.tv_nsec;
+	if (res.tv_nsec < 0) {
+		res.tv_sec--;
+		res.tv_nsec += 1000000000L;
+	}
+
+	/* Only begin displaying an elapsed time message if we've waited a few
+	 * seconds with no response, or the status message included a timeout
+	 * value.
+	 */
+	if (res.tv_sec > 2 || ctx->status_msg_timeout) {
+		uint64_t elapsed_m, elapsed_s;
+		char msg[128];
+		size_t len;
+
+		/* clear the last elapsed time message, if we have one */
+		cmd_dev_flash_clear_elapsed_time(ctx);
+
+		elapsed_m = res.tv_sec / 60;
+		elapsed_s = res.tv_sec % 60;
+
+		/**
+		 * If we've elapsed a few seconds without receiving any status
+		 * notification from the device, we display a time elapsed
+		 * message. This has a few possible formats:
+		 *
+		 * 1) just time elapsed, when no timeout was provided
+		 *    " ( Xm Ys )"
+		 * 2) time elapsed out of a timeout that came from the device
+		 *    driver via DEVLINK_CMD_FLASH_UPDATE_STATUS_TIMEOUT
+		 *    " ( Xm Ys : Am Ys)"
+		 * 3) time elapsed if we still receive no status after
+		 *    reaching the provided timeout.
+		 *    " ( Xm Ys : timeout reached )"
+		 */
+		if (!ctx->status_msg_timeout) {
+			len = snprintf(msg, sizeof(msg),
+				       " ( %lum %lus )", elapsed_m, elapsed_s);
+		} else if (res.tv_sec <= ctx->status_msg_timeout) {
+			uint64_t timeout_m, timeout_s;
+
+			timeout_m = ctx->status_msg_timeout / 60;
+			timeout_s = ctx->status_msg_timeout % 60;
+
+			len = snprintf(msg, sizeof(msg),
+				       " ( %lum %lus : %lum %lus )",
+				       elapsed_m, elapsed_s, timeout_m, timeout_s);
+		} else {
+			len = snprintf(msg, sizeof(msg),
+				       " ( %lum %lus : timeout reached )", elapsed_m, elapsed_s);
+		}
+
+		ctx->elapsed_time_msg_len = len;
+
+		pr_out_tty("%s", msg);
+		fflush(stdout);
+	}
+}
+
 static int cmd_dev_flash_fds_process(struct cmd_dev_flash_status_ctx *ctx,
 				     struct mnlg_socket *nlg_ntf,
 				     int pipe_r)
 {
 	int nlfd = mnlg_socket_get_fd(nlg_ntf);
+	struct timeval timeout;
 	fd_set fds[3];
 	int fdmax;
 	int i;
@@ -3174,7 +3308,14 @@ static int cmd_dev_flash_fds_process(struct cmd_dev_flash_status_ctx *ctx,
 	if (nlfd >= fdmax)
 		fdmax = nlfd + 1;
 
-	while (select(fdmax, &fds[0], &fds[1], &fds[2], NULL) < 0) {
+	/* select only for a short while (1/10th of a second) in order to
+	 * allow periodically updating the screen with an elapsed time
+	 * indicator.
+	 */
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 100000;
+
+	while (select(fdmax, &fds[0], &fds[1], &fds[2], &timeout) < 0) {
 		if (errno == EINTR)
 			continue;
 		pr_err("select() failed\n");
@@ -3196,6 +3337,7 @@ static int cmd_dev_flash_fds_process(struct cmd_dev_flash_status_ctx *ctx,
 			return err2;
 		ctx->flash_done = 1;
 	}
+	cmd_dev_flash_time_elapsed(ctx);
 	return 0;
 }
 
@@ -3219,7 +3361,7 @@ static int cmd_dev_flash(struct dl *dl)
 			       NLM_F_REQUEST | NLM_F_ACK);
 
 	err = dl_argv_parse_put(nlh, dl, DL_OPT_HANDLE | DL_OPT_FLASH_FILE_NAME,
-				DL_OPT_FLASH_COMPONENT);
+				DL_OPT_FLASH_COMPONENT | DL_OPT_FLASH_OVERWRITE);
 	if (err)
 		return err;
 
@@ -3229,19 +3371,21 @@ static int cmd_dev_flash(struct dl *dl)
 
 	err = _mnlg_socket_group_add(nlg_ntf, DEVLINK_GENL_MCGRP_CONFIG_NAME);
 	if (err)
-		return err;
+		goto err_socket;
 
 	err = pipe(pipe_fds);
-	if (err == -1)
-		return -errno;
+	if (err == -1) {
+		err = -errno;
+		goto err_socket;
+	}
 	pipe_r = pipe_fds[0];
 	pipe_w = pipe_fds[1];
 
 	pid = fork();
 	if (pid == -1) {
-		close(pipe_r);
 		close(pipe_w);
-		return -errno;
+		err = -errno;
+		goto out;
 	} else if (!pid) {
 		/* In child, just execute the flash and pass returned
 		 * value through pipe once it is done.
@@ -3256,6 +3400,11 @@ static int cmd_dev_flash(struct dl *dl)
 	}
 	close(pipe_w);
 
+	/* initialize starting time to allow comparison for when to begin
+	 * displaying a time elapsed message.
+	 */
+	clock_gettime(CLOCK_MONOTONIC, &ctx.time_of_last_status);
+
 	do {
 		err = cmd_dev_flash_fds_process(&ctx, nlg_ntf, pipe_r);
 		if (err)
@@ -3265,6 +3414,7 @@ static int cmd_dev_flash(struct dl *dl)
 	err = _mnlg_socket_recv_run(dl->nlg, NULL, NULL);
 out:
 	close(pipe_r);
+err_socket:
 	mnlg_socket_close(nlg_ntf);
 	return err;
 }
@@ -3343,6 +3493,9 @@ static void pr_out_port_pfvf_num(struct dl *dl, struct nlattr **tb)
 {
 	uint16_t fn_num;
 
+	if (tb[DEVLINK_ATTR_PORT_CONTROLLER_NUMBER])
+		print_uint(PRINT_ANY, "controller", " controller %u",
+			   mnl_attr_get_u32(tb[DEVLINK_ATTR_PORT_CONTROLLER_NUMBER]));
 	if (tb[DEVLINK_ATTR_PORT_PCI_PF_NUMBER]) {
 		fn_num = mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_PCI_PF_NUMBER]);
 		print_uint(PRINT_ANY, "pfnum", " pfnum %u", fn_num);
@@ -3350,6 +3503,12 @@ static void pr_out_port_pfvf_num(struct dl *dl, struct nlattr **tb)
 	if (tb[DEVLINK_ATTR_PORT_PCI_VF_NUMBER]) {
 		fn_num = mnl_attr_get_u16(tb[DEVLINK_ATTR_PORT_PCI_VF_NUMBER]);
 		print_uint(PRINT_ANY, "vfnum", " vfnum %u", fn_num);
+	}
+	if (tb[DEVLINK_ATTR_PORT_EXTERNAL]) {
+		uint8_t external;
+
+		external = mnl_attr_get_u8(tb[DEVLINK_ATTR_PORT_EXTERNAL]);
+		print_bool(PRINT_ANY, "external", " external %s", external);
 	}
 }
 
@@ -7046,6 +7205,13 @@ static int cmd_health_diagnose(struct dl *dl)
 					0);
 }
 
+static int cmd_health_test(struct dl *dl)
+{
+	return cmd_health_object_common(dl,
+					DEVLINK_CMD_HEALTH_REPORTER_TEST,
+					0);
+}
+
 static int cmd_health_recover(struct dl *dl)
 {
 	struct nlmsghdr *nlh;
@@ -7250,6 +7416,7 @@ static void cmd_health_help(void)
 	pr_err("Usage: devlink health show [ { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME ]\n");
 	pr_err("       devlink health recover { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
 	pr_err("       devlink health diagnose { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
+	pr_err("       devlink health test { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
 	pr_err("       devlink health dump show { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
 	pr_err("       devlink health dump clear { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
 	pr_err("       devlink health set { DEV | DEV/PORT_INDEX } reporter REPORTER_NAME\n");
@@ -7273,6 +7440,9 @@ static int cmd_health(struct dl *dl)
 	} else if (dl_argv_match(dl, "diagnose")) {
 		dl_arg_inc(dl);
 		return cmd_health_diagnose(dl);
+	} else if (dl_argv_match(dl, "test")) {
+		dl_arg_inc(dl);
+		return cmd_health_test(dl);
 	} else if (dl_argv_match(dl, "dump")) {
 		dl_arg_inc(dl);
 		if (dl_argv_match(dl, "show")) {

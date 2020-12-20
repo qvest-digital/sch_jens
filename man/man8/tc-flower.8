@@ -1,11 +1,5 @@
 .TH "Flower filter in tc" 8 "22 Oct 2015" "iproute2" "Linux"
 
-	"Usage: ct clear\n"
-		"	ct commit [force] [zone ZONE] [mark MASKED_MARK] [label MASKED_LABEL] [nat NAT_SPEC] [OFFLOAD_POLICY]\n"
-		"	ct [nat] [zone ZONE] [OFFLOAD_POLICY]\n"
-		"Where: ZONE is the conntrack zone table number\n"
-		"	NAT_SPEC is {src|dst} addr addr1[-addr2] [port port1[-port2]]\n"
-		"	OFFLOAD_POLICY is [policy_pkts PACKETS] [policy_timeout TIMEOUT]\n"
 .SH NAME
 flower \- flow based traffic control filter
 .SH SYNOPSIS
@@ -306,7 +300,7 @@ If the prefix is missing, \fBtc\fR assumes a full-length host match.
 .TQ
 .IR \fBsrc_port " { "  MASKED_NUMBER " | " " MIN_VALUE-MAX_VALUE "  }
 Match on layer 4 protocol source or destination port number, with an
-optional mask. Alternatively, the mininum and maximum values can be
+optional mask. Alternatively, the minimum and maximum values can be
 specified to match on a range of layer 4 protocol source or destination
 port numbers. Only available for
 .BR ip_proto " values " udp ", " tcp  " and " sctp
@@ -384,7 +378,7 @@ Matches on connection tracking info
 .RS
 .TP
 .I CT_STATE
-Match the connection state, and can ne combination of [{+|-}flag] flags, where flag can be one of
+Match the connection state, and can be combination of [{+|-}flag] flags, where flag can be one of
 .RS
 .TP
 trk - Tracked connection.

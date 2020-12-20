@@ -75,6 +75,9 @@ ip-link \- network device configuration
 .br
 .RB "[ " protodown " { " on " | " off " } ]"
 .br
+.RB "[ " protodown_reason
+.IR PREASON " { " on " | " off " } ]"
+.br
 .RB "[ " trailers " { " on " | " off " } ]"
 .br
 .RB "[ " txqueuelen
@@ -441,7 +444,7 @@ the following additional arguments are supported:
 - either 802.1Q or 802.1ad.
 
 .BI id " VLANID "
-- specifies the VLAN Identifer to use. Note that numbers with a leading " 0 " or " 0x " are interpreted as octal or hexadeimal, respectively.
+- specifies the VLAN Identifier to use. Note that numbers with a leading " 0 " or " 0x " are interpreted as octal or hexadecimal, respectively.
 
 .BR reorder_hdr " { " on " | " off " } "
 - specifies whether ethernet headers are reordered or not (default is
@@ -572,7 +575,7 @@ the following additional arguments are supported:
 .in +8
 .sp
 .BI  id " VNI "
-- specifies the VXLAN Network Identifer (or VXLAN Segment
+- specifies the VXLAN Network Identifier (or VXLAN Segment
 Identifier) to use.
 
 .BI dev " PHYS_DEV"
@@ -1237,7 +1240,7 @@ the following additional arguments are supported:
 .in +8
 .sp
 .BI  id " VNI "
-- specifies the Virtual Network Identifer to use.
+- specifies the Virtual Network Identifier to use.
 
 .sp
 .BI remote " IPADDR"
@@ -1947,6 +1950,13 @@ on the port. Switch drivers can react to this error by doing a phys
 down on the switch port.
 
 .TP
+.BR "protodown_reason PREASON on " or " off"
+set
+.B PROTODOWN
+reasons on the device. protodown reason bit names can be enumerated under
+/etc/iproute2/protodown_reasons.d/. possible reasons bits 0-31
+
+.TP
 .BR "dynamic on " or " dynamic off"
 change the
 .B DYNAMIC
@@ -2497,7 +2507,7 @@ specifies the device to display address-family statistics for.
 
 .PP
 .I "TYPE"
-specifies which help of link type to dislpay.
+specifies which help of link type to display.
 
 .SS
 .I GROUP

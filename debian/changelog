@@ -1,3 +1,11 @@
+iproute2 (5.10.0-1) unstable; urgency=medium
+
+  * Update upstream source from tag 'upstream/5.10.0'
+    (Closes: #972784, #949235)
+  * Bump Standards-Version to 4.5.1, no changes
+
+ -- Luca Boccassi <bluca@debian.org>  Sun, 20 Dec 2020 22:47:37 +0000
+
 iproute2 (5.9.0-1) unstable; urgency=medium
 
   * Update upstream source from tag 'upstream/5.9.0'

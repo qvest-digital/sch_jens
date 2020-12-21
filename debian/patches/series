@@ -1,2 +1,7 @@
 0001-Add-moo-feature.patch
 0004-sync-iptables-header.patch
+0005-iproute2-add-check_libbpf-and-get_libbpf_version.patch
+0006-lib-make-ipvrf-able-to-use-libbpf-and-fix-function-n.patch
+0007-lib-add-libbpf-support.patch
+0008-examples-bpf-move-struct-bpf_elf_map-defined-maps-to.patch
+0009-examples-bpf-add-bpf-examples-with-BTF-defined-maps.patch

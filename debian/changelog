@@ -1,3 +1,11 @@
+iproute2 (5.10.0-2) unstable; urgency=medium
+
+  * Backport patches from iproute2-next to support libbpf
+  * Add build-dependency on libbpf-dev
+  * Remove duplicated lines from iproute2.lintian-overridess
+
+ -- Luca Boccassi <bluca@debian.org>  Sat, 26 Dec 2020 15:16:36 +0000
+
 iproute2 (5.10.0-1) unstable; urgency=medium
 
   * Update upstream source from tag 'upstream/5.10.0'

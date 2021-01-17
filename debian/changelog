@@ -1,3 +1,9 @@
+iproute2 (5.10.0-3) unstable; urgency=medium
+
+  * Backport patches to fix ip vrf exec (Closes: #980046)
+
+ -- Luca Boccassi <bluca@debian.org>  Sun, 17 Jan 2021 23:11:31 +0000
+
 iproute2 (5.10.0-2) unstable; urgency=medium
 
   * Backport patches from iproute2-next to support libbpf

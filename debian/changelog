@@ -1,3 +1,10 @@
+iproute2 (5.10.0-4~bpo10+1) buster-backports; urgency=medium
+
+  * Rebuild for buster-backports.
+  * Merge tag 'debian/5.10.0-4' into buster-backports
+
+ -- Luca Boccassi <bluca@debian.org>  Tue, 02 Mar 2021 15:54:56 +0000
+
 iproute2 (5.10.0-4) unstable; urgency=medium
 
   * Backport 0012-iproute-force-rtm_dst_len-to-32-128.patch to fix ip

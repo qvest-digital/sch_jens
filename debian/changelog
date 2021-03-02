@@ -1,3 +1,34 @@
+iproute2 (5.10.0-4) unstable; urgency=medium
+
+  * Backport 0012-iproute-force-rtm_dst_len-to-32-128.patch to fix ip
+    route get with netmask (Closes: #944730)
+  * Add d/not-installed file
+  * Bump debhelper-compat to 13
+
+ -- Luca Boccassi <bluca@debian.org>  Fri, 05 Feb 2021 23:34:59 +0000
+
+iproute2 (5.10.0-3) unstable; urgency=medium
+
+  * Backport patches to fix ip vrf exec (Closes: #980046)
+
+ -- Luca Boccassi <bluca@debian.org>  Sun, 17 Jan 2021 23:11:31 +0000
+
+iproute2 (5.10.0-2) unstable; urgency=medium
+
+  * Backport patches from iproute2-next to support libbpf
+  * Add build-dependency on libbpf-dev
+  * Remove duplicated lines from iproute2.lintian-overridess
+
+ -- Luca Boccassi <bluca@debian.org>  Sat, 26 Dec 2020 15:16:36 +0000
+
+iproute2 (5.10.0-1) unstable; urgency=medium
+
+  * Update upstream source from tag 'upstream/5.10.0'
+    (Closes: #972784, #949235)
+  * Bump Standards-Version to 4.5.1, no changes
+
+ -- Luca Boccassi <bluca@debian.org>  Sun, 20 Dec 2020 22:47:37 +0000
+
 iproute2 (5.9.0-1~bpo10+1) buster-backports; urgency=medium
 
   * Rebuild for buster-backports

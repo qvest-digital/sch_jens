@@ -114,6 +114,7 @@ static int sctp_ino;
 static int show_tipcinfo;
 static int show_tos;
 static int show_cgroup;
+static int show_inet_sockopt;
 int oneline;
 
 enum col_id {
@@ -3135,7 +3136,7 @@ static void mptcp_stats_print(struct mptcp_info *s)
 		out(" subflows:%d", s->mptcpi_subflows);
 	if (s->mptcpi_add_addr_signal)
 		out(" add_addr_signal:%d", s->mptcpi_add_addr_signal);
-	if (s->mptcpi_add_addr_signal)
+	if (s->mptcpi_add_addr_accepted)
 		out(" add_addr_accepted:%d", s->mptcpi_add_addr_accepted);
 	if (s->mptcpi_subflows_max)
 		out(" subflows_max:%d", s->mptcpi_subflows_max);
@@ -3331,6 +3332,41 @@ static int inet_show_sock(struct nlmsghdr *nlh,
 	if (show_cgroup) {
 		if (tb[INET_DIAG_CGROUP_ID])
 			out(" cgroup:%s", cg_id_to_path(rta_getattr_u64(tb[INET_DIAG_CGROUP_ID])));
+	}
+
+	if (show_inet_sockopt) {
+		if (tb[INET_DIAG_SOCKOPT] && RTA_PAYLOAD(tb[INET_DIAG_SOCKOPT]) >=
+		    sizeof(struct inet_diag_sockopt)) {
+			const struct inet_diag_sockopt *sockopt =
+					RTA_DATA(tb[INET_DIAG_SOCKOPT]);
+			if (!oneline)
+				out("\n\tinet-sockopt: (");
+			else
+				out(" inet-sockopt: (");
+			if (sockopt->recverr)
+				out(" recverr");
+			if (sockopt->is_icsk)
+				out(" is_icsk");
+			if (sockopt->freebind)
+				out(" freebind");
+			if (sockopt->hdrincl)
+				out(" hdrincl");
+			if (sockopt->mc_loop)
+				out(" mc_loop");
+			if (sockopt->transparent)
+				out(" transparent");
+			if (sockopt->mc_all)
+				out(" mc_all");
+			if (sockopt->nodefrag)
+				out(" nodefrag");
+			if (sockopt->bind_address_no_port)
+				out(" bind_addr_no_port");
+			if (sockopt->recverr_rfc4884)
+				out(" recverr_rfc4884");
+			if (sockopt->defer_connect)
+				out(" defer_connect");
+			out(")");
+		}
 	}
 
 	if (show_mem || (show_tcpinfo && s->type != IPPROTO_UDP)) {
@@ -4500,6 +4536,21 @@ static void xdp_show_umem(struct xdp_diag_umem *umem, struct xdp_diag_ring *fr,
 		xdp_show_ring("cr", cr);
 }
 
+static void xdp_show_stats(struct xdp_diag_stats *stats)
+{
+	if (oneline)
+		out(" stats(");
+	else
+		out("\n\tstats(");
+	out("rx dropped:%llu", stats->n_rx_dropped);
+	out(",rx invalid:%llu", stats->n_rx_invalid);
+	out(",rx queue full:%llu", stats->n_rx_full);
+	out(",rx fill ring empty:%llu", stats->n_fill_ring_empty);
+	out(",tx invalid:%llu", stats->n_tx_invalid);
+	out(",tx ring empty:%llu", stats->n_tx_ring_empty);
+	out(")");
+}
+
 static int xdp_show_sock(struct nlmsghdr *nlh, void *arg)
 {
 	struct xdp_diag_ring *rx = NULL, *tx = NULL, *fr = NULL, *cr = NULL;
@@ -4507,6 +4558,7 @@ static int xdp_show_sock(struct nlmsghdr *nlh, void *arg)
 	struct rtattr *tb[XDP_DIAG_MAX + 1];
 	struct xdp_diag_info *info = NULL;
 	struct xdp_diag_umem *umem = NULL;
+	struct xdp_diag_stats *stats = NULL;
 	const struct filter *f = arg;
 	struct sockstat stat = {};
 
@@ -4541,6 +4593,8 @@ static int xdp_show_sock(struct nlmsghdr *nlh, void *arg)
 
 		stat.rq = skmeminfo[SK_MEMINFO_RMEM_ALLOC];
 	}
+	if (tb[XDP_DIAG_STATS])
+		stats = RTA_DATA(tb[XDP_DIAG_STATS]);
 
 	if (xdp_stats_print(&stat, f))
 		return 0;
@@ -4552,6 +4606,8 @@ static int xdp_show_sock(struct nlmsghdr *nlh, void *arg)
 			xdp_show_ring("tx", tx);
 		if (umem)
 			xdp_show_umem(umem, fr, cr);
+		if (stats)
+			xdp_show_stats(stats);
 	}
 
 	if (show_mem)
@@ -4570,7 +4626,7 @@ static int xdp_show(struct filter *f)
 
 	req.r.sdiag_family = AF_XDP;
 	req.r.xdiag_show = XDP_SHOW_INFO | XDP_SHOW_RING_CFG | XDP_SHOW_UMEM |
-			   XDP_SHOW_MEMINFO;
+			   XDP_SHOW_MEMINFO | XDP_SHOW_STATS;
 
 	return handle_netlink_request(f, &req.nlh, sizeof(req), xdp_show_sock);
 }
@@ -5210,6 +5266,7 @@ static void _usage(FILE *dest)
 "   -K, --kill          forcibly close sockets, display what was closed\n"
 "   -H, --no-header     Suppress header line\n"
 "   -O, --oneline       socket's data printed on a single line\n"
+"       --inet-sockopt  show various inet socket options\n"
 "\n"
 "   -A, --query=QUERY, --socket=QUERY\n"
 "       QUERY := {all|inet|tcp|mptcp|udp|raw|unix|unix_dgram|unix_stream|unix_seqpacket|packet|netlink|vsock_stream|vsock_dgram|tipc}[,QUERY]\n"
@@ -5299,6 +5356,8 @@ static int scan_state(const char *state)
 
 #define OPT_CGROUP 261
 
+#define OPT_INET_SOCKOPT 262
+
 static const struct option long_opts[] = {
 	{ "numeric", 0, 0, 'n' },
 	{ "resolve", 0, 0, 'r' },
@@ -5341,6 +5400,7 @@ static const struct option long_opts[] = {
 	{ "xdp", 0, 0, OPT_XDPSOCK},
 	{ "mptcp", 0, 0, 'M' },
 	{ "oneline", 0, 0, 'O' },
+	{ "inet-sockopt", 0, 0, OPT_INET_SOCKOPT },
 	{ 0 }
 
 };
@@ -5538,6 +5598,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'O':
 			oneline = 1;
+			break;
+		case OPT_INET_SOCKOPT:
+			show_inet_sockopt = 1;
 			break;
 		case 'h':
 			help();

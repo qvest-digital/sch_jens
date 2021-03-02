@@ -1,0 +1,312 @@
+Author: Hangbin Liu <haliu@redhat.com>
+Origin: https://git.kernel.org/pub/scm/network/iproute2/iproute2-next.git/commit/?id=503e9229b054b948cfb1b1b77bee97c1f74e491c
+Description: iproute2: add check_libbpf() and get_libbpf_version()
+
+ This patch aim to add basic checking functions for later iproute2
+ libbpf support.
+
+ First we add check_libbpf() in configure to see if we have bpf library
+ support. By default the system libbpf will be used, but static linking
+ against a custom libbpf version can be achieved by passing libbpf DESTDIR
+ to variable LIBBPF_DIR for configure.
+
+ Another variable LIBBPF_FORCE is used to control whether to build iproute2
+ with libbpf. If set to on, then force to build with libbpf and exit if
+ not available. If set to off, then force to not build with libbpf.
+
+ When dynamically linking against libbpf, we can't be sure that the
+ version we discovered at compile time is actually the one we are
+ using at runtime. This can lead to hard-to-debug errors. So we add
+ a new file lib/bpf_glue.c and a helper function get_libbpf_version()
+ to get correct libbpf version at runtime.
+--- a/configure
++++ b/configure
+@@ -2,6 +2,11 @@
+ # SPDX-License-Identifier: GPL-2.0
+ # This is not an autoconf generated configure
+ #
++# Influential LIBBPF environment variables:
++#   LIBBPF_FORCE={on,off}   on: require link against libbpf;
++#                           off: disable libbpf probing
++#   LIBBPF_DIR              Path to libbpf DESTDIR to use
++
+ INCLUDE=${1:-"$PWD/include"}
+ 
+ # Output file which is input to Makefile
+@@ -240,6 +245,111 @@
+     fi
+ }
+ 
++have_libbpf_basic()
++{
++    cat >$TMPDIR/libbpf_test.c <<EOF
++#include <bpf/libbpf.h>
++int main(int argc, char **argv) {
++    bpf_program__set_autoload(NULL, false);
++    bpf_map__ifindex(NULL);
++    bpf_map__set_pin_path(NULL, NULL);
++    bpf_object__open_file(NULL, NULL);
++    return 0;
++}
++EOF
++
++    $CC -o $TMPDIR/libbpf_test $TMPDIR/libbpf_test.c $LIBBPF_CFLAGS $LIBBPF_LDLIBS >/dev/null 2>&1
++    local ret=$?
++
++    rm -f $TMPDIR/libbpf_test.c $TMPDIR/libbpf_test
++    return $ret
++}
++
++have_libbpf_sec_name()
++{
++    cat >$TMPDIR/libbpf_sec_test.c <<EOF
++#include <bpf/libbpf.h>
++int main(int argc, char **argv) {
++    void *ptr;
++    bpf_program__section_name(NULL);
++    return 0;
++}
++EOF
++
++    $CC -o $TMPDIR/libbpf_sec_test $TMPDIR/libbpf_sec_test.c $LIBBPF_CFLAGS $LIBBPF_LDLIBS >/dev/null 2>&1
++    local ret=$?
++
++    rm -f $TMPDIR/libbpf_sec_test.c $TMPDIR/libbpf_sec_test
++    return $ret
++}
++
++check_force_libbpf_on()
++{
++    # if set LIBBPF_FORCE=on but no libbpf support, just exist the config
++    # process to make sure we don't build without libbpf.
++    if [ "$LIBBPF_FORCE" = on ]; then
++        echo "	LIBBPF_FORCE=on set, but couldn't find a usable libbpf"
++        exit 1
++    fi
++}
++
++check_libbpf()
++{
++    # if set LIBBPF_FORCE=off, disable libbpf entirely
++    if [ "$LIBBPF_FORCE" = off ]; then
++        echo "no"
++        return
++    fi
++
++    if ! ${PKG_CONFIG} libbpf --exists && [ -z "$LIBBPF_DIR" ] ; then
++        echo "no"
++        check_force_libbpf_on
++        return
++    fi
++
++    if [ $(uname -m) = x86_64 ]; then
++        local LIBBPF_LIBDIR="${LIBBPF_DIR}/usr/lib64"
++    else
++        local LIBBPF_LIBDIR="${LIBBPF_DIR}/usr/lib"
++    fi
++
++    if [ -n "$LIBBPF_DIR" ]; then
++        LIBBPF_CFLAGS="-I${LIBBPF_DIR}/usr/include"
++        LIBBPF_LDLIBS="${LIBBPF_LIBDIR}/libbpf.a -lz -lelf"
++        LIBBPF_VERSION=$(PKG_CONFIG_LIBDIR=${LIBBPF_LIBDIR}/pkgconfig ${PKG_CONFIG} libbpf --modversion)
++    else
++        LIBBPF_CFLAGS=$(${PKG_CONFIG} libbpf --cflags)
++        LIBBPF_LDLIBS=$(${PKG_CONFIG} libbpf --libs)
++        LIBBPF_VERSION=$(${PKG_CONFIG} libbpf --modversion)
++    fi
++
++    if ! have_libbpf_basic; then
++        echo "no"
++        echo "	libbpf version $LIBBPF_VERSION is too low, please update it to at least 0.1.0"
++        check_force_libbpf_on
++        return
++    else
++        echo "HAVE_LIBBPF:=y" >> $CONFIG
++        echo 'CFLAGS += -DHAVE_LIBBPF ' $LIBBPF_CFLAGS >> $CONFIG
++        echo "CFLAGS += -DLIBBPF_VERSION=\\\"$LIBBPF_VERSION\\\"" >> $CONFIG
++        echo 'LDLIBS += ' $LIBBPF_LDLIBS >> $CONFIG
++
++        if [ -z "$LIBBPF_DIR" ]; then
++            echo "CFLAGS += -DLIBBPF_DYNAMIC" >> $CONFIG
++        fi
++    fi
++
++    # bpf_program__title() is deprecated since libbpf 0.2.0, use
++    # bpf_program__section_name() instead if we support
++    if have_libbpf_sec_name; then
++        echo "HAVE_LIBBPF_SECTION_NAME:=y" >> $CONFIG
++        echo 'CFLAGS += -DHAVE_LIBBPF_SECTION_NAME ' >> $CONFIG
++    fi
++
++    echo "yes"
++    echo "	libbpf version $LIBBPF_VERSION"
++}
++
+ check_selinux()
+ # SELinux is a compile time option in the ss utility
+ {
+@@ -385,6 +495,9 @@
+ echo -n "SELinux support: "
+ check_selinux
+ 
++echo -n "libbpf support: "
++check_libbpf
++
+ echo -n "ELF support: "
+ check_elf
+ 
+--- a/include/bpf_util.h
++++ b/include/bpf_util.h
+@@ -300,4 +300,7 @@
+ 	return -1;
+ }
+ #endif /* HAVE_ELF */
++
++const char *get_libbpf_version(void);
++
+ #endif /* __BPF_UTIL__ */
+--- a/ip/ip.c
++++ b/ip/ip.c
+@@ -24,6 +24,7 @@
+ #include "namespace.h"
+ #include "color.h"
+ #include "rt_names.h"
++#include "bpf_util.h"
+ 
+ int preferred_family = AF_UNSPEC;
+ int human_readable;
+@@ -188,8 +189,9 @@
+ 
+ int main(int argc, char **argv)
+ {
+-	char *basename;
++	const char *libbpf_version;
+ 	char *batch_file = NULL;
++	char *basename;
+ 	int color = 0;
+ 
+ 	/* to run vrf exec without root, capabilities might be set, drop them
+@@ -270,7 +272,11 @@
+ 			++timestamp;
+ 			++timestamp_short;
+ 		} else if (matches(opt, "-Version") == 0) {
+-			printf("ip utility, iproute2-%s\n", version);
++			printf("ip utility, iproute2-%s", version);
++			libbpf_version = get_libbpf_version();
++			if (libbpf_version)
++				printf(", libbpf %s", libbpf_version);
++			printf("\n");
+ 			exit(0);
+ 		} else if (matches(opt, "-force") == 0) {
+ 			++force;
+--- a/lib/Makefile
++++ b/lib/Makefile
+@@ -5,7 +5,7 @@
+ 
+ UTILOBJ = utils.o rt_names.o ll_map.o ll_types.o ll_proto.o ll_addr.o \
+ 	inet_proto.o namespace.o json_writer.o json_print.o \
+-	names.o color.o bpf.o exec.o fs.o cg_map.o
++	names.o color.o bpf.o bpf_glue.o exec.o fs.o cg_map.o
+ 
+ NLOBJ=libgenl.o libnetlink.o
+ 
+--- /dev/null
++++ b/lib/bpf_glue.c
+@@ -0,0 +1,63 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * bpf_glue.c:	BPF code to call both legacy and libbpf code
++ * Authors:	Hangbin Liu <haliu@redhat.com>
++ *
++ */
++#include "bpf_util.h"
++
++#ifdef HAVE_LIBBPF
++static const char *_libbpf_compile_version = LIBBPF_VERSION;
++static char _libbpf_version[10] = {};
++
++const char *get_libbpf_version(void)
++{
++	/* Start by copying compile-time version into buffer so we have a
++	 * fallback value in case we are dynamically linked, or can't find a
++	 * version in /proc/self/maps below.
++	 */
++	strncpy(_libbpf_version, _libbpf_compile_version,
++		sizeof(_libbpf_version)-1);
++#ifdef LIBBPF_DYNAMIC
++	char buf[PATH_MAX], *s;
++	bool found = false;
++	FILE *fp;
++
++	/* When dynamically linking against libbpf, we can't be sure that the
++	 * version we discovered at compile time is actually the one we are
++	 * using at runtime. This can lead to hard-to-debug errors, so we try to
++	 * discover the correct version at runtime.
++	 *
++	 * The simple solution to this would be if libbpf itself exported a
++	 * version in its API. But since it doesn't, we work around this by
++	 * parsing the mappings of the binary at runtime, looking for the full
++	 * filename of libbpf.so and using that.
++	 */
++	fp = fopen("/proc/self/maps", "r");
++	if (fp == NULL)
++		goto out;
++
++	while ((s = fgets(buf, sizeof(buf), fp)) != NULL) {
++		if ((s = strstr(buf, "libbpf.so.")) != NULL) {
++			strncpy(_libbpf_version, s+10, sizeof(_libbpf_version)-1);
++			strtok(_libbpf_version, "\n");
++			found = true;
++			break;
++		}
++	}
++
++	fclose(fp);
++out:
++	if (!found)
++		fprintf(stderr, "Couldn't find runtime libbpf version - falling back to compile-time value!\n");
++#endif /* LIBBPF_DYNAMIC */
++
++	_libbpf_version[sizeof(_libbpf_version)-1] = '\0';
++	return _libbpf_version;
++}
++#else
++const char *get_libbpf_version(void)
++{
++	return NULL;
++}
++#endif /* HAVE_LIBBPF */
+--- a/tc/tc.c
++++ b/tc/tc.c
+@@ -30,6 +30,7 @@
+ #include "tc_common.h"
+ #include "namespace.h"
+ #include "rt_names.h"
++#include "bpf_util.h"
+ 
+ int show_stats;
+ int show_details;
+@@ -281,8 +282,9 @@
+ 
+ int main(int argc, char **argv)
+ {
+-	int ret;
++	const char *libbpf_version;
+ 	char *batch_file = NULL;
++	int ret;
+ 
+ 	while (argc > 1) {
+ 		if (argv[1][0] != '-')
+@@ -299,7 +301,11 @@
+ 		} else if (matches(argv[1], "-graph") == 0) {
+ 			show_graph = 1;
+ 		} else if (matches(argv[1], "-Version") == 0) {
+-			printf("tc utility, iproute2-%s\n", version);
++			printf("tc utility, iproute2-%s", version);
++			libbpf_version = get_libbpf_version();
++			if (libbpf_version)
++				printf(", libbpf %s", libbpf_version);
++			printf("\n");
+ 			return 0;
+ 		} else if (matches(argv[1], "-iec") == 0) {
+ 			++use_iec;

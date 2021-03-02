@@ -6,14 +6,15 @@ Uploaders: Luca Boccassi <bluca@debian.org>
 Homepage: https://wiki.linuxfoundation.org/networking/iproute2
 Vcs-Browser: https://salsa.debian.org/debian/iproute2
 Vcs-Git: https://salsa.debian.org/debian/iproute2.git
-Standards-Version: 4.5.0
+Standards-Version: 4.5.1
 Rules-Requires-Root: no
 Build-Depends: bison,
-               debhelper-compat (= 12),
+               debhelper-compat (= 13),
                flex,
                libxtables-dev,
                libatm1-dev,
                libbsd-dev,
+               libbpf-dev (>= 1:0.1.0~),
                libcap-dev,
                libdb-dev,
                libelf-dev,

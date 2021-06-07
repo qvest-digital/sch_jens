@@ -1,3 +1,4 @@
 Kbuild usr/src/sch-jens-DEB_VERSION_UPSTREAM/
 jens*.h usr/src/sch-jens-DEB_VERSION_UPSTREAM/
+jens_uapi.h usr/include/linux/sch_jens/
 sch_jens.c usr/src/sch-jens-DEB_VERSION_UPSTREAM/

@@ -1,3 +1,5 @@
+/* part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO */
+
 /*
  * Fair Queue CoDel discipline
  *
@@ -23,10 +25,11 @@
 #include <linux/vmalloc.h>
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
+/*#include "jens_uapi.h"*/
 #include <net/pkt_cls.h>
-#include <net/codel.h>
-#include <net/codel_impl.h>
-#include <net/codel_qdisc.h>
+#include "jens_codel.h"
+#include "jens_codel_impl.h"
+#include "jens_codel_qdisc.h"
 
 /*	Fair Queue CoDel.
  *
@@ -732,5 +735,5 @@ static void __exit fq_codel_module_exit(void)
 
 module_init(fq_codel_module_init)
 module_exit(fq_codel_module_exit)
-MODULE_AUTHOR("Eric Dumazet");
+MODULE_AUTHOR("Deutsche Telekom LLCTO");
 MODULE_LICENSE("GPL");

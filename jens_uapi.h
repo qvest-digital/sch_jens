@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 
-/*** excerpt ***/
+/* part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO */
+
+#ifndef __NET_SCHED_JENS_UAPI_H
+#define __NET_SCHED_JENS_UAPI_H
 
 /* FQ_CODEL */
 
@@ -61,3 +64,5 @@ struct tc_fq_codel_xstats {
 		struct tc_fq_codel_cl_stats class_stats;
 	};
 };
+
+#endif

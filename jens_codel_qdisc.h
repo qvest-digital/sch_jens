@@ -1,5 +1,7 @@
-#ifndef __NET_SCHED_CODEL_QDISC_H
-#define __NET_SCHED_CODEL_QDISC_H
+#ifndef __NET_SCHED_JENS_CODEL_QDISC_H
+#define __NET_SCHED_JENS_CODEL_QDISC_H
+
+/* part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO */
 
 /*
  * Codel - The Controlled-Delay Active Queue Management algorithm

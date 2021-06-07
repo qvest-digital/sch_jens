@@ -1,5 +1,7 @@
-#ifndef __NET_SCHED_CODEL_H
-#define __NET_SCHED_CODEL_H
+#ifndef __NET_SCHED_JENS_CODEL_H
+#define __NET_SCHED_JENS_CODEL_H
+
+/* part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO */
 
 /*
  * Codel - The Controlled-Delay Active Queue Management algorithm
@@ -54,7 +56,6 @@
  *
  * Implemented on linux by Dave Taht and Eric Dumazet
  */
-
 
 /* CoDel uses a 1024 nsec clock, encoded in u32
  * This gives a range of 2199 seconds, because of signed compares

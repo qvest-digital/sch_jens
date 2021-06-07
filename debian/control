@@ -1,0 +1,15 @@
+Source: sch-jens
+Section: kernel
+Priority: optional
+Maintainer: Thorsten Glaser <t.glaser@tarent.de>
+Build-Depends: debhelper-compat (= 13), dkms
+Standards-Version: 4.5.1
+
+Package: sch-jens-dkms
+Architecture: all
+Depends: ${misc:Depends}
+Provides: sch-jens
+Description: E/// PoC-imitating scheduler for JENS
+ This is a fork of sch_fq_codel, for tc(8), with changed behaviour
+ as regards CE marking of packets. The details are currently still
+ being worked on.

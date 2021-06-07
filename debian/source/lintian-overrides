@@ -1,0 +1,5 @@
+# we have a human-readable copyright instead
+sch-jens source: no-dep5-copyright debian/copyright
+
+# probably not, but not used in buster(‑backports) anyway
+sch-jens source: silent-on-rules-requiring-root

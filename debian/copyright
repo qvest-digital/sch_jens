@@ -1,0 +1,15 @@
+sch_jens is Copyright © 2021 mirabilos <t.glaser@tarent.de>
+Licensor: Deutsche Telekom LLCTO
+
+It is provided under the same licence as the Linux kernel,
+that is, the GPL, version 2, which can be read at
+/usr/share/common-licenses/GPL-2 on Debian systems.
+
+The code is a derivative of sch_fq_codel
+ © 2011–2012 Kathleen Nichols <nichols@pollere.com>
+ © 2011–2012 Van Jacobson <van@pollere.net>
+ © 2012 Michael D. Taht <dave.taht@bufferbloat.net>
+ © 2012, 2015 Eric Dumazet <edumazet@google.com>
+also available under the GPLv2; parts of the code are also
+available under a 3-clause BSD licence, see the individual
+files (jens_codel*.h) for details.

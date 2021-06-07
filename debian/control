@@ -9,6 +9,8 @@ Package: sch-jens-dkms
 Architecture: all
 Depends: ${misc:Depends}
 Provides: sch-jens
+# to avoid apt upgrading iproute2 to buster-backports version
+Breaks: iproute2 (>= 5)
 Description: E/// PoC-imitating scheduler for JENS
  This is a fork of sch_fq_codel, for tc(8), with changed behaviour
  as regards CE marking of packets. The details are currently still

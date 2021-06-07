@@ -5,30 +5,30 @@
 #ifndef __NET_SCHED_JENS_UAPI_H
 #define __NET_SCHED_JENS_UAPI_H
 
-/* FQ_CODEL */
+/* JENS */
 
 enum {
-	TCA_FQ_CODEL_UNSPEC,
-	TCA_FQ_CODEL_TARGET,
-	TCA_FQ_CODEL_LIMIT,
-	TCA_FQ_CODEL_INTERVAL,
-	TCA_FQ_CODEL_ECN,
-	TCA_FQ_CODEL_FLOWS,
-	TCA_FQ_CODEL_QUANTUM,
-	TCA_FQ_CODEL_CE_THRESHOLD,
-	TCA_FQ_CODEL_DROP_BATCH_SIZE,
-	TCA_FQ_CODEL_MEMORY_LIMIT,
-	__TCA_FQ_CODEL_MAX
+	TCA_JENS_UNSPEC,
+	TCA_JENS_TARGET,
+	TCA_JENS_LIMIT,
+	TCA_JENS_INTERVAL,
+	TCA_JENS_ECN,
+	TCA_JENS_FLOWS,
+	TCA_JENS_QUANTUM,
+	TCA_JENS_CE_THRESHOLD,
+	TCA_JENS_DROP_BATCH_SIZE,
+	TCA_JENS_MEMORY_LIMIT,
+	__TCA_JENS_MAX
 };
 
-#define TCA_FQ_CODEL_MAX	(__TCA_FQ_CODEL_MAX - 1)
+#define TCA_JENS_MAX	(__TCA_JENS_MAX - 1)
 
 enum {
-	TCA_FQ_CODEL_XSTATS_QDISC,
-	TCA_FQ_CODEL_XSTATS_CLASS,
+	TCA_JENS_XSTATS_QDISC,
+	TCA_JENS_XSTATS_CLASS,
 };
 
-struct tc_fq_codel_qd_stats {
+struct tc_jens_qd_stats {
 	__u32	maxpacket;	/* largest packet we've seen so far */
 	__u32	drop_overlimit; /* number of time max qdisc
 				 * packet limit was hit
@@ -46,7 +46,7 @@ struct tc_fq_codel_qd_stats {
 	__u32	drop_overmemory;
 };
 
-struct tc_fq_codel_cl_stats {
+struct tc_jens_cl_stats {
 	__s32	deficit;
 	__u32	ldelay;		/* in-queue delay seen by most recently
 				 * dequeued packet
@@ -57,11 +57,11 @@ struct tc_fq_codel_cl_stats {
 	__s32	drop_next;
 };
 
-struct tc_fq_codel_xstats {
+struct tc_jens_xstats {
 	__u32	type;
 	union {
-		struct tc_fq_codel_qd_stats qdisc_stats;
-		struct tc_fq_codel_cl_stats class_stats;
+		struct tc_jens_qd_stats qdisc_stats;
+		struct tc_jens_cl_stats class_stats;
 	};
 };
 

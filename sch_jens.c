@@ -25,7 +25,7 @@
 #include <linux/vmalloc.h>
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
-/*#include "jens_uapi.h"*/
+#include "jens_uapi.h"
 #include <net/pkt_cls.h>
 #include "jens_codel.h"
 #include "jens_codel_impl.h"
@@ -368,74 +368,74 @@ static void fq_codel_reset(struct Qdisc *sch)
 	q->memory_usage = 0;
 }
 
-static const struct nla_policy fq_codel_policy[TCA_FQ_CODEL_MAX + 1] = {
-	[TCA_FQ_CODEL_TARGET]	= { .type = NLA_U32 },
-	[TCA_FQ_CODEL_LIMIT]	= { .type = NLA_U32 },
-	[TCA_FQ_CODEL_INTERVAL]	= { .type = NLA_U32 },
-	[TCA_FQ_CODEL_ECN]	= { .type = NLA_U32 },
-	[TCA_FQ_CODEL_FLOWS]	= { .type = NLA_U32 },
-	[TCA_FQ_CODEL_QUANTUM]	= { .type = NLA_U32 },
-	[TCA_FQ_CODEL_CE_THRESHOLD] = { .type = NLA_U32 },
-	[TCA_FQ_CODEL_DROP_BATCH_SIZE] = { .type = NLA_U32 },
-	[TCA_FQ_CODEL_MEMORY_LIMIT] = { .type = NLA_U32 },
+static const struct nla_policy fq_codel_policy[TCA_JENS_MAX + 1] = {
+	[TCA_JENS_TARGET]	= { .type = NLA_U32 },
+	[TCA_JENS_LIMIT]	= { .type = NLA_U32 },
+	[TCA_JENS_INTERVAL]	= { .type = NLA_U32 },
+	[TCA_JENS_ECN]	= { .type = NLA_U32 },
+	[TCA_JENS_FLOWS]	= { .type = NLA_U32 },
+	[TCA_JENS_QUANTUM]	= { .type = NLA_U32 },
+	[TCA_JENS_CE_THRESHOLD] = { .type = NLA_U32 },
+	[TCA_JENS_DROP_BATCH_SIZE] = { .type = NLA_U32 },
+	[TCA_JENS_MEMORY_LIMIT] = { .type = NLA_U32 },
 };
 
 static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 			   struct netlink_ext_ack *extack)
 {
 	struct fq_codel_sched_data *q = qdisc_priv(sch);
-	struct nlattr *tb[TCA_FQ_CODEL_MAX + 1];
+	struct nlattr *tb[TCA_JENS_MAX + 1];
 	int err;
 
 	if (!opt)
 		return -EINVAL;
 
-	err = nla_parse_nested(tb, TCA_FQ_CODEL_MAX, opt, fq_codel_policy,
+	err = nla_parse_nested(tb, TCA_JENS_MAX, opt, fq_codel_policy,
 			       NULL);
 	if (err < 0)
 		return err;
-	if (tb[TCA_FQ_CODEL_FLOWS]) {
+	if (tb[TCA_JENS_FLOWS]) {
 		if (q->flows)
 			return -EINVAL;
-		q->flows_cnt = nla_get_u32(tb[TCA_FQ_CODEL_FLOWS]);
+		q->flows_cnt = nla_get_u32(tb[TCA_JENS_FLOWS]);
 		if (!q->flows_cnt ||
 		    q->flows_cnt > 65536)
 			return -EINVAL;
 	}
 	sch_tree_lock(sch);
 
-	if (tb[TCA_FQ_CODEL_TARGET]) {
-		u64 target = nla_get_u32(tb[TCA_FQ_CODEL_TARGET]);
+	if (tb[TCA_JENS_TARGET]) {
+		u64 target = nla_get_u32(tb[TCA_JENS_TARGET]);
 
 		q->cparams.target = (target * NSEC_PER_USEC) >> CODEL_SHIFT;
 	}
 
-	if (tb[TCA_FQ_CODEL_CE_THRESHOLD]) {
-		u64 val = nla_get_u32(tb[TCA_FQ_CODEL_CE_THRESHOLD]);
+	if (tb[TCA_JENS_CE_THRESHOLD]) {
+		u64 val = nla_get_u32(tb[TCA_JENS_CE_THRESHOLD]);
 
 		q->cparams.ce_threshold = (val * NSEC_PER_USEC) >> CODEL_SHIFT;
 	}
 
-	if (tb[TCA_FQ_CODEL_INTERVAL]) {
-		u64 interval = nla_get_u32(tb[TCA_FQ_CODEL_INTERVAL]);
+	if (tb[TCA_JENS_INTERVAL]) {
+		u64 interval = nla_get_u32(tb[TCA_JENS_INTERVAL]);
 
 		q->cparams.interval = (interval * NSEC_PER_USEC) >> CODEL_SHIFT;
 	}
 
-	if (tb[TCA_FQ_CODEL_LIMIT])
-		sch->limit = nla_get_u32(tb[TCA_FQ_CODEL_LIMIT]);
+	if (tb[TCA_JENS_LIMIT])
+		sch->limit = nla_get_u32(tb[TCA_JENS_LIMIT]);
 
-	if (tb[TCA_FQ_CODEL_ECN])
-		q->cparams.ecn = !!nla_get_u32(tb[TCA_FQ_CODEL_ECN]);
+	if (tb[TCA_JENS_ECN])
+		q->cparams.ecn = !!nla_get_u32(tb[TCA_JENS_ECN]);
 
-	if (tb[TCA_FQ_CODEL_QUANTUM])
-		q->quantum = max(256U, nla_get_u32(tb[TCA_FQ_CODEL_QUANTUM]));
+	if (tb[TCA_JENS_QUANTUM])
+		q->quantum = max(256U, nla_get_u32(tb[TCA_JENS_QUANTUM]));
 
-	if (tb[TCA_FQ_CODEL_DROP_BATCH_SIZE])
-		q->drop_batch_size = max(1U, nla_get_u32(tb[TCA_FQ_CODEL_DROP_BATCH_SIZE]));
+	if (tb[TCA_JENS_DROP_BATCH_SIZE])
+		q->drop_batch_size = max(1U, nla_get_u32(tb[TCA_JENS_DROP_BATCH_SIZE]));
 
-	if (tb[TCA_FQ_CODEL_MEMORY_LIMIT])
-		q->memory_limit = min(1U << 31, nla_get_u32(tb[TCA_FQ_CODEL_MEMORY_LIMIT]));
+	if (tb[TCA_JENS_MEMORY_LIMIT])
+		q->memory_limit = min(1U << 31, nla_get_u32(tb[TCA_JENS_MEMORY_LIMIT]));
 
 	while (sch->q.qlen > sch->limit ||
 	       q->memory_usage > q->memory_limit) {
@@ -534,26 +534,26 @@ static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 	if (opts == NULL)
 		goto nla_put_failure;
 
-	if (nla_put_u32(skb, TCA_FQ_CODEL_TARGET,
+	if (nla_put_u32(skb, TCA_JENS_TARGET,
 			codel_time_to_us(q->cparams.target)) ||
-	    nla_put_u32(skb, TCA_FQ_CODEL_LIMIT,
+	    nla_put_u32(skb, TCA_JENS_LIMIT,
 			sch->limit) ||
-	    nla_put_u32(skb, TCA_FQ_CODEL_INTERVAL,
+	    nla_put_u32(skb, TCA_JENS_INTERVAL,
 			codel_time_to_us(q->cparams.interval)) ||
-	    nla_put_u32(skb, TCA_FQ_CODEL_ECN,
+	    nla_put_u32(skb, TCA_JENS_ECN,
 			q->cparams.ecn) ||
-	    nla_put_u32(skb, TCA_FQ_CODEL_QUANTUM,
+	    nla_put_u32(skb, TCA_JENS_QUANTUM,
 			q->quantum) ||
-	    nla_put_u32(skb, TCA_FQ_CODEL_DROP_BATCH_SIZE,
+	    nla_put_u32(skb, TCA_JENS_DROP_BATCH_SIZE,
 			q->drop_batch_size) ||
-	    nla_put_u32(skb, TCA_FQ_CODEL_MEMORY_LIMIT,
+	    nla_put_u32(skb, TCA_JENS_MEMORY_LIMIT,
 			q->memory_limit) ||
-	    nla_put_u32(skb, TCA_FQ_CODEL_FLOWS,
+	    nla_put_u32(skb, TCA_JENS_FLOWS,
 			q->flows_cnt))
 		goto nla_put_failure;
 
 	if (q->cparams.ce_threshold != CODEL_DISABLED_THRESHOLD &&
-	    nla_put_u32(skb, TCA_FQ_CODEL_CE_THRESHOLD,
+	    nla_put_u32(skb, TCA_JENS_CE_THRESHOLD,
 			codel_time_to_us(q->cparams.ce_threshold)))
 		goto nla_put_failure;
 
@@ -566,8 +566,8 @@ nla_put_failure:
 static int fq_codel_dump_stats(struct Qdisc *sch, struct gnet_dump *d)
 {
 	struct fq_codel_sched_data *q = qdisc_priv(sch);
-	struct tc_fq_codel_xstats st = {
-		.type				= TCA_FQ_CODEL_XSTATS_QDISC,
+	struct tc_jens_xstats st = {
+		.type				= TCA_JENS_XSTATS_QDISC,
 	};
 	struct list_head *pos;
 
@@ -633,14 +633,14 @@ static int fq_codel_dump_class_stats(struct Qdisc *sch, unsigned long cl,
 	struct fq_codel_sched_data *q = qdisc_priv(sch);
 	u32 idx = cl - 1;
 	struct gnet_stats_queue qs = { 0 };
-	struct tc_fq_codel_xstats xstats;
+	struct tc_jens_xstats xstats;
 
 	if (idx < q->flows_cnt) {
 		const struct fq_codel_flow *flow = &q->flows[idx];
 		const struct sk_buff *skb;
 
 		memset(&xstats, 0, sizeof(xstats));
-		xstats.type = TCA_FQ_CODEL_XSTATS_CLASS;
+		xstats.type = TCA_JENS_XSTATS_CLASS;
 		xstats.class_stats.deficit = flow->deficit;
 		xstats.class_stats.ldelay =
 			codel_time_to_us(flow->cvars.ldelay);

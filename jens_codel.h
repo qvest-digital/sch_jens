@@ -97,14 +97,14 @@ static inline u32 codel_time_to_us(codel_time_t val)
 }
 
 /**
- * struct codel_params - contains codel parameters
+ * struct jens_params - contains codel parameters
  * @target:	target queue size (in time units)
  * @ce_threshold:  threshold for marking packets with ECN CE
  * @interval:	width of moving time window
  * @mtu:	device mtu, or minimal queue backlog in bytes.
  * @ecn:	is Explicit Congestion Notification enabled
  */
-struct codel_params {
+struct jens_params {
 	codel_time_t	target;
 	codel_time_t	ce_threshold;
 	codel_time_t	interval;

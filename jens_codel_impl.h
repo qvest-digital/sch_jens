@@ -51,7 +51,7 @@
  * Implemented on linux by Dave Taht and Eric Dumazet
  */
 
-static void codel_params_init(struct codel_params *params)
+static void jens_params_init(struct jens_params *params)
 {
 	params->interval = MS2TIME(100);
 	params->target = MS2TIME(5);
@@ -99,10 +99,10 @@ static codel_time_t codel_control_law(codel_time_t t,
 	return t + reciprocal_scale(interval, rec_inv_sqrt << REC_INV_SQRT_SHIFT);
 }
 
-static bool codel_should_drop(const struct sk_buff *skb,
+static bool jens_should_drop(const struct sk_buff *skb,
 			      void *ctx,
 			      struct codel_vars *vars,
-			      struct codel_params *params,
+			      struct jens_params *params,
 			      struct codel_stats *stats,
 			      codel_skb_len_t skb_len_func,
 			      codel_skb_time_t skb_time_func,
@@ -141,9 +141,9 @@ static bool codel_should_drop(const struct sk_buff *skb,
 	return ok_to_drop;
 }
 
-static struct sk_buff *codel_dequeue(void *ctx,
+static struct sk_buff *jens_dequeue_codel(void *ctx,
 				     u32 *backlog,
-				     struct codel_params *params,
+				     struct jens_params *params,
 				     struct codel_vars *vars,
 				     struct codel_stats *stats,
 				     codel_skb_len_t skb_len_func,
@@ -160,7 +160,7 @@ static struct sk_buff *codel_dequeue(void *ctx,
 		return skb;
 	}
 	now = codel_get_time();
-	drop = codel_should_drop(skb, ctx, vars, params, stats,
+	drop = jens_should_drop(skb, ctx, vars, params, stats,
 				 skb_len_func, skb_time_func, backlog, now);
 	if (vars->dropping) {
 		if (!drop) {
@@ -193,7 +193,7 @@ static struct sk_buff *codel_dequeue(void *ctx,
 				drop_func(skb, ctx);
 				stats->drop_count++;
 				skb = dequeue_func(vars, ctx);
-				if (!codel_should_drop(skb, ctx,
+				if (!jens_should_drop(skb, ctx,
 						       vars, params, stats,
 						       skb_len_func,
 						       skb_time_func,
@@ -220,7 +220,7 @@ static struct sk_buff *codel_dequeue(void *ctx,
 			stats->drop_count++;
 
 			skb = dequeue_func(vars, ctx);
-			drop = codel_should_drop(skb, ctx, vars, params,
+			drop = jens_should_drop(skb, ctx, vars, params,
 						 stats, skb_len_func,
 						 skb_time_func, backlog, now);
 		}

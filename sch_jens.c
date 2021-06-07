@@ -56,7 +56,7 @@ struct fq_codel_flow {
 	struct codel_vars cvars;
 }; /* please try to keep this structure <= 64 bytes */
 
-struct fq_codel_sched_data {
+struct jens_sched_data {
 	struct tcf_proto __rcu *filter_list; /* optional external classifier */
 	struct tcf_block *block;
 	struct fq_codel_flow *flows;	/* Flows table [flows_cnt] */
@@ -65,7 +65,7 @@ struct fq_codel_sched_data {
 	u32		quantum;	/* psched_mtu(qdisc_dev(sch)); */
 	u32		drop_batch_size;
 	u32		memory_limit;
-	struct codel_params cparams;
+	struct jens_params cparams;
 	struct codel_stats cstats;
 	u32		memory_usage;
 	u32		drop_overmemory;
@@ -76,7 +76,7 @@ struct fq_codel_sched_data {
 	struct list_head old_flows;	/* list of old flows */
 };
 
-static unsigned int fq_codel_hash(const struct fq_codel_sched_data *q,
+static unsigned int fq_codel_hash(const struct jens_sched_data *q,
 				  struct sk_buff *skb)
 {
 	return reciprocal_scale(skb_get_hash(skb), q->flows_cnt);
@@ -85,7 +85,7 @@ static unsigned int fq_codel_hash(const struct fq_codel_sched_data *q,
 static unsigned int fq_codel_classify(struct sk_buff *skb, struct Qdisc *sch,
 				      int *qerr)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	struct tcf_proto *filter;
 	struct tcf_result res;
 	int result;
@@ -146,7 +146,7 @@ static inline void flow_queue_add(struct fq_codel_flow *flow,
 static unsigned int fq_codel_drop(struct Qdisc *sch, unsigned int max_packets,
 				  struct sk_buff **to_free)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	struct sk_buff *skb;
 	unsigned int maxbacklog = 0, idx = 0, i, len;
 	struct fq_codel_flow *flow;
@@ -192,7 +192,7 @@ static unsigned int fq_codel_drop(struct Qdisc *sch, unsigned int max_packets,
 static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 			    struct sk_buff **to_free)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	unsigned int idx, prev_backlog, prev_qlen;
 	struct fq_codel_flow *flow;
 	int uninitialized_var(ret);
@@ -257,14 +257,14 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 	return NET_XMIT_SUCCESS;
 }
 
-/* This is the specific function called from codel_dequeue()
+/* This is the specific function called from jens_dequeue_codel()
  * to dequeue a packet from queue. Note: backlog is handled in
  * codel, we dont need to reduce it here.
  */
 static struct sk_buff *dequeue_func(struct codel_vars *vars, void *ctx)
 {
 	struct Qdisc *sch = ctx;
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	struct fq_codel_flow *flow;
 	struct sk_buff *skb = NULL;
 
@@ -287,9 +287,9 @@ static void drop_func(struct sk_buff *skb, void *ctx)
 	qdisc_qstats_drop(sch);
 }
 
-static struct sk_buff *fq_codel_dequeue(struct Qdisc *sch)
+static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	struct sk_buff *skb;
 	struct fq_codel_flow *flow;
 	struct list_head *head;
@@ -313,7 +313,7 @@ begin:
 	prev_drop_count = q->cstats.drop_count;
 	prev_ecn_mark = q->cstats.ecn_mark;
 
-	skb = codel_dequeue(sch, &sch->qstats.backlog, &q->cparams,
+	skb = jens_dequeue_codel(sch, &sch->qstats.backlog, &q->cparams,
 			    &flow->cvars, &q->cstats, qdisc_pkt_len,
 			    codel_get_enqueue_time, drop_func, dequeue_func);
 
@@ -350,7 +350,7 @@ static void fq_codel_flow_purge(struct fq_codel_flow *flow)
 
 static void fq_codel_reset(struct Qdisc *sch)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	int i;
 
 	INIT_LIST_HEAD(&q->new_flows);
@@ -383,7 +383,7 @@ static const struct nla_policy fq_codel_policy[TCA_JENS_MAX + 1] = {
 static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 			   struct netlink_ext_ack *extack)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	struct nlattr *tb[TCA_JENS_MAX + 1];
 	int err;
 
@@ -439,7 +439,7 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 
 	while (sch->q.qlen > sch->limit ||
 	       q->memory_usage > q->memory_limit) {
-		struct sk_buff *skb = fq_codel_dequeue(sch);
+		struct sk_buff *skb = jens_dequeue_fq(sch);
 
 		q->cstats.drop_len += qdisc_pkt_len(skb);
 		rtnl_kfree_skbs(skb, skb);
@@ -455,7 +455,7 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 
 static void fq_codel_destroy(struct Qdisc *sch)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 
 	tcf_block_put(q->block);
 	kvfree(q->backlogs);
@@ -465,7 +465,7 @@ static void fq_codel_destroy(struct Qdisc *sch)
 static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 			 struct netlink_ext_ack *extack)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	int i;
 	int err;
 
@@ -476,7 +476,7 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	q->quantum = psched_mtu(qdisc_dev(sch));
 	INIT_LIST_HEAD(&q->new_flows);
 	INIT_LIST_HEAD(&q->old_flows);
-	codel_params_init(&q->cparams);
+	jens_params_init(&q->cparams);
 	codel_stats_init(&q->cstats);
 	q->cparams.ecn = true;
 	q->cparams.mtu = psched_mtu(qdisc_dev(sch));
@@ -527,7 +527,7 @@ init_failure:
 
 static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	struct nlattr *opts;
 
 	opts = nla_nest_start(skb, TCA_OPTIONS);
@@ -565,7 +565,7 @@ nla_put_failure:
 
 static int fq_codel_dump_stats(struct Qdisc *sch, struct gnet_dump *d)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	struct tc_jens_xstats st = {
 		.type				= TCA_JENS_XSTATS_QDISC,
 	};
@@ -613,7 +613,7 @@ static void fq_codel_unbind(struct Qdisc *q, unsigned long cl)
 static struct tcf_block *fq_codel_tcf_block(struct Qdisc *sch, unsigned long cl,
 					    struct netlink_ext_ack *extack)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 
 	if (cl)
 		return NULL;
@@ -630,7 +630,7 @@ static int fq_codel_dump_class(struct Qdisc *sch, unsigned long cl,
 static int fq_codel_dump_class_stats(struct Qdisc *sch, unsigned long cl,
 				     struct gnet_dump *d)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	u32 idx = cl - 1;
 	struct gnet_stats_queue qs = { 0 };
 	struct tc_jens_xstats xstats;
@@ -676,7 +676,7 @@ static int fq_codel_dump_class_stats(struct Qdisc *sch, unsigned long cl,
 
 static void fq_codel_walk(struct Qdisc *sch, struct qdisc_walker *arg)
 {
-	struct fq_codel_sched_data *q = qdisc_priv(sch);
+	struct jens_sched_data *q = qdisc_priv(sch);
 	unsigned int i;
 
 	if (arg->stop)
@@ -710,9 +710,9 @@ static const struct Qdisc_class_ops fq_codel_class_ops = {
 static struct Qdisc_ops fq_codel_qdisc_ops __read_mostly = {
 	.cl_ops		=	&fq_codel_class_ops,
 	.id		=	"fq_codel",
-	.priv_size	=	sizeof(struct fq_codel_sched_data),
+	.priv_size	=	sizeof(struct jens_sched_data),
 	.enqueue	=	fq_codel_enqueue,
-	.dequeue	=	fq_codel_dequeue,
+	.dequeue	=	jens_dequeue_fq,
 	.peek		=	qdisc_peek_dequeued,
 	.init		=	fq_codel_init,
 	.reset		=	fq_codel_reset,

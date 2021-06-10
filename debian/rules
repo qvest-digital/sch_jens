@@ -21,12 +21,12 @@ include /usr/share/dpkg/pkg-info.mk
 	dh $@ -Snone --with dkms
 
 execute_after_dh_clean:
-	-rm -f debian/install
+	-rm -f debian/sch-jens-dkms.install
 
 execute_after_dh_auto_build:
 	sed 's/DEB_VERSION_UPSTREAM/${DEB_VERSION_UPSTREAM}/g' \
-	    <debian/install.in >debian/install || \
-	    { rm -f debian/install; exit 1; }
+	    <debian/sch-jens-dkms.install.in >debian/sch-jens-dkms.install || \
+	    { rm -f debian/sch-jens-dkms.install; exit 1; }
 
 # work around #736803
 override_dh_dkms:

@@ -437,6 +437,17 @@ struct xtables_globals
 
 #define XT_GETOPT_TABLEEND {.name = NULL, .has_arg = false}
 
+/*
+ * enum op-
+ *
+ * For writing clean nftables translations code
+ */
+enum xt_op {
+	XT_OP_EQ,
+	XT_OP_NEQ,
+	XT_OP_MAX,
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -578,6 +589,14 @@ extern struct xtables_lmap *xtables_lmap_init(const char *);
 extern void xtables_lmap_free(struct xtables_lmap *);
 extern int xtables_lmap_name2id(const struct xtables_lmap *, const char *);
 extern const char *xtables_lmap_id2name(const struct xtables_lmap *, int);
+
+/* xlate infrastructure */
+struct xt_xlate *xt_xlate_alloc(int size);
+void xt_xlate_free(struct xt_xlate *xl);
+void xt_xlate_add(struct xt_xlate *xl, const char *fmt, ...);
+void xt_xlate_add_comment(struct xt_xlate *xl, const char *comment);
+const char *xt_xlate_get_comment(struct xt_xlate *xl);
+const char *xt_xlate_get(struct xt_xlate *xl);
 
 #ifdef XTABLES_INTERNAL
 

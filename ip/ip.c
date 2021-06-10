@@ -24,6 +24,7 @@
 #include "namespace.h"
 #include "color.h"
 #include "rt_names.h"
+#include "bpf_util.h"
 
 int preferred_family = AF_UNSPEC;
 int human_readable;
@@ -69,6 +70,20 @@ static int do_help(int argc, char **argv)
 	return 0;
 }
 
+static int do_moo(int argc, char **argv)
+{
+	
+fprintf(stderr,
+"\n"
+" _ __ ___   ___   ___\n"
+"| '_ ` _ \\ / _ \\ / _ \\\n"
+"| | | | | | (_) | (_) |\n"
+"|_| |_| |_|\\___/ \\___/\n"
+"\n\n"
+"P.S. no real cows were harmed for this moo\n");
+	exit(1);
+}
+                       
 static const struct cmd {
 	const char *cmd;
 	int (*func)(int argc, char **argv);
@@ -105,6 +120,7 @@ static const struct cmd {
 	{ "nexthop",	do_ipnh },
 	{ "mptcp",	do_mptcp },
 	{ "help",	do_help },
+	{ "moo",	do_moo }, 
 	{ 0 }
 };
 
@@ -173,8 +189,9 @@ static int batch(const char *name)
 
 int main(int argc, char **argv)
 {
-	char *basename;
+	const char *libbpf_version;
 	char *batch_file = NULL;
+	char *basename;
 	int color = 0;
 
 	/* to run vrf exec without root, capabilities might be set, drop them
@@ -255,7 +272,11 @@ int main(int argc, char **argv)
 			++timestamp;
 			++timestamp_short;
 		} else if (matches(opt, "-Version") == 0) {
-			printf("ip utility, iproute2-%s\n", version);
+			printf("ip utility, iproute2-%s", version);
+			libbpf_version = get_libbpf_version();
+			if (libbpf_version)
+				printf(", libbpf %s", libbpf_version);
+			printf("\n");
 			exit(0);
 		} else if (matches(opt, "-force") == 0) {
 			++force;

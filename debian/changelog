@@ -1,3 +1,6 @@
+  * Convert to single-debian-patch packaging so the sch_jens LKM can
+    be actually developed in git…
+
 iproute2 (5.10.0-4) unstable; urgency=medium
 
   * Backport 0012-iproute-force-rtm_dst_len-to-32-128.patch to fix ip

@@ -1,14 +1,14 @@
 Source: iproute2
 Section: net
 Priority: optional
-Maintainer: mirabilos <t.glaser@tarent.de>
-Homepage: https://wiki.linuxfoundation.org/networking/iproute2
+Maintainer: Thorsten Glaser <t.glaser@tarent.de>
 Vcs-Browser: https://github.com/tarent/sch_jens/
 Vcs-Git: git@github.com:tarent/sch_jens.git
 Standards-Version: 4.5.1
 Rules-Requires-Root: no
 Build-Depends: bison,
                debhelper-compat (= 13),
+               dkms,
                flex,
                libxtables-dev,
                libatm1-dev,
@@ -54,3 +54,13 @@ Description: networking and traffic control tools - documentation
  traffic control.
  .
  This package contains the documentation for iproute.
+
+Package: sch-jens-dkms
+Architecture: all
+Section: kernel
+Depends: ${misc:Depends}, iproute2 (= ${binary:Version})
+Provides: sch-jens
+Description: E/// PoC-imitating scheduler for JENS
+ This is a fork of sch_fq_codel, for tc(8), with changed behaviour
+ as regards CE marking of packets. The details are currently still
+ being worked on.

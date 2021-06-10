@@ -1,0 +1,8 @@
+sch_jens Linux kernel module
+────────────────────────────
+
+This module is intended to be used with Debian 10 “buster”,
+either stock Linux kernel 4.19 or backports kernel 5.10; it
+is also usable with Debian 11 “bullseye” therefore.
+
+Documentation on purpose, etc. tbd.

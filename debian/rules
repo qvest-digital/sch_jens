@@ -1,5 +1,16 @@
 #!/usr/bin/make -f
 
+ifeq (,$(filter terse,${DEB_BUILD_OPTIONS}))
+export DH_VERBOSE=1
+export V=1
+export VERBOSE=1
+else
+export VERBOSE=0
+endif
+
+LC_ALL:=C
+export LC_ALL
+
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
 # for DEB_* variables
@@ -16,21 +27,21 @@ else
 	export CBUILD_CFLAGS=$(CFLAGS) $(CPPFLAGS) $(LDFLAGS)
 endif
 
-ifneq (,$(findstring terse,$(DEB_BUILD_OPTIONS)))
-export VERBOSE=0
-else
-export VERBOSE=1
-endif
-
 export KERNEL_INCLUDE=./include
 export NETNS_RUN_DIR=/run/netns
 
 %:
-	dh $@
+	dh $@ --with dkms
 
 override_dh_clean:
 	dh_clean
 	make distclean
+	-rm -f debian/sch-jens-dkms.install
+
+execute_after_dh_auto_build:
+	sed 's/DEB_VERSION_UPSTREAM/${DEB_VERSION_UPSTREAM}/g' \
+	    <debian/sch-jens-dkms.install.in >debian/sch-jens-dkms.install || \
+	    { rm -f debian/sch-jens-dkms.install; exit 1; }
 
 override_dh_shlibdeps:
 	dh_shlibdeps -a -Xq_atm.so -Xm_xt.so -Xm_ipt.so
@@ -43,3 +54,7 @@ override_dh_auto_test:
 # package, so avoid shipping the manpage as well. See #873818
 override_dh_install:
 	dh_install -Xifstat.8
+
+# work around #736803
+override_dh_dkms:
+	exec dh_dkms -V ${DEB_VERSION_UPSTREAM}

@@ -1,4 +1,6 @@
 Source: sch-jens
+Origin: tarent
+Bugs: mailto:t.glaser@tarent.de
 Section: kernel
 Priority: optional
 Maintainer: Thorsten Glaser <t.glaser@tarent.de>

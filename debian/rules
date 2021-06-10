@@ -36,12 +36,12 @@ export NETNS_RUN_DIR=/run/netns
 override_dh_clean:
 	dh_clean
 	make distclean
-	-rm -f debian/sch-jens-dkms.install
+	-rm -f debian/install
 
 execute_after_dh_auto_build:
 	sed 's/DEB_VERSION_UPSTREAM/${DEB_VERSION_UPSTREAM}/g' \
-	    <debian/sch-jens-dkms.install.in >debian/sch-jens-dkms.install || \
-	    { rm -f debian/sch-jens-dkms.install; exit 1; }
+	    <debian/install.in >debian/install || \
+	    { rm -f debian/install; exit 1; }
 
 override_dh_shlibdeps:
 	dh_shlibdeps -a -Xq_atm.so -Xm_xt.so -Xm_ipt.so

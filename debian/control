@@ -1,4 +1,6 @@
 Source: iproute2
+Origin: tarent
+Bugs: mailto:t.glaser@tarent.de
 Section: net
 Priority: optional
 Maintainer: Thorsten Glaser <t.glaser@tarent.de>

@@ -1,0 +1,45 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# for DEB_* variables
+include /usr/share/dpkg/default.mk
+
+ifneq ($(DEB_BUILD_GNU_TYPE),$(DEB_HOST_GNU_TYPE))
+	export CC=$(DEB_HOST_GNU_TYPE)-gcc
+	export HOSTCC=gcc
+	export PKG_CONFIG=$(DEB_HOST_GNU_TYPE)-pkg-config
+else
+	# some tools are to be built with the host compiler and intentionally
+	# ignore the *FLAGS, use them anyway in a non-cross build to make
+	# dpkg-buildflags-missing happy
+	export CBUILD_CFLAGS=$(CFLAGS) $(CPPFLAGS) $(LDFLAGS)
+endif
+
+ifneq (,$(findstring terse,$(DEB_BUILD_OPTIONS)))
+export VERBOSE=0
+else
+export VERBOSE=1
+endif
+
+export KERNEL_INCLUDE=./include
+export NETNS_RUN_DIR=/run/netns
+
+%:
+	dh $@
+
+override_dh_clean:
+	dh_clean
+	make distclean
+
+override_dh_shlibdeps:
+	dh_shlibdeps -a -Xq_atm.so -Xm_xt.so -Xm_ipt.so
+	dh_shlibdeps -a -- -pipmods -dRecommends -e debian/iproute2/usr/lib/tc/m_xt.so -e debian/iproute2/usr/lib/tc/q_atm.so -xlibc6
+
+override_dh_auto_test:
+	# upstream test suite needs root and leaves machine unclean, skip it
+
+# We are not shipping the ifstat binary as it conflicts with another Debian
+# package, so avoid shipping the manpage as well. See #873818
+override_dh_install:
+	dh_install -Xifstat.8

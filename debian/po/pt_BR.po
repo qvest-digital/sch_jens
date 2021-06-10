@@ -1,0 +1,73 @@
+# Debconf translations for iproute2.
+# Copyright (C) 2018 THE iproute2'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the iproute2 package.
+# Adriano Rafael Gomes <adrianorg@debian.org>, 2018.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: iproute2\n"
+"Report-Msgid-Bugs-To: iproute2@packages.debian.org\n"
+"POT-Creation-Date: 2018-04-12 12:01+0100\n"
+"PO-Revision-Date: 2018-06-29 20:57-0300\n"
+"Last-Translator: Adriano Rafael Gomes <adrianorg@debian.org>\n"
+"Language-Team: Brazilian Portuguese <debian-l10n-portuguese@lists.debian."
+"org>\n"
+"Language: pt_BR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid "Allow ordinary users to run ip vrf exec using capabilities?"
+msgstr ""
+"Permitir que usuários comuns executem ip vrf exec usando capacidades "
+"(\"capabilities\")?"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"iproute2 can be used to configure and use Virtual Routing and Forwarding "
+"(VRF) functionality in the  kernel. This normally requires root permissions, "
+"but sometimes it's useful to allow ordinary users to execute commands from "
+"inside a virtual routing and forwarding domain. E.g. ip vrf exec examplevrf "
+"ping 10.0.0.1"
+msgstr ""
+"O iproute2 pode ser usado para configurar e usar a funcionalidade de "
+"Encaminhamento e Roteamento Virtual do kernel (\"Virtual Routing and "
+"Forwarding\" (VRF)). Isso normalmente exige permissões de root, mas algumas "
+"vezes é útil permitir que usuários comuns executem comandos a partir de um "
+"domínio de encaminhamento e roteamento virtual. Por exemplo: ip vrf exec "
+"vrfexemplo ping 10.0.0.1"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"The ip command supports dropping capabilities, making an exception for ip "
+"vrf exec. The drawback of setting the permissions is that if in the unlikely "
+"case of a security critical bug being found before the ip command has "
+"dropped capabilities then it could be used by an attacker to gain root "
+"permissions. It's up to you to decide about the trade-offs and select the "
+"best setting for your system. This will give cap_dac_override, cap_net_admin "
+"and cap_sys_admin to /bin/ip."
+msgstr ""
+"O comando ip tem suporte a dispensar capacidades, fazendo uma exceção para "
+"ip vrf exec. A desvantagem de ajustar as permissões é que, no caso "
+"improvável de um bug crítico de segurança ser encontrado antes do comando ip "
+"ter dispensado capacidades, isso poderia ser usado por um atacante para "
+"obter permissões de root. Cabe a você decidir sobre os prós e os contras, e "
+"selecionar a melhor configuração para o seu sistema. Isso dará "
+"cap_dac_override, cap_net_admin e cap_sys_admin para /bin/ip."
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"More information about VRF can be found at: https://www.kernel.org/doc/"
+"Documentation/networking/vrf.txt"
+msgstr ""
+"Mais informação sobre VRF pode ser encontrada em: https://www.kernel.org/doc/"
+"Documentation/networking/vrf.txt"

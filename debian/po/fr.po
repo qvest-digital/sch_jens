@@ -1,0 +1,76 @@
+# Translation of iproute2 debconf templates to French.
+# Copyright (C) 2018, French l10n team <debian-l10n-french@lists.debian.org>
+# This file is distributed under the same license as the iproute2 package.
+#
+# Translators:
+# Alban Vidal <alban.vidal@zordhak.fr>, 2018.
+msgid ""
+msgstr ""
+"Project-Id-Version: iproute2 4.16.0-2\n"
+"Report-Msgid-Bugs-To: iproute2@packages.debian.org\n"
+"POT-Creation-Date: 2018-04-12 12:01+0100\n"
+"PO-Revision-Date: 2018-05-12 12:25+0100\n"
+"Last-Translator: Alban Vidal <alban.vidal@zordhak.fr>\n"
+"Language-Team: French <debian-l10n-french@lists.debian.org>\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Lokalize 2.0\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid "Allow ordinary users to run ip vrf exec using capabilities?"
+msgstr ""
+"Voulez-vous permettre aux utilisateurs ordinaires d'exécuter « ip vrf exec » "
+"en utilisant des capacités ?"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"iproute2 can be used to configure and use Virtual Routing and Forwarding "
+"(VRF) functionality in the  kernel. This normally requires root permissions, "
+"but sometimes it's useful to allow ordinary users to execute commands from "
+"inside a virtual routing and forwarding domain. E.g. ip vrf exec examplevrf "
+"ping 10.0.0.1"
+msgstr ""
+"iproute2 peut être utilisé pour configurer et utiliser la fonctionnalité "
+"Virtual Routing and Forwarding (VRF — routage et transfert virtuels) dans le "
+"noyau. Cela nécessite normalement les droits du superutilisateur (root), "
+"mais il est parfois utile d'autoriser un utilisateur normal à exécuter ces "
+"commandes depuis un domaine de routage et transfert virtuels. Par exemple : "
+"ip vrf exec examplevrf ping 10.0.0.1"
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"The ip command supports dropping capabilities, making an exception for ip "
+"vrf exec. The drawback of setting the permissions is that if in the unlikely "
+"case of a security critical bug being found before the ip command has "
+"dropped capabilities then it could be used by an attacker to gain root "
+"permissions. It's up to you to decide about the trade-offs and select the "
+"best setting for your system. This will give cap_dac_override, cap_net_admin "
+"and cap_sys_admin to /bin/ip."
+msgstr ""
+"La commande ip gère la capacité de rejet, en faisait une exception pour ip "
+"vrf exec. L'inconvénient de configurer ces droits est que, dans un cas "
+"improbable de bogue critique de sécurité situé avant que la commande ip ait "
+"rejeté les capacités, il pourrait être utilisé par un attaquant pour obtenir "
+"les droits du superutilisateur (root). C'est à vous de trouver un compromis "
+"et de choisir le meilleur paramètre pour votre système. Cela va donner les "
+"capacités cap_dac_override, cap_net_admin et cap_sys_admin au binaire /bin/"
+"ip."
+
+#. Type: boolean
+#. Description
+#: ../iproute2.templates:1001
+msgid ""
+"More information about VRF can be found at: https://www.kernel.org/doc/"
+"Documentation/networking/vrf.txt"
+msgstr ""
+"Pour plus d'informations sur VRF, veuillez consulter la page Web suivante : "
+"https://www.kernel.org/doc/Documentation/networking/vrf.txt"

@@ -1,0 +1,20 @@
+etc/
+usr/include/iproute2/
+sbin/arpd /usr/sbin
+sbin/bridge
+sbin/devlink
+sbin/genl /usr/sbin
+sbin/ip /bin
+sbin/lnstat /usr/bin/
+sbin/nstat /usr/bin/
+sbin/rdma /usr/bin
+sbin/routef /usr/bin
+sbin/routel /usr/bin
+sbin/rtacct
+sbin/rtmon
+sbin/ss /bin
+sbin/tc
+sbin/tipc
+usr/lib/tc/
+usr/share/bash-completion/
+usr/share/man/

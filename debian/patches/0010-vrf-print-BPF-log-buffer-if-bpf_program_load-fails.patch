@@ -1,0 +1,16 @@
+Author: Luca Boccassi <bluca@debian.org>
+Description: print BPF log buffer if bpf_program_load fails
+Forwarded: yes, https://www.spinics.net/lists/netdev/msg714641.html
+--- a/ip/ipvrf.c
++++ b/ip/ipvrf.c
+@@ -278,8 +278,8 @@
+ 	 */
+ 	prog_fd = prog_load(ifindex);
+ 	if (prog_fd < 0) {
+-		fprintf(stderr, "Failed to load BPF prog: '%s'\n",
+-			strerror(errno));
++		fprintf(stderr, "Failed to load BPF prog: '%s'\n%s",
++			strerror(errno), bpf_log_buf);
+ 
+ 		if (errno != EPERM) {
+ 			fprintf(stderr,

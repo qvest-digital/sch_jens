@@ -1,0 +1,4 @@
+/usr/bin/lnstat usr/bin/ctstat
+/usr/bin/lnstat usr/bin/rtstat
+/usr/lib/tc/m_xt.so usr/lib/tc/m_ipt.so
+bin/ip sbin/ip

@@ -527,7 +527,11 @@ static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 	struct fq_codel_sched_data *q = qdisc_priv(sch);
 	struct nlattr *opts;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0)
 	opts = nla_nest_start(skb, TCA_OPTIONS);
+#else
+	opts = nla_nest_start_noflag(skb, TCA_OPTIONS);
+#endif
 	if (opts == NULL)
 		goto nla_put_failure;
 

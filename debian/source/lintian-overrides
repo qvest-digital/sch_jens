@@ -5,11 +5,10 @@ iproute2 source: vcs-field-uses-not-recommended-uri-format
 # we unfortunately don’t have one for this project (yet)
 iproute2 source: no-homepage-field
 
+# DEP 5 is not suitable for this package
+iproute2 source: no-dep5-copyright
+
 # inherited issues from the Debian buster-backports package
 iproute2 source: orig-tarball-missing-upstream-signature
 iproute2 source: upstream-metadata-missing-bug-tracking
 iproute2 source: package-does-not-install-examples
-
-# aaaargh! DEP 5 applies to BEFORE patches are applied…
-iproute2 source: unused-file-paragraph-in-dep5-copyright paragraph at line 35
-iproute2 source: wildcard-matches-nothing-in-dep5-copyright sch_jens/* (line 35)

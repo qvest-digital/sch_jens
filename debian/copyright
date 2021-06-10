@@ -1,4 +1,7 @@
-Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+This is NOT a DEP 5 copyright file. The sch_jens/* Files paragraph shall
+apply to the git tree, i.e. the source with debian/patches/debian-changes
+applied (though the debian/* match would apply to the patches as well).
+
 Upstream-Name: iproute2
 Source: https://www.kernel.org/pub/linux/utils/net/iproute2/
 Comment:

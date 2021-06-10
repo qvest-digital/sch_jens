@@ -1,3 +1,10 @@
+iproute2 (5.10.0-4~jens+1) tarent; urgency=medium
+
+  * Modified build of iproute2 (buster-backports), adding support
+    for the JENS traffic scheduler
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 10 Jun 2021 15:46:12 +0200
+
 iproute2 (5.10.0-4~bpo10+1) buster-backports; urgency=medium
 
   * Rebuild for buster-backports.

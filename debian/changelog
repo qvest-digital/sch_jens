@@ -5,8 +5,13 @@ iproute2 (5.10.0-4~jens+1) tarent; urgency=medium
   * Build the sch-jens-dkms package
   * Convert to single-debian-patch packaging so the sch_jens LKM can
     be actually developed in git…
+  * Add undocumented tc-fq_codel flags to manpage and bash completion
+  * Copy fq_codel code for jens (appropriately renamed), removing noecn
+  * sch_jens: always uses ECN marking, TCA_JENS_ECN no longer exists
+  * NOTE: current jens_uapi is *NOT* stable yet, especially reporting
+    and stats will be fleshed out later
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 10 Jun 2021 16:51:03 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 14 Jun 2021 20:09:51 +0200
 
 iproute2 (5.10.0-4~bpo10+1) buster-backports; urgency=medium
 

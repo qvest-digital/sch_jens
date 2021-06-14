@@ -43,7 +43,6 @@
  *
  * For a given flow, packets are not reordered (CoDel uses a FIFO)
  * head drops only.
- * ECN capability is on by default.
  * Low memory footprint (64 bytes per flow)
  */
 
@@ -364,7 +363,6 @@ static const struct nla_policy fq_codel_policy[TCA_JENS_MAX + 1] = {
 	[TCA_JENS_TARGET]	= { .type = NLA_U32 },
 	[TCA_JENS_LIMIT]	= { .type = NLA_U32 },
 	[TCA_JENS_INTERVAL]	= { .type = NLA_U32 },
-	[TCA_JENS_ECN]	= { .type = NLA_U32 },
 	[TCA_JENS_FLOWS]	= { .type = NLA_U32 },
 	[TCA_JENS_QUANTUM]	= { .type = NLA_U32 },
 	[TCA_JENS_CE_THRESHOLD] = { .type = NLA_U32 },
@@ -422,9 +420,6 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 	if (tb[TCA_JENS_LIMIT])
 		sch->limit = nla_get_u32(tb[TCA_JENS_LIMIT]);
 
-	if (tb[TCA_JENS_ECN])
-		q->cparams.ecn = !!nla_get_u32(tb[TCA_JENS_ECN]);
-
 	if (tb[TCA_JENS_QUANTUM])
 		q->quantum = max(256U, nla_get_u32(tb[TCA_JENS_QUANTUM]));
 
@@ -475,7 +470,6 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	INIT_LIST_HEAD(&q->old_flows);
 	jens_params_init(&q->cparams);
 	codel_stats_init(&q->cstats);
-	q->cparams.ecn = true;
 	q->cparams.mtu = psched_mtu(qdisc_dev(sch));
 
 	if (opt) {
@@ -541,8 +535,6 @@ static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 			sch->limit) ||
 	    nla_put_u32(skb, TCA_JENS_INTERVAL,
 			codel_time_to_us(q->cparams.interval)) ||
-	    nla_put_u32(skb, TCA_JENS_ECN,
-			q->cparams.ecn) ||
 	    nla_put_u32(skb, TCA_JENS_QUANTUM,
 			q->quantum) ||
 	    nla_put_u32(skb, TCA_JENS_DROP_BATCH_SIZE,
@@ -710,7 +702,7 @@ static const struct Qdisc_class_ops fq_codel_class_ops = {
 
 static struct Qdisc_ops fq_codel_qdisc_ops __read_mostly = {
 	.cl_ops		=	&fq_codel_class_ops,
-	.id		=	"fq_codel",
+	.id		=	"jens",
 	.priv_size	=	sizeof(struct jens_sched_data),
 	.enqueue	=	fq_codel_enqueue,
 	.dequeue	=	jens_dequeue_fq,
@@ -720,7 +712,7 @@ static struct Qdisc_ops fq_codel_qdisc_ops __read_mostly = {
 	.destroy	=	fq_codel_destroy,
 	.change		=	fq_codel_change,
 	.dump		=	fq_codel_dump,
-	.dump_stats =	fq_codel_dump_stats,
+	.dump_stats	=	fq_codel_dump_stats,
 	.owner		=	THIS_MODULE,
 };
 

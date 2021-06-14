@@ -178,7 +178,7 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	if (tb[TCA_JENS_LIMIT] &&
 	    RTA_PAYLOAD(tb[TCA_JENS_LIMIT]) >= sizeof(__u32)) {
 		limit = rta_getattr_u32(tb[TCA_JENS_LIMIT]);
-		print_uint(PRINT_ANY, "limit", "limit %up ", limit);
+		print_uint(PRINT_ANY, "limit", "limit %u ", limit);
 	}
 	if (tb[TCA_JENS_FLOWS] &&
 	    RTA_PAYLOAD(tb[TCA_JENS_FLOWS]) >= sizeof(__u32)) {

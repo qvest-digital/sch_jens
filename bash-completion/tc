@@ -296,7 +296,8 @@ _tc_qdisc_options()
             return 0
             ;;
         fq_codel)
-            _tc_once_attr 'limit flows target interval quantum'
+            _tc_once_attr 'limit flows target interval quantum \
+                ce_threshold memory_limit'
             _tc_one_of_list 'ecn noecn'
             return 0
             ;;

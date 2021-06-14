@@ -56,7 +56,6 @@ static void jens_params_init(struct jens_params *params)
 	params->interval = MS2TIME(100);
 	params->target = MS2TIME(5);
 	params->ce_threshold = CODEL_DISABLED_THRESHOLD;
-	params->ecn = false;
 }
 
 static void codel_vars_init(struct codel_vars *vars)
@@ -181,7 +180,7 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 						* since there is no more divide
 						*/
 				codel_Newton_step(vars);
-				if (params->ecn && INET_ECN_set_ce(skb)) {
+				if (INET_ECN_set_ce(skb)) {
 					stats->ecn_mark++;
 					vars->drop_next =
 						codel_control_law(vars->drop_next,
@@ -212,7 +211,7 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 	} else if (drop) {
 		u32 delta;
 
-		if (params->ecn && INET_ECN_set_ce(skb)) {
+		if (INET_ECN_set_ce(skb)) {
 			stats->ecn_mark++;
 		} else {
 			stats->drop_len += skb_len_func(skb);

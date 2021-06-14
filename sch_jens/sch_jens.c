@@ -720,7 +720,7 @@ static struct Qdisc_ops fq_codel_qdisc_ops __read_mostly = {
 	.destroy	=	fq_codel_destroy,
 	.change		=	fq_codel_change,
 	.dump		=	fq_codel_dump,
-	.dump_stats =	fq_codel_dump_stats,
+	.dump_stats	=	fq_codel_dump_stats,
 	.owner		=	THIS_MODULE,
 };
 

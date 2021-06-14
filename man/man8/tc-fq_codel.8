@@ -21,7 +21,9 @@ BYTES ] [
 .B ce_threshold
 TIME ] [
 .B memory_limit
-BYTES ]
+BYTES ] [
+.B drop_batch
+SIZE ]
 
 .SH DESCRIPTION
 FQ_Codel (Fair Queuing Controlled Delay) is queuing discipline that combines Fair
@@ -88,6 +90,9 @@ is turned on by default.
 sets a threshold above which all packets are marked with ECN Congestion
 Experienced. This is useful for DCTCP-style congestion control algorithms that
 require marking at very shallow queueing thresholds.
+
+.SS drop_batch
+is the maximum number of packets dropped from the fat flow.
 
 .SH EXAMPLES
 #tc qdisc add   dev eth0 root fq_codel

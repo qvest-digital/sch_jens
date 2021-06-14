@@ -710,7 +710,7 @@ static const struct Qdisc_class_ops fq_codel_class_ops = {
 
 static struct Qdisc_ops fq_codel_qdisc_ops __read_mostly = {
 	.cl_ops		=	&fq_codel_class_ops,
-	.id		=	"fq_codel",
+	.id		=	"jens",
 	.priv_size	=	sizeof(struct jens_sched_data),
 	.enqueue	=	fq_codel_enqueue,
 	.dequeue	=	jens_dequeue_fq,

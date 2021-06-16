@@ -53,6 +53,9 @@ is the number of flows into which the incoming packets are classified. Due to
 the stochastic nature of hashing, multiple flows may end up being hashed into
 the same slot. Newer flows have priority over older ones. This parameter can be
 set only at load time since memory has to be allocated for the hash table.
+This should be roughly an eighth to a tenth of
+.B limit
+(setting it too high causes CPU overload when dropping).
 Default value is 1024.
 
 .SS target

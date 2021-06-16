@@ -330,8 +330,10 @@ void print_rate(char *buf, int len, __u64 rate)
 {
 	extern int use_iec;
 	unsigned long kilo = use_iec ? 1024 : 1000;
-	const char *str = use_iec ? "i" : "";
-	static char *units[5] = {"", "K", "M", "G", "T"};
+	static const char *units[2][5] = {
+		{ "", "k", "M", "G", "T" },
+		{ "", "Ki", "Mi", "Gi", "Ti" }
+	};
 	int i;
 
 	rate <<= 3; /* bytes/sec -> bits/sec */
@@ -344,7 +346,7 @@ void print_rate(char *buf, int len, __u64 rate)
 		rate /= kilo;
 	}
 
-	snprintf(buf, len, "%.0f%s%sbit", (double)rate, units[i], str);
+	snprintf(buf, len, "%.0f%sbit", (double)rate, units[use_iec ? 1 : 0][i]);
 }
 
 char *sprint_rate(__u64 rate, char *buf)
@@ -438,9 +440,9 @@ static void print_size(char *buf, int len, __u32 sz)
 	double tmp = sz;
 
 	if (sz >= 1024*1024 && fabs(1024*1024*rint(tmp/(1024*1024)) - sz) < 1024)
-		snprintf(buf, len, "%gMb", rint(tmp/(1024*1024)));
+		snprintf(buf, len, "%gMB", rint(tmp/(1024*1024)));
 	else if (sz >= 1024 && fabs(1024*rint(tmp/1024) - sz) < 16)
-		snprintf(buf, len, "%gKb", rint(tmp/1024));
+		snprintf(buf, len, "%gKB", rint(tmp/1024));
 	else
 		snprintf(buf, len, "%ub", sz);
 }

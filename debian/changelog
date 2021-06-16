@@ -11,8 +11,10 @@ iproute2 (5.10.0-4~jens+1) tarent; urgency=medium
   * NOTE: current jens_uapi is *NOT* stable yet, especially reporting
     and stats will be fleshed out later
   * Correct printing of limit, for reentrancy (jens only)
+  * Fix printing units within upstream-compatibility boundaries (MB, not
+    MiB; KB for KiB, but that’s usual; SI/IEC bit/s correct)
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 14 Jun 2021 20:30:43 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 16 Jun 2021 17:54:25 +0200
 
 iproute2 (5.10.0-4~bpo10+1) buster-backports; urgency=medium
 

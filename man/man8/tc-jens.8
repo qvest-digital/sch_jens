@@ -180,19 +180,32 @@ is the minimum queue delay at which packets will be marked (see above)
 with 100% probability.
 Default: 14\ ms
 .El
+.Sh STATISTICS
+Currently the same as in
+.Xr tc\-fq_codel 8 ,
+except
+.Li ecn_mark
+counts the packets ECN CE-marked due to being over
+.Ic target
+or
+.Ic markfull
+or that actually were marked while being over
+.Ic markfree .
+.Pp
+More information about statistics will come with a subsequent release.
 .Sh EXAMPLES
 Set up a queue with standard parameters and display its statistics:
 .Bd -literal
-#tc qdisc add   dev eth0 root fq_codel
-#tc -s qdisc show
-qdisc fq_codel 8002: dev eth0 root refcnt 2 limit 10240p flows 1024 quantum 1514
- target 5.0ms interval 100.0ms ecn
-   Sent 428514 bytes 2269 pkt (dropped 0, overlimits 0 requeues 0)
-   backlog 0b 0p requeues 0
-    maxpacket 256 drop_overlimit 0 new_flow_count 0 ecn_mark 0
-    new_flows_len 0 old_flows_len 0
+$ sudo tc qdisc add dev eth0 root jens
+$ sudo tc -s qdisc show dev eth0
+qdisc jens 8005: root refcnt 2 limit 10240 memory_limit 32MB \e
+    drop_batch 64 flows 1024 quantum 1514 interval 100ms \e
+    target 5ms markfree 4ms markfull 14ms
+ Sent 17740 bytes 82 pkt (dropped 0, overlimits 0 requeues 0)
+ backlog 0b 0p requeues 0
+  maxpacket 0 drop_overlimit 0 new_flow_count 0 ecn_mark 0
+  new_flows_len 0 old_flows_len 0
 .Ed
-(better example tbd)
 .Sh SEE ALSO
 .Xr tc 8 ,
 .Xr tc\-fq_codel 8

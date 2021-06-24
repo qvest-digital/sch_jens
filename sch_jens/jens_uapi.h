@@ -12,9 +12,10 @@ enum {
 	TCA_JENS_TARGET,
 	TCA_JENS_LIMIT,
 	TCA_JENS_INTERVAL,
+	TCA_JENS_MARKFREE,
+	TCA_JENS_MARKFULL,
 	TCA_JENS_FLOWS,
 	TCA_JENS_QUANTUM,
-	TCA_JENS_CE_THRESHOLD,
 	TCA_JENS_DROP_BATCH_SIZE,
 	TCA_JENS_MEMORY_LIMIT,
 	__TCA_JENS_MAX
@@ -40,7 +41,7 @@ struct tc_jens_qd_stats {
 				 */
 	__u32	new_flows_len;	/* count of flows in new list */
 	__u32	old_flows_len;	/* count of flows in old list */
-	__u32	ce_mark;	/* packets above ce_threshold */
+	__u32	ce_mark;	/* packets ECN CE-marked due to sojourn time */
 	__u32	memory_usage;	/* in bytes */
 	__u32	drop_overmemory;
 };

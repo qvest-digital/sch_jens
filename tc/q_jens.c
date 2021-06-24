@@ -1,4 +1,5 @@
 /* part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO */
+/* Copyright © 2021 mirabilos <t.glaser@tarent.de> */
 
 /*
  * Fair Queue Codel
@@ -52,10 +53,9 @@
 static void explain(void)
 {
 	fprintf(stderr, "Usage: ... jens"
-		"	[ limit PACKETS ] [ memory_limit BYTES ]"
-		"\n\t\t	[ flows NUMBER ] [ target TIME ] [ interval TIME ]"
-		"\n\t\t	[ quantum BYTES ] [ drop_batch SIZE ]"
-		"\n\t\t	[ ce_threshold TIME ]"
+		"	[ limit PACKETS ] [ memory_limit BYTES ] [ drop_batch SIZE ]"
+		"\n\t	[ flows NUMBER ] [ quantum BYTES ] [ interval TIME ]"
+		"\n\t	[ target TIME ] [ markfree TIME ] [ markfull TIME ]"
 		"\n");
 }
 
@@ -66,9 +66,10 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	unsigned int limit = 0;
 	unsigned int flows = 0;
 	unsigned int target = 0;
+	unsigned int markfree = ~0U;
+	unsigned int markfull = ~0U;
 	unsigned int interval = 0;
 	unsigned int quantum = 0;
-	unsigned int ce_threshold = ~0U;
 	unsigned int memory = ~0U;
 	struct rtattr *tail;
 
@@ -103,10 +104,16 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 				fprintf(stderr, "Illegal \"target\"\n");
 				return -1;
 			}
-		} else if (strcmp(*argv, "ce_threshold") == 0) {
+		} else if (strcmp(*argv, "markfree") == 0) {
 			NEXT_ARG();
-			if (get_time(&ce_threshold, *argv)) {
-				fprintf(stderr, "Illegal \"ce_threshold\"\n");
+			if (get_time(&markfree, *argv)) {
+				fprintf(stderr, "Illegal \"markfree\"\n");
+				return -1;
+			}
+		} else if (strcmp(*argv, "markfull") == 0) {
+			NEXT_ARG();
+			if (get_time(&markfull, *argv)) {
+				fprintf(stderr, "Illegal \"markfull\"\n");
 				return -1;
 			}
 		} else if (strcmp(*argv, "memory_limit") == 0) {
@@ -143,9 +150,10 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		addattr_l(n, 1024, TCA_JENS_INTERVAL, &interval, sizeof(interval));
 	if (target)
 		addattr_l(n, 1024, TCA_JENS_TARGET, &target, sizeof(target));
-	if (ce_threshold != ~0U)
-		addattr_l(n, 1024, TCA_JENS_CE_THRESHOLD,
-			  &ce_threshold, sizeof(ce_threshold));
+	if (markfree != ~0U)
+		addattr_l(n, 1024, TCA_JENS_MARKFREE, &markfree, sizeof(markfree));
+	if (markfull != ~0U)
+		addattr_l(n, 1024, TCA_JENS_MARKFULL, &markfull, sizeof(markfull));
 	if (memory != ~0U)
 		addattr_l(n, 1024, TCA_JENS_MEMORY_LIMIT,
 			  &memory, sizeof(memory));
@@ -163,8 +171,9 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	unsigned int flows;
 	unsigned int interval;
 	unsigned int target;
+	unsigned int markfree;
+	unsigned int markfull;
 	unsigned int quantum;
-	unsigned int ce_threshold;
 	unsigned int memory_limit;
 	unsigned int drop_batch;
 
@@ -180,37 +189,6 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 		limit = rta_getattr_u32(tb[TCA_JENS_LIMIT]);
 		print_uint(PRINT_ANY, "limit", "limit %u ", limit);
 	}
-	if (tb[TCA_JENS_FLOWS] &&
-	    RTA_PAYLOAD(tb[TCA_JENS_FLOWS]) >= sizeof(__u32)) {
-		flows = rta_getattr_u32(tb[TCA_JENS_FLOWS]);
-		print_uint(PRINT_ANY, "flows", "flows %u ", flows);
-	}
-	if (tb[TCA_JENS_QUANTUM] &&
-	    RTA_PAYLOAD(tb[TCA_JENS_QUANTUM]) >= sizeof(__u32)) {
-		quantum = rta_getattr_u32(tb[TCA_JENS_QUANTUM]);
-		print_uint(PRINT_ANY, "quantum", "quantum %u ", quantum);
-	}
-	if (tb[TCA_JENS_TARGET] &&
-	    RTA_PAYLOAD(tb[TCA_JENS_TARGET]) >= sizeof(__u32)) {
-		target = rta_getattr_u32(tb[TCA_JENS_TARGET]);
-		print_uint(PRINT_JSON, "target", NULL, target);
-		print_string(PRINT_FP, NULL, "target %s ",
-			     sprint_time(target, b1));
-	}
-	if (tb[TCA_JENS_CE_THRESHOLD] &&
-	    RTA_PAYLOAD(tb[TCA_JENS_CE_THRESHOLD]) >= sizeof(__u32)) {
-		ce_threshold = rta_getattr_u32(tb[TCA_JENS_CE_THRESHOLD]);
-		print_uint(PRINT_JSON, "ce_threshold", NULL, ce_threshold);
-		print_string(PRINT_FP, NULL, "ce_threshold %s ",
-			     sprint_time(ce_threshold, b1));
-	}
-	if (tb[TCA_JENS_INTERVAL] &&
-	    RTA_PAYLOAD(tb[TCA_JENS_INTERVAL]) >= sizeof(__u32)) {
-		interval = rta_getattr_u32(tb[TCA_JENS_INTERVAL]);
-		print_uint(PRINT_JSON, "interval", NULL, interval);
-		print_string(PRINT_FP, NULL, "interval %s ",
-			     sprint_time(interval, b1));
-	}
 	if (tb[TCA_JENS_MEMORY_LIMIT] &&
 	    RTA_PAYLOAD(tb[TCA_JENS_MEMORY_LIMIT]) >= sizeof(__u32)) {
 		memory_limit = rta_getattr_u32(tb[TCA_JENS_MEMORY_LIMIT]);
@@ -223,6 +201,44 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 		drop_batch = rta_getattr_u32(tb[TCA_JENS_DROP_BATCH_SIZE]);
 		if (drop_batch)
 			print_uint(PRINT_ANY, "drop_batch", "drop_batch %u ", drop_batch);
+	}
+	if (tb[TCA_JENS_FLOWS] &&
+	    RTA_PAYLOAD(tb[TCA_JENS_FLOWS]) >= sizeof(__u32)) {
+		flows = rta_getattr_u32(tb[TCA_JENS_FLOWS]);
+		print_uint(PRINT_ANY, "flows", "flows %u ", flows);
+	}
+	if (tb[TCA_JENS_QUANTUM] &&
+	    RTA_PAYLOAD(tb[TCA_JENS_QUANTUM]) >= sizeof(__u32)) {
+		quantum = rta_getattr_u32(tb[TCA_JENS_QUANTUM]);
+		print_uint(PRINT_ANY, "quantum", "quantum %u ", quantum);
+	}
+	if (tb[TCA_JENS_INTERVAL] &&
+	    RTA_PAYLOAD(tb[TCA_JENS_INTERVAL]) >= sizeof(__u32)) {
+		interval = rta_getattr_u32(tb[TCA_JENS_INTERVAL]);
+		print_uint(PRINT_JSON, "interval", NULL, interval);
+		print_string(PRINT_FP, NULL, "interval %s ",
+			     sprint_time(interval, b1));
+	}
+	if (tb[TCA_JENS_TARGET] &&
+	    RTA_PAYLOAD(tb[TCA_JENS_TARGET]) >= sizeof(__u32)) {
+		target = rta_getattr_u32(tb[TCA_JENS_TARGET]);
+		print_uint(PRINT_JSON, "target", NULL, target);
+		print_string(PRINT_FP, NULL, "target %s ",
+			     sprint_time(target, b1));
+	}
+	if (tb[TCA_JENS_MARKFREE] &&
+	    RTA_PAYLOAD(tb[TCA_JENS_MARKFREE]) >= sizeof(__u32)) {
+		markfree = rta_getattr_u32(tb[TCA_JENS_MARKFREE]);
+		print_uint(PRINT_JSON, "markfree", NULL, markfree);
+		print_string(PRINT_FP, NULL, "markfree %s ",
+			     sprint_time(markfree, b1));
+	}
+	if (tb[TCA_JENS_MARKFULL] &&
+	    RTA_PAYLOAD(tb[TCA_JENS_MARKFULL]) >= sizeof(__u32)) {
+		markfull = rta_getattr_u32(tb[TCA_JENS_MARKFULL]);
+		print_uint(PRINT_JSON, "markfull", NULL, markfull);
+		print_string(PRINT_FP, NULL, "markfull %s ",
+			     sprint_time(markfull, b1));
 	}
 
 	return 0;

@@ -303,7 +303,7 @@ _tc_qdisc_options()
             ;;
         jens)
             _tc_once_attr 'limit flows target interval quantum \
-                ce_threshold memory_limit drop_batch'
+                markfree markfull memory_limit drop_batch'
             return 0
             ;;
         gred)

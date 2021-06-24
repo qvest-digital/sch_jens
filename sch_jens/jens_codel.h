@@ -99,14 +99,18 @@ static inline u32 codel_time_to_us(codel_time_t val)
 /**
  * struct jens_params - contains codel parameters
  * @target:	target queue size (in time units)
- * @ce_threshold:  threshold for marking packets with ECN CE
  * @interval:	width of moving time window
+ * @markfree:	packets faster than this will not be CE marked
+ *		except if by missing target within interval
+ *		or as part of dropping
+ * @markfull:	packets slower than this will be CE marked
  * @mtu:	device mtu, or minimal queue backlog in bytes.
  */
 struct jens_params {
 	codel_time_t	target;
-	codel_time_t	ce_threshold;
 	codel_time_t	interval;
+	codel_time_t	markfree;
+	codel_time_t	markfull;
 	u32		mtu;
 };
 
@@ -142,7 +146,9 @@ struct codel_vars {
  * @drop_count:	temp count of dropped packets in dequeue()
  * @drop_len:	bytes of dropped packets in dequeue()
  * ecn_mark:	number of packets we ECN marked instead of dropping
- * ce_mark:	number of packets CE marked because sojourn time was above ce_threshold
+ * ce_mark:	number of packets ECN CE marked
+ *		because sojourn time was above markfull, or
+ *		above markfree and within percentage-relative marking
  */
 struct codel_stats {
 	u32		maxpacket;
@@ -151,8 +157,6 @@ struct codel_stats {
 	u32		ecn_mark;
 	u32		ce_mark;
 };
-
-#define CODEL_DISABLED_THRESHOLD INT_MAX
 
 typedef u32 (*codel_skb_len_t)(const struct sk_buff *skb);
 typedef codel_time_t (*codel_skb_time_t)(const struct sk_buff *skb);

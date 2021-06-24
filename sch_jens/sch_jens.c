@@ -1,4 +1,5 @@
 /* part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO */
+/* Copyright © 2021 mirabilos <t.glaser@tarent.de> */
 
 /*
  * Fair Queue CoDel discipline
@@ -363,9 +364,10 @@ static const struct nla_policy fq_codel_policy[TCA_JENS_MAX + 1] = {
 	[TCA_JENS_TARGET]	= { .type = NLA_U32 },
 	[TCA_JENS_LIMIT]	= { .type = NLA_U32 },
 	[TCA_JENS_INTERVAL]	= { .type = NLA_U32 },
+	[TCA_JENS_MARKFREE]	= { .type = NLA_U32 },
+	[TCA_JENS_MARKFULL]	= { .type = NLA_U32 },
 	[TCA_JENS_FLOWS]	= { .type = NLA_U32 },
 	[TCA_JENS_QUANTUM]	= { .type = NLA_U32 },
-	[TCA_JENS_CE_THRESHOLD] = { .type = NLA_U32 },
 	[TCA_JENS_DROP_BATCH_SIZE] = { .type = NLA_U32 },
 	[TCA_JENS_MEMORY_LIMIT] = { .type = NLA_U32 },
 };
@@ -405,10 +407,15 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 		q->cparams.target = (target * NSEC_PER_USEC) >> CODEL_SHIFT;
 	}
 
-	if (tb[TCA_JENS_CE_THRESHOLD]) {
-		u64 val = nla_get_u32(tb[TCA_JENS_CE_THRESHOLD]);
+	if (tb[TCA_JENS_MARKFREE]) {
+		u64 val = nla_get_u32(tb[TCA_JENS_MARKFREE]);
 
-		q->cparams.ce_threshold = (val * NSEC_PER_USEC) >> CODEL_SHIFT;
+		q->cparams.markfree = (val * NSEC_PER_USEC) >> CODEL_SHIFT;
+	}
+	if (tb[TCA_JENS_MARKFULL]) {
+		u64 val = nla_get_u32(tb[TCA_JENS_MARKFULL]);
+
+		q->cparams.markfull = (val * NSEC_PER_USEC) >> CODEL_SHIFT;
 	}
 
 	if (tb[TCA_JENS_INTERVAL]) {
@@ -535,6 +542,10 @@ static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 			sch->limit) ||
 	    nla_put_u32(skb, TCA_JENS_INTERVAL,
 			codel_time_to_us(q->cparams.interval)) ||
+	    nla_put_u32(skb, TCA_JENS_MARKFREE,
+			codel_time_to_us(q->cparams.markfree)) ||
+	    nla_put_u32(skb, TCA_JENS_MARKFULL,
+			codel_time_to_us(q->cparams.markfull)) ||
 	    nla_put_u32(skb, TCA_JENS_QUANTUM,
 			q->quantum) ||
 	    nla_put_u32(skb, TCA_JENS_DROP_BATCH_SIZE,
@@ -543,11 +554,6 @@ static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 			q->memory_limit) ||
 	    nla_put_u32(skb, TCA_JENS_FLOWS,
 			q->flows_cnt))
-		goto nla_put_failure;
-
-	if (q->cparams.ce_threshold != CODEL_DISABLED_THRESHOLD &&
-	    nla_put_u32(skb, TCA_JENS_CE_THRESHOLD,
-			codel_time_to_us(q->cparams.ce_threshold)))
 		goto nla_put_failure;
 
 	return nla_nest_end(skb, opts);

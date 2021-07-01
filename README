@@ -9,6 +9,9 @@ sudo tc qdisc add dev $dev root handle 1: htb default 1
 sudo tc class add dev $dev parent 1: classid 1:1 htb rate ${rate}kbit ceil ${rate}kbit prio 1
 sudo tc qdisc add dev $dev parent 1:1 jens
 
+sudo tc -s qdisc show dev $dev
+sudo tc -s class show dev $dev
+
 sudo tc qdisc del dev $dev parent 1:1
 sudo tc class del dev $dev parent 1: classid 1:1
 sudo tc qdisc del dev $dev root

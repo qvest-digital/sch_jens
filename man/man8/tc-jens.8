@@ -1,7 +1,7 @@
 .\" part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO
 .\"-
 .if \n(.g .hlm 0
-.Dd June 24, 2021
+.Dd July 12, 2021
 .Dt TC\-JENS 8
 .Os Linux
 .Sh NAME
@@ -117,8 +117,8 @@ and begins ECN-marking (or dropping) if not; this is the
 .Dq controlled delay
 part of the scheduler.
 (By setting
-.Ar markfree
-lower than
+.Ar markfull
+to at least
 .Ar target ,
 this can be ignored in practice.)
 .Sh PARAMETERS

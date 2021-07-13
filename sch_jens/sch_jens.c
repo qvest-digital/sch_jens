@@ -29,8 +29,8 @@
 #include "jens_uapi.h"
 #include <net/pkt_cls.h>
 #include "jens_codel.h"
-#include "jens_codel_impl.h"
 #include "jens_codel_qdisc.h"
+#include "jens_codel_impl.h"
 
 /*	Fair Queue CoDel.
  *
@@ -74,6 +74,12 @@ struct jens_sched_data {
 	struct list_head new_flows;	/* list of new flows */
 	struct list_head old_flows;	/* list of old flows */
 };
+
+static void jens_record_packet(struct sk_buff *skb, __u8 flags)
+{
+	jens_update_record_flag(skb, flags);
+	/* relay_write */
+}
 
 static unsigned int fq_codel_hash(const struct jens_sched_data *q,
 				  struct sk_buff *skb)
@@ -208,7 +214,7 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 	}
 	idx--;
 
-	codel_set_enqueue_time(skb);
+	jens_set_enqueue_data(skb);
 	flow = &q->flows[idx];
 	flow_queue_add(flow, skb);
 	q->backlogs[idx] += qdisc_pkt_len(skb);
@@ -282,11 +288,13 @@ static void drop_func(struct sk_buff *skb, void *ctx)
 {
 	struct Qdisc *sch = ctx;
 
+	if (skb)
+		jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP);
 	kfree_skb(skb);
 	qdisc_qstats_drop(sch);
 }
 
-static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
+static struct sk_buff *jens_dequeue_fq_int(struct Qdisc *sch)
 {
 	struct jens_sched_data *q = qdisc_priv(sch);
 	struct sk_buff *skb;
@@ -332,6 +340,18 @@ begin:
 		q->cstats.drop_len = 0;
 	}
 	return skb;
+}
+
+static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
+{
+	struct sk_buff *skb = jens_dequeue_fq_int(sch);
+
+	if (skb) {
+		__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
+
+		jens_record_packet(skb, (ecn << 3));
+	}
+	return (skb);
 }
 
 static void fq_codel_flow_purge(struct fq_codel_flow *flow)
@@ -438,8 +458,10 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 
 	while (sch->q.qlen > sch->limit ||
 	       q->memory_usage > q->memory_limit) {
-		struct sk_buff *skb = jens_dequeue_fq(sch);
+		struct sk_buff *skb = jens_dequeue_fq_int(sch);
 
+		if (skb)
+			jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP);
 		q->cstats.drop_len += qdisc_pkt_len(skb);
 		rtnl_kfree_skbs(skb, skb);
 		q->cstats.drop_count++;

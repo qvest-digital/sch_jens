@@ -218,6 +218,8 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 						* since there is no more divide
 						*/
 				codel_Newton_step(vars);
+				jens_update_record_flag(skb,
+				    TC_JENS_RELAY_SOJOURN_SLOW);
 				if (INET_ECN_set_ce(skb)) {
 					stats->ecn_mark++;
 					vars->drop_next =
@@ -249,6 +251,7 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 	} else if (drop) {
 		u32 delta;
 
+		jens_update_record_flag(skb, TC_JENS_RELAY_SOJOURN_SLOW);
 		if (INET_ECN_set_ce(skb)) {
 			stats->ecn_mark++;
 		} else {
@@ -288,9 +291,11 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 	if (skb && (codel_time_after_eq(vars->ldelay, params->markfull) ||
 	    (codel_time_after(vars->ldelay, params->markfree) &&
 	     jens_progressive_mark(params->markfree, vars->ldelay,
-				   params->markfull))) &&
-	    INET_ECN_set_ce(skb))
-		stats->ce_mark++;
+				   params->markfull)))) {
+		jens_update_record_flag(skb, TC_JENS_RELAY_SOJOURN_MARK);
+		if (INET_ECN_set_ce(skb))
+			stats->ce_mark++;
+	}
 	return skb;
 }
 

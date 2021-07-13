@@ -55,6 +55,7 @@
 struct codel_skb_cb {
 	codel_time_t enqueue_time;
 	unsigned int mem_usage;
+	__u8 record_flag;
 };
 
 static struct codel_skb_cb *get_codel_cb(const struct sk_buff *skb)
@@ -68,9 +69,43 @@ static codel_time_t codel_get_enqueue_time(const struct sk_buff *skb)
 	return get_codel_cb(skb)->enqueue_time;
 }
 
-static void codel_set_enqueue_time(struct sk_buff *skb)
+/* from INET_ECN_set_ce (net/inet_ecn.h) */
+static __u8 jens_get_ecn(struct sk_buff *skb)
 {
-	get_codel_cb(skb)->enqueue_time = codel_get_time();
+	__u8 tos;
+
+	switch (skb->protocol) {
+	case cpu_to_be16(ETH_P_IP):
+		if (skb_network_header(skb) + sizeof(struct iphdr) <=
+		    skb_tail_pointer(skb)) {
+			tos = ip_hdr(skb)->tos;
+			return ((tos & INET_ECN_MASK) | 4);
+		}
+		break;
+	case cpu_to_be16(ETH_P_IPV6):
+		if (skb_network_header(skb) + sizeof(struct ipv6hdr) <=
+		    skb_tail_pointer(skb)) {
+			tos = ipv6_get_dsfield(ipv6_hdr(skb));
+			return ((tos & INET_ECN_MASK) | 4);
+		}
+		break;
+	}
+	return (0);
+}
+
+static void jens_set_enqueue_data(struct sk_buff *skb)
+{
+	struct codel_skb_cb *cb = get_codel_cb(skb);
+
+	cb->record_flag = jens_get_ecn(skb);
+	cb->enqueue_time = codel_get_time();
+}
+
+static void jens_update_record_flag(struct sk_buff *skb, __u8 data)
+{
+	struct codel_skb_cb *cb = get_codel_cb(skb);
+
+	cb->record_flag |= data;
 }
 
 #endif

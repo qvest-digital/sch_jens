@@ -95,4 +95,8 @@ enum {
 };
 #define TC_JENS_RELAY_MAX (__TC_JENS_RELAY_MAX - 1)
 
+#define TC_JENS_RELAY_SOJOURN_SLOW (1U << 5)	/* target not reached */
+#define TC_JENS_RELAY_SOJOURN_MARK (1U << 6)	/* markfree..markfull */
+#define TC_JENS_RELAY_SOJOURN_DROP (1U << 7)	/* packet was dropped */
+
 #endif

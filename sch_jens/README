@@ -11,3 +11,13 @@ Differences to fq_codel
 ───────────────────────
 
 • The “ecn” parameter is always enabled and does not exist.
+• The new parameter “markfull” loosely corresponds to the old
+  parameter “ce_threshold”: all packets taking at least this
+  long to sojourn are ECN CE-marked
+• The parameter “markfree” is a fully new concepts: packets
+  taking more than this time will be ECN CE-marked based on
+  a, currently linear, scale, depending on where in between
+  the “markfree” and “markfull” times the sojourn time falls;
+  e.g. markfree=5, markfull=15, sojourn=10 → 50% are marked
+  (note that the CoDel algorithm of marking packets when the
+  “target” time isn’t reached within “interval” still applies)

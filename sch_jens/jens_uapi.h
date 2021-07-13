@@ -86,14 +86,27 @@ extern struct tc_jens_relay tc_jens_relay_cta[sizeof(struct tc_jens_relay) == 16
 
 /* relay record types */
 enum {
+	/* invalid (0), not initialised */
 	TC_JENS_RELAY_INVALID,
+
+	/* initialised but skip as subbuffer padding */
 	TC_JENS_RELAY_PADDING,
+
+	/* report a single packet leaving our queue */
 	/* d32 = sojourn time in 1024 ns units */
+	/* e16 = ECN marking range/percentage */
+	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
+		3:4=ECN bits on dequeue, TC_JENS_RELAY_SOJOURN_SLOW,
+		TC_JENS_RELAY_SOJOURN_MARK, TC_JENS_RELAY_SOJOURN_DROP */
 	TC_JENS_RELAY_SOJOURN,
+
 #ifdef notyet
-	/* d32 = queue size */
+	/* report length of queue periodically */
+	/* d32 = amount of packets in FIFO */
 	TC_JENS_RELAY_QUEUESZ,
 #endif
+
+	/* invalid, too high */
 	__TC_JENS_RELAY_MAX
 };
 #define TC_JENS_RELAY_MAX (__TC_JENS_RELAY_MAX - 1)

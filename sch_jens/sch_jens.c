@@ -131,12 +131,14 @@ static void jens_record_packet(struct sk_buff *skb, __u8 flags,
     struct jens_sched_data *q)
 {
 	struct tc_jens_relay r = {0};
+	int thiscpu = get_cpu(); /*XXX*/
 
 	r.type = TC_JENS_RELAY_SOJOURN;
-	r.d32 = /*XXX*/ 0xFFFFFFFF;
+	r.d32 = /*XXX*/ (unsigned int)thiscpu;
 	r.e16 = /*XXX*/ 0xFFFF;
 	r.f8 = jens_update_record_flag(skb, flags);
 	jens_record_write(&r, q);
+	put_cpu(); /*XXX*/
 }
 
 static unsigned int fq_codel_hash(const struct jens_sched_data *q,

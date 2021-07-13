@@ -105,6 +105,7 @@ static inline u32 codel_time_to_us(codel_time_t val)
  *		or as part of dropping
  * @markfull:	packets slower than this will be CE marked
  * @mtu:	device mtu, or minimal queue backlog in bytes.
+ * @subbufs:	number of TC_JENS_RELAY_SUBBUFSZ-sized subbuffers
  */
 struct jens_params {
 	codel_time_t	target;
@@ -112,6 +113,7 @@ struct jens_params {
 	codel_time_t	markfree;
 	codel_time_t	markfull;
 	u32		mtu;
+	u32		subbufs;
 };
 
 /**

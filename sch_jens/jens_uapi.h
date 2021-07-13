@@ -18,6 +18,7 @@ enum {
 	TCA_JENS_QUANTUM,
 	TCA_JENS_DROP_BATCH_SIZE,
 	TCA_JENS_MEMORY_LIMIT,
+	TCA_JENS_SUBBUFS,
 	__TCA_JENS_MAX
 };
 
@@ -100,5 +101,9 @@ enum {
 #define TC_JENS_RELAY_SOJOURN_SLOW (1U << 5)	/* target not reached */
 #define TC_JENS_RELAY_SOJOURN_MARK (1U << 6)	/* markfree..markfull */
 #define TC_JENS_RELAY_SOJOURN_DROP (1U << 7)	/* packet was dropped */
+
+#define TC_JENS_RELAY_NRECORDS 64		/* per subbuffer */
+#define TC_JENS_RELAY_SUBBUFSZ \
+    (TC_JENS_RELAY_NRECORDS * sizeof(struct tc_jens_relay))
 
 #endif

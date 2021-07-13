@@ -25,6 +25,10 @@ Differences to fq_codel
 Live measurement
 ────────────────
 
+The debugging filesystem must be mounted:
+
+	$ sudo mount -t debugfs debugfs /sys/kernel/debug
+
 We’re currently intending to measure the following KPIs:
 
 • queue length (integer, ≤ “limit”) every 5 ms
@@ -83,5 +87,5 @@ Record types define the following data members:
     ‣   7 (TC_JENS_RELAY_SOJOURN_DROP) the packet was dropped not sent
 • TC_JENS_RELAY_QUEUESZ: d32 queue length
 
-Relayfs subbuffers are 64 records or 1 KiB each. There currently
-are 1024 subbuffers per CPU (will be made configurable).
+Subbuffers are TC_JENS_RELAY_NRECORDS (64) records or 1 KiB each.
+There currently are 1024 subbuffers (will be made configurable).

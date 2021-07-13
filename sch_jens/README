@@ -62,7 +62,20 @@ Any data members not specified by the record type must not be accessed.
 
 Record types define the following data members:
 
-• TC_JENS_RELAY_SOJOURN: d32 packet sojourn time in 1024 ns units
+• TC_JENS_RELAY_SOJOURN:
+  – d32 packet sojourn time in 1024 ns units
+  – e16 ECN marking range/percentage
+    ‣ 0xFFFF = above or equal to markfull
+    ‣ 0x0000 = below or equal to markfree
+    ‣ anything in between = relative value of chance of marking
+      (this currently scales linearly based on the sojourn time
+      but may in the future use a gradual approach)
+  – f8 bitfield
+    ‣ 0:1 ECN bits on enqueue
+    ‣ 2:3 ECN bits on dequeue
+    ‣   4 if ECN marked from not reaching target within interval
+    ‣   5 if ECN marked from markfree/markfull range
+    ‣ 6:7 reserved
 • TC_JENS_RELAY_QUEUESZ: d32 queue length
 
 Relayfs subbuffers are 64 records or 1 KiB each. There currently

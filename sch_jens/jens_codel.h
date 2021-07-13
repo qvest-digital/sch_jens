@@ -62,7 +62,7 @@
  */
 typedef u32 codel_time_t;
 typedef s32 codel_tdiff_t;
-#define CODEL_SHIFT 10
+#define CODEL_SHIFT TC_JENS_TIMESHIFT
 #define MS2TIME(a) ((a * NSEC_PER_MSEC) >> CODEL_SHIFT)
 
 static inline codel_time_t codel_get_time(void)

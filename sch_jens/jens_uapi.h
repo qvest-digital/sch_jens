@@ -66,6 +66,8 @@ struct tc_jens_xstats {
 	};
 };
 
+#define TC_JENS_TIMESHIFT 10
+
 /* relay record */
 struct tc_jens_relay {
 	__u64 ts;		/* timestamp (CLOCK_MONOTONIC, ns) */
@@ -111,6 +113,13 @@ enum {
 };
 #define TC_JENS_RELAY_MAX (__TC_JENS_RELAY_MAX - 1)
 
+/* convert d32 to nanoseconds as __u64 */
+#define TC_JENS_RELAY_SOJOURN_TO_NS(d32) ((__u64)(d32) << TC_JENS_TIMESHIFT)
+
+/* divide e16 by this (and multiply with 100.0) to get a percentage */
+#define TC_JENS_RELAY_SOJOURN_PCTDIV ((double)65535)
+
+/* flags in f8 */
 #define TC_JENS_RELAY_SOJOURN_SLOW (1U << 5)	/* target not reached */
 #define TC_JENS_RELAY_SOJOURN_MARK (1U << 6)	/* markfree..markfull */
 #define TC_JENS_RELAY_SOJOURN_DROP (1U << 7)	/* packet was dropped */

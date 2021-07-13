@@ -101,11 +101,12 @@ static void jens_set_enqueue_data(struct sk_buff *skb)
 	cb->enqueue_time = codel_get_time();
 }
 
-static void jens_update_record_flag(struct sk_buff *skb, __u8 data)
+static __u8 jens_update_record_flag(struct sk_buff *skb, __u8 data)
 {
 	struct codel_skb_cb *cb = get_codel_cb(skb);
 
 	cb->record_flag |= data;
+	return (cb->record_flag);
 }
 
 #endif

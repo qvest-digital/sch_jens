@@ -39,8 +39,7 @@ as follows via relayfs:
 
 The .ts (timestamp) member is a 64-bit unsigned integer,
 representing the timestamp of this record in nanoseconds
-per CLOCK_MONOTONIC. This is important for ordering since
-relayfs has per-CPU buffers so data w̲i̲l̲l̲ be misordered.
+per CLOCK_MONOTONIC (this is not the packet receive time).
 This timestamp has no relation to wall-clock time but is
 consistent within measurement as it increases monotonically,
 pausing when the system is suspended.

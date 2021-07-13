@@ -21,3 +21,26 @@ Differences to fq_codel
   e.g. markfree=5, markfull=15, sojourn=10 → 50% are marked
   (note that the CoDel algorithm of marking packets when the
   “target” time isn’t reached within “interval” still applies)
+
+Live measurement
+────────────────
+
+We’re currently intending to measure the following KPIs:
+
+• queue length (integer, ≤ “limit”) every 5 ms
+• timestamp (at least µs) and sojourn time (dito) for every packet
+
+The structure to pass this information back to userspace, for example
+with relay(fs), must be power-of-two sized and have at least:
+
+• timestamp
+• packet type
+• other data
+
+This probably means 128 bit (16 bytes, 4 32-bit (2 64-bit) quantities),
+so the timestamp can be in ns (u64 ktime_get_ns() is very fast),
+leaving 64 bit for the other data.
+
+We’ll not be able to easily map timestamp to wallclock time thus,
+but we really only need it to be good within a series of measurement,
+so that’s fine.

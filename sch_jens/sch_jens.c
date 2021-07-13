@@ -76,6 +76,8 @@ struct jens_sched_data {
 
 	struct list_head new_flows;	/* list of new flows */
 	struct list_head old_flows;	/* list of old flows */
+
+	spinlock_t	record_lock;	/* for record_chan */
 };
 
 static struct dentry *jens_debugfs_main;
@@ -114,10 +116,27 @@ static /*const*/ struct rchan_callbacks jens_debugfs_relay_hooks = {
 	.subbuf_start = jens_subbuf_init,
 };
 
-static void jens_record_packet(struct sk_buff *skb, __u8 flags)
+static void jens_record_write(struct tc_jens_relay *record,
+    struct jens_sched_data *q)
 {
-	jens_update_record_flag(skb, flags);
-	/* relay_write */
+	unsigned long flags;	/* used by spinlock macros */
+
+	record->ts = ktime_get_ns();
+	spin_lock_irqsave(&q->record_lock, flags);
+	__relay_write(q->record_chan, record, sizeof(struct tc_jens_relay));
+	spin_unlock_irqrestore(&q->record_lock, flags);
+}
+
+static void jens_record_packet(struct sk_buff *skb, __u8 flags,
+    struct jens_sched_data *q)
+{
+	struct tc_jens_relay r = {0};
+
+	r.type = TC_JENS_RELAY_SOJOURN;
+	r.d32 = /*XXX*/ 0xFFFFFFFF;
+	r.e16 = /*XXX*/ 0xFFFF;
+	r.f8 = jens_update_record_flag(skb, flags);
+	jens_record_write(&r, q);
 }
 
 static unsigned int fq_codel_hash(const struct jens_sched_data *q,
@@ -328,7 +347,8 @@ static void drop_func(struct sk_buff *skb, void *ctx)
 	struct Qdisc *sch = ctx;
 
 	if (skb)
-		jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP);
+		jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP,
+		    qdisc_priv(sch));
 	kfree_skb(skb);
 	qdisc_qstats_drop(sch);
 }
@@ -388,7 +408,7 @@ static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
 	if (skb) {
 		__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
 
-		jens_record_packet(skb, (ecn << 3));
+		jens_record_packet(skb, (ecn << 3), qdisc_priv(sch));
 	}
 	return (skb);
 }
@@ -512,7 +532,7 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 		struct sk_buff *skb = jens_dequeue_fq_int(sch);
 
 		if (skb)
-			jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP);
+			jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP, q);
 		q->cstats.drop_len += qdisc_pkt_len(skb);
 		rtnl_kfree_skbs(skb, skb);
 		q->cstats.drop_count++;
@@ -554,6 +574,7 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	codel_stats_init(&q->cstats);
 	q->cparams.mtu = psched_mtu(qdisc_dev(sch));
 	q->record_chan = NULL;
+	spin_lock_init(&q->record_lock);
 
 	if (opt) {
 		err = fq_codel_change(sch, opt, extack);

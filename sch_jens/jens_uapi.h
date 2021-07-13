@@ -65,4 +65,34 @@ struct tc_jens_xstats {
 	};
 };
 
+/* relay record */
+struct tc_jens_relay {
+	__u64 ts;		/* timestamp (CLOCK_MONOTONIC, ns) */
+	__u8 type;		/* relay record type */
+	__u8 f8;		/* 8 bits of even more user data */
+	union {
+		__u16 e16;
+		__u8 e8[2];
+	};			/* 16 bits of extra user data */
+	union {
+		__u32 d32;
+		__u16 d16[2];
+		__u8 d8[4];
+	};			/* 32 bits of user data */
+};
+/* compile-time check for correct size */
+extern struct tc_jens_relay tc_jens_relay_cta[sizeof(struct tc_jens_relay) == 16 ? 1 : -1];
+
+/* relay record types */
+enum {
+	/* d32 = sojourn time in 1024 ns units */
+	TC_JENS_RELAY_SOJOURN,
+#ifdef notyet
+	/* d32 = queue size */
+	TC_JENS_RELAY_QUEUESZ,
+#endif
+	__TC_JENS_RELAY_MAX
+};
+#define TC_JENS_RELAY_MAX (__TC_JENS_RELAY_MAX - 1)
+
 #endif

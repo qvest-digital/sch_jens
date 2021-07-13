@@ -30,17 +30,41 @@ We’re currently intending to measure the following KPIs:
 • queue length (integer, ≤ “limit”) every 5 ms
 • timestamp (at least µs) and sojourn time (dito) for every packet
 
-The structure to pass this information back to userspace, for example
-with relay(fs), must be power-of-two sized and have at least:
+This data is passed from kernel to userspace in records structured
+as follows via relayfs:
 
-• timestamp
-• packet type
-• other data
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ ts (timestamp)                │typ│fNN│ eNN   │ dNN (data)    │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
-This probably means 128 bit (16 bytes, 4 32-bit (2 64-bit) quantities),
-so the timestamp can be in ns (u64 ktime_get_ns() is very fast),
-leaving 64 bit for the other data.
+The .ts (timestamp) member is a 64-bit unsigned integer,
+representing the timestamp of this record in nanoseconds
+per CLOCK_MONOTONIC. This is important for ordering since
+relayfs has per-CPU buffers so data w̲i̲l̲l̲ be misordered.
+This timestamp has no relation to wall-clock time but is
+consistent within measurement as it increases monotonically,
+pausing when the system is suspended.
 
-We’ll not be able to easily map timestamp to wallclock time thus,
-but we really only need it to be good within a series of measurement,
-so that’s fine.
+The .type member, an 8-bit unsigned integer, indicates
+which record it is, i.e. which meaning it has and how
+the data members are filled. This is one of:
+
+• TC_JENS_RELAY_SOJOURN (an IP packet’s sojourn time)
+• TC_JENS_RELAY_QUEUESZ (amount of packets in the FIFO)
+
+The remaining members are per-record-type data. They are:
+• f8 (8-bit unsigned integer)
+• e16 (16-bit unsigned integer)
+  aliased as e8[2] (8-bit unsigned integer)
+• d32 (32-bit unsigned integer)
+  aliased as d16[2] (16-bit unsigned integer)
+  aliased as d8[4] (8-bit unsigned integer)
+Any data members not specified by the record type must not be accessed.
+
+Record types define the following data members:
+
+• TC_JENS_RELAY_SOJOURN: d32 packet sojourn time in 1024 ns units
+• TC_JENS_RELAY_QUEUESZ: d32 queue length
+
+Relayfs subbuffers are 64 records or 1 KiB each. There currently
+are 1024 subbuffers per CPU (will be made configurable).

@@ -48,6 +48,8 @@ The .type member, an 8-bit unsigned integer, indicates
 which record it is, i.e. which meaning it has and how
 the data members are filled. This is one of:
 
+• TC_JENS_RELAY_INVALID (= 0), record was not filled in, do warn
+• TC_JENS_RELAY_PADDING (quietly skip/ignore this record)
 • TC_JENS_RELAY_SOJOURN (an IP packet’s sojourn time)
 • TC_JENS_RELAY_QUEUESZ (amount of packets in the FIFO)
 

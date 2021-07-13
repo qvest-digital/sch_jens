@@ -85,6 +85,8 @@ extern struct tc_jens_relay tc_jens_relay_cta[sizeof(struct tc_jens_relay) == 16
 
 /* relay record types */
 enum {
+	TC_JENS_RELAY_INVALID,
+	TC_JENS_RELAY_PADDING,
 	/* d32 = sojourn time in 1024 ns units */
 	TC_JENS_RELAY_SOJOURN,
 #ifdef notyet

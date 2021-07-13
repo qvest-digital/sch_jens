@@ -29,6 +29,10 @@ The debugging filesystem must be mounted:
 
 	$ sudo mount -t debugfs debugfs /sys/kernel/debug
 
+This can also be achieved with an /etc/fstab line as follows:
+
+	debugfs    /sys/kernel/debug  debugfs  defaults  0  0
+
 We’re currently intending to measure the following KPIs:
 
 • queue length (integer, ≤ “limit”) every 5 ms

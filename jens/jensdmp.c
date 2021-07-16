@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -22,6 +23,10 @@
 
 #include <linux/types.h>
 #include "../sch_jens/jens_uapi.h"
+
+#ifndef INFTIM
+#define INFTIM (-1)
+#endif
 
 #define BIT(n) (1U << (n))
 
@@ -71,6 +76,8 @@ main(int argc, char *argv[])
 {
 	int fd;
 	size_t n, off = 0;
+	struct pollfd pfd;
+	int pres;
 
 	if (argc != 2)
 		errx(255, "Usage: %s /path/to/debugfs/sch_jens/nnnn:0",
@@ -94,6 +101,17 @@ main(int argc, char *argv[])
  loop:
 	if (do_exit)
 		goto do_exit;
+	pfd.fd = fd;
+	pfd.events = POLLIN;
+	pres = poll(&pfd, 1, INFTIM);
+	if (do_exit)
+		goto do_exit;
+	if (pres == -1) {
+		if (errno == EINTR)
+			goto loop;
+		err(2, "poll");
+	}
+	/* pres == 1, (pfd.revents & (POLLIN | POLLRDNORM)) is true */
 	if ((n = read(fd, cbuf + off, sizeof(rbuf) - off)) == (size_t)-1) {
 		if (errno == EINTR)
 			goto loop;

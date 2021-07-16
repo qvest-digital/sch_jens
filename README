@@ -18,6 +18,14 @@ sudo tc qdisc del dev $dev root
 
 sudo jensdmp /sys/kernel/debug/sch_jens/0002:0
 
+The debugging filesystem must be mounted for jensdmp:
+
+	$ sudo mount -t debugfs debugfs /sys/kernel/debug
+
+This can also be achieved with an /etc/fstab line as follows:
+
+	debugfs    /sys/kernel/debug  debugfs  defaults  0  0
+
 ────────────────────────────────────────────────────────────────────────
 
 This is a set of utilities for Linux networking.

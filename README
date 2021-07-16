@@ -16,6 +16,8 @@ sudo tc qdisc del dev $dev parent 1:1
 sudo tc class del dev $dev parent 1: classid 1:1
 sudo tc qdisc del dev $dev root
 
+sudo jensdmp /sys/kernel/debug/sch_jens/8001:0
+
 ────────────────────────────────────────────────────────────────────────
 
 This is a set of utilities for Linux networking.

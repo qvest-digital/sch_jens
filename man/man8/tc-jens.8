@@ -196,9 +196,9 @@ More information about statistics will come with a subsequent release.
 .Sh EXAMPLES
 Set up a queue with standard parameters and display its statistics:
 .Bd -literal
-$ sudo tc qdisc add dev eth0 root jens
+$ sudo tc qdisc add dev eth0 root handle 2: jens
 $ sudo tc -s qdisc show dev eth0
-qdisc jens 8005: root refcnt 2 limit 10240 memory_limit 32MB \e
+qdisc jens 2: root refcnt 2 limit 10240 memory_limit 32MB \e
     drop_batch 64 flows 1024 quantum 1514 interval 100ms \e
     target 5ms markfree 4ms markfull 14ms
  Sent 17740 bytes 82 pkt (dropped 0, overlimits 0 requeues 0)

@@ -1,0 +1,5 @@
+ECN bits are INvalid when:
+• the packet is not IPv4 or IPv6 (e.g. ARP)
+• the packet is fragmented and the header too short for us to inspect
+  (very unlikely to happen, the ECN bits are virtually the first thing)
+Don’t worry! They are normal!

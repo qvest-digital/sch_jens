@@ -24,13 +24,15 @@
 #include <linux/skbuff.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
+#include <linux/debugfs.h>
+#include <linux/relay.h>
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
 #include "jens_uapi.h"
 #include <net/pkt_cls.h>
 #include "jens_codel.h"
-#include "jens_codel_impl.h"
 #include "jens_codel_qdisc.h"
+#include "jens_codel_impl.h"
 
 /*	Fair Queue CoDel.
  *
@@ -64,6 +66,7 @@ struct jens_sched_data {
 	u32		quantum;	/* psched_mtu(qdisc_dev(sch)); */
 	u32		drop_batch_size;
 	u32		memory_limit;
+	struct rchan *record_chan;	/* relay to userspace */
 	struct jens_params cparams;
 	struct codel_stats cstats;
 	u32		memory_usage;
@@ -73,7 +76,70 @@ struct jens_sched_data {
 
 	struct list_head new_flows;	/* list of new flows */
 	struct list_head old_flows;	/* list of old flows */
+
+	spinlock_t	record_lock;	/* for record_chan */
 };
+
+static struct dentry *jens_debugfs_main;
+
+static struct dentry *jens_debugfs_create(const char *filename,
+    struct dentry *parent, umode_t mode, struct rchan_buf *buf,
+    int *is_global)
+{
+	*is_global = 1;
+	return (debugfs_create_file(filename, mode, parent, buf,
+	    &relay_file_operations));
+}
+
+static int jens_debugfs_destroy(struct dentry *dentry)
+{
+	debugfs_remove(dentry);
+	return (0);
+}
+
+static int jens_subbuf_init(struct rchan_buf *buf, void *subbuf_,
+    void *prev_subbuf, size_t prev_padding)
+{
+	size_t n;
+	struct tc_jens_relay *subbuf = (struct tc_jens_relay *)subbuf_;
+
+	memset(subbuf_, '\0', TC_JENS_RELAY_SUBBUFSZ);
+	for (n = 0; n < TC_JENS_RELAY_NRECORDS; ++n)
+		subbuf[n].type = TC_JENS_RELAY_PADDING;
+
+	return (1);
+}
+
+static /*const*/ struct rchan_callbacks jens_debugfs_relay_hooks = {
+	.create_buf_file = jens_debugfs_create,
+	.remove_buf_file = jens_debugfs_destroy,
+	.subbuf_start = jens_subbuf_init,
+};
+
+static void jens_record_write(struct tc_jens_relay *record,
+    struct jens_sched_data *q)
+{
+	unsigned long flags;	/* used by spinlock macros */
+
+	record->ts = ktime_get_ns();
+	spin_lock_irqsave(&q->record_lock, flags);
+	__relay_write(q->record_chan, record, sizeof(struct tc_jens_relay));
+	spin_unlock_irqrestore(&q->record_lock, flags);
+}
+
+static void jens_record_packet(struct sk_buff *skb, __u8 flags,
+    struct jens_sched_data *q)
+{
+	struct tc_jens_relay r = {0};
+	int thiscpu = get_cpu(); /*XXX*/
+
+	r.type = TC_JENS_RELAY_SOJOURN;
+	r.d32 = /*XXX*/ (unsigned int)thiscpu;
+	r.e16 = /*XXX*/ 0xFFFF;
+	r.f8 = jens_update_record_flag(skb, flags);
+	jens_record_write(&r, q);
+	put_cpu(); /*XXX*/
+}
 
 static unsigned int fq_codel_hash(const struct jens_sched_data *q,
 				  struct sk_buff *skb)
@@ -208,7 +274,7 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 	}
 	idx--;
 
-	codel_set_enqueue_time(skb);
+	jens_set_enqueue_data(skb);
 	flow = &q->flows[idx];
 	flow_queue_add(flow, skb);
 	q->backlogs[idx] += qdisc_pkt_len(skb);
@@ -282,11 +348,14 @@ static void drop_func(struct sk_buff *skb, void *ctx)
 {
 	struct Qdisc *sch = ctx;
 
+	if (skb)
+		jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP,
+		    qdisc_priv(sch));
 	kfree_skb(skb);
 	qdisc_qstats_drop(sch);
 }
 
-static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
+static struct sk_buff *jens_dequeue_fq_int(struct Qdisc *sch)
 {
 	struct jens_sched_data *q = qdisc_priv(sch);
 	struct sk_buff *skb;
@@ -334,6 +403,18 @@ begin:
 	return skb;
 }
 
+static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
+{
+	struct sk_buff *skb = jens_dequeue_fq_int(sch);
+
+	if (skb) {
+		__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
+
+		jens_record_packet(skb, (ecn << 3), qdisc_priv(sch));
+	}
+	return (skb);
+}
+
 static void fq_codel_flow_purge(struct fq_codel_flow *flow)
 {
 	rtnl_kfree_skbs(flow->head, flow->tail);
@@ -370,6 +451,7 @@ static const struct nla_policy fq_codel_policy[TCA_JENS_MAX + 1] = {
 	[TCA_JENS_QUANTUM]	= { .type = NLA_U32 },
 	[TCA_JENS_DROP_BATCH_SIZE] = { .type = NLA_U32 },
 	[TCA_JENS_MEMORY_LIMIT] = { .type = NLA_U32 },
+	[TCA_JENS_SUBBUFS]	= { .type = NLA_U32 },
 };
 
 static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
@@ -391,6 +473,17 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 #endif
 	if (err < 0)
 		return err;
+
+	if (tb[TCA_JENS_SUBBUFS]) {
+		/* only at load time */
+		if (q->flows)
+			return (-EINVAL);
+		q->cparams.subbufs = nla_get_u32(tb[TCA_JENS_SUBBUFS]);
+		if (q->cparams.subbufs == 1)
+			/* use suitable default value */
+			q->cparams.subbufs = 1024;
+	}
+
 	if (tb[TCA_JENS_FLOWS]) {
 		if (q->flows)
 			return -EINVAL;
@@ -438,8 +531,10 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 
 	while (sch->q.qlen > sch->limit ||
 	       q->memory_usage > q->memory_limit) {
-		struct sk_buff *skb = jens_dequeue_fq(sch);
+		struct sk_buff *skb = jens_dequeue_fq_int(sch);
 
+		if (skb)
+			jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP, q);
 		q->cstats.drop_len += qdisc_pkt_len(skb);
 		rtnl_kfree_skbs(skb, skb);
 		q->cstats.drop_count++;
@@ -456,6 +551,8 @@ static void fq_codel_destroy(struct Qdisc *sch)
 {
 	struct jens_sched_data *q = qdisc_priv(sch);
 
+	if (q->record_chan)
+		relay_close(q->record_chan);
 	tcf_block_put(q->block);
 	kvfree(q->backlogs);
 	kvfree(q->flows);
@@ -478,11 +575,29 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	jens_params_init(&q->cparams);
 	codel_stats_init(&q->cstats);
 	q->cparams.mtu = psched_mtu(qdisc_dev(sch));
+	q->record_chan = NULL;
+	spin_lock_init(&q->record_lock);
 
 	if (opt) {
 		err = fq_codel_change(sch, opt, extack);
 		if (err)
 			goto init_failure;
+	}
+
+	if (!jens_debugfs_main)
+		q->cparams.subbufs = 0;
+	if (q->cparams.subbufs) {
+		char name[6];
+
+		snprintf(name, sizeof(name), "%04X:", sch->handle >> 16);
+		q->record_chan = relay_open(name, jens_debugfs_main,
+		    TC_JENS_RELAY_SUBBUFSZ, q->cparams.subbufs,
+		    &jens_debugfs_relay_hooks, sch);
+		if (!q->record_chan) {
+			printk(KERN_DEBUG "sch_jens: relay channel creation failed\n");
+			err = -ENOENT;
+			goto init_failure;
+		}
 	}
 
 	err = tcf_block_get(&q->block, &q->filter_list, sch, extack);
@@ -519,6 +634,8 @@ alloc_failure:
 	kvfree(q->flows);
 	q->flows = NULL;
 init_failure:
+	if (q->record_chan)
+		relay_close(q->record_chan);
 	q->flows_cnt = 0;
 	return err;
 }
@@ -550,6 +667,8 @@ static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 			q->quantum) ||
 	    nla_put_u32(skb, TCA_JENS_DROP_BATCH_SIZE,
 			q->drop_batch_size) ||
+	    nla_put_u32(skb, TCA_JENS_SUBBUFS,
+			q->cparams.subbufs) ||
 	    nla_put_u32(skb, TCA_JENS_MEMORY_LIMIT,
 			q->memory_limit) ||
 	    nla_put_u32(skb, TCA_JENS_FLOWS,
@@ -724,12 +843,29 @@ static struct Qdisc_ops fq_codel_qdisc_ops __read_mostly = {
 
 static int __init fq_codel_module_init(void)
 {
-	return register_qdisc(&fq_codel_qdisc_ops);
+	int rv;
+
+	if (!(jens_debugfs_main = debugfs_create_dir("sch_jens", NULL))) {
+		printk(KERN_WARNING "sch_jens: debugfs not available\n");
+		rv = -ENOSYS;
+	} else
+		rv = PTR_ERR_OR_ZERO(jens_debugfs_main);
+	if (rv)
+		goto e0;
+
+	rv = register_qdisc(&fq_codel_qdisc_ops);
+
+	if (rv)
+		debugfs_remove(jens_debugfs_main);
+
+ e0:
+	return (rv);
 }
 
 static void __exit fq_codel_module_exit(void)
 {
 	unregister_qdisc(&fq_codel_qdisc_ops);
+	debugfs_remove(jens_debugfs_main);
 }
 
 module_init(fq_codel_module_init)

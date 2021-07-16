@@ -21,3 +21,75 @@ Differences to fq_codel
   e.g. markfree=5, markfull=15, sojourn=10 → 50% are marked
   (note that the CoDel algorithm of marking packets when the
   “target” time isn’t reached within “interval” still applies)
+
+Live measurement
+────────────────
+
+The debugging filesystem must be mounted:
+
+	$ sudo mount -t debugfs debugfs /sys/kernel/debug
+
+This can also be achieved with an /etc/fstab line as follows:
+
+	debugfs    /sys/kernel/debug  debugfs  defaults  0  0
+
+We’re currently intending to measure the following KPIs:
+
+• queue length (integer, ≤ “limit”) every 5 ms
+• timestamp (at least µs) and sojourn time (dito) for every packet
+
+This data is passed from kernel to userspace in records structured
+as follows via relayfs:
+
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ ts (timestamp)                │typ│fNN│ eNN   │ dNN (data)    │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+
+The .ts (timestamp) member is a 64-bit unsigned integer,
+representing the timestamp of this record in nanoseconds
+per CLOCK_MONOTONIC (this is not the packet receive time).
+This timestamp has no relation to wall-clock time but is
+consistent within measurement as it increases monotonically,
+pausing when the system is suspended.
+
+The .type member, an 8-bit unsigned integer, indicates
+which record it is, i.e. which meaning it has and how
+the data members are filled. This is one of:
+
+• TC_JENS_RELAY_INVALID (= 0), record was not filled in, do warn
+• TC_JENS_RELAY_PADDING (quietly skip/ignore this record)
+• TC_JENS_RELAY_SOJOURN (an IP packet’s sojourn time)
+• TC_JENS_RELAY_QUEUESZ (amount of packets in the FIFO)
+
+The remaining members are per-record-type data. They are:
+• f8 (8-bit unsigned integer)
+• e16 (16-bit unsigned integer)
+  aliased as e8[2] (8-bit unsigned integer)
+• d32 (32-bit unsigned integer)
+  aliased as d16[2] (16-bit unsigned integer)
+  aliased as d8[4] (8-bit unsigned integer)
+Any data members not specified by the record type must not be accessed.
+
+Record types define the following data members:
+
+• TC_JENS_RELAY_SOJOURN:
+  – d32 packet sojourn time in 1024 ns units
+  – e16 ECN marking range/percentage
+    ‣ 0xFFFF = above or equal to markfull
+    ‣ 0x0000 = below or equal to markfree
+    ‣ anything in between = relative value of chance of marking
+      (this currently scales linearly based on the sojourn time
+      but may in the future use a gradual approach)
+  – f8 bitfield
+    ‣ 0:1 ECN bits on enqueue
+    ‣   2 ECN bits are valid (0 if they could not be determined)
+    ‣ 3:4 ECN bits on dequeue
+    ‣   5 if ECN marked from not reaching target within interval
+          (TC_JENS_RELAY_SOJOURN_SLOW), even set if not ECN packet
+    ‣   6 if ECN marked from markfree/markfull range
+          (TC_JENS_RELAY_SOJOURN_MARK), even set if not ECN packet
+    ‣   7 (TC_JENS_RELAY_SOJOURN_DROP) the packet was dropped not sent
+• TC_JENS_RELAY_QUEUESZ: d32 queue length
+
+Subbuffers are TC_JENS_RELAY_NRECORDS (64) records or 1 KiB each.
+There currently are 1024 subbuffers (will be made configurable).

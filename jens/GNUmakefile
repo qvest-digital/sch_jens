@@ -20,3 +20,6 @@ ${PROG}: ${OBJS}
 
 clean:
 	-rm -f ${CLEANFILES}
+
+run: all
+	sudo java --source 11 JensReader.java /sys/kernel/debug/sch_jens/0002:0

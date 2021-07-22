@@ -81,6 +81,8 @@ main(int argc, char *argv[])
 	int pres;
 
 	printf("<pkt ts=\"1\" time=\"1\" chance=\"0.123456789\" ecn-in=\"00\" ecn-out=\"00\"/>\n");
+	printf("<pkt ts=\"20\" time=\"3FFF\" chance=\"1\" slow=\"1\" mark=\"1\" drop=\"1\" ecn-valid=\"1\" ecn-in=\"01\" ecn-out=\"11\"/>\n");
+	printf("<qsz ts=\"FFFFFFFFFFFFFFFF\" len=\"FFFFFFFF\"/>\n");
 	if (argc > 0) exit(0);
 
 	if (argc != 2)

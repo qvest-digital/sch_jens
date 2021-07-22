@@ -72,6 +72,11 @@ public final class JensReader {
         return String.format("%d%c%06d", ms, decimal, frac);
     }
 
+    private static String ecnfmt(final int bits) {
+        final String s = Integer.toBinaryString(bits);
+        return s.length() < 2 ? "0" + s : s;
+    }
+
     private static JensReader init(final String[] args)
       throws ParserConfigurationException, IOException {
         // this is awful but we can’t directly use NumberFormat…
@@ -124,12 +129,12 @@ public final class JensReader {
         final Document d = db.parse(new InputSource(new StringReader(line)));
         final Element root = d.getDocumentElement();
         final long ts = Long.parseUnsignedLong(root.getAttribute("ts"), 16);
-        System.out.printf("[%s] ", unsfmt(ts));
+        System.out.printf("[%13s] ", unsfmt(ts));
         switch (root.getTagName()) {
         case "qsz": {
             final int d32 = Integer.parseUnsignedInt(root.getAttribute("len"), 16);
             final long len = Integer.toUnsignedLong(d32);
-            System.out.printf("queue-size: %d\n", len);
+            System.out.printf("queue-size: %d packets\n", len);
             break;
         }
         case "pkt": {
@@ -142,14 +147,13 @@ public final class JensReader {
             final boolean markCoDel = !("".equals(root.getAttribute("slow")));
             final boolean markJENS = !("".equals(root.getAttribute("mark")));
             final boolean dropped = !("".equals(root.getAttribute("drop")));
-            System.out.printf("sojourn-time: %s ms; ", unsfmt(time));
+            System.out.printf("sojourn-time: %9s ms; ", unsfmt(time));
             if (ecnValid) {
-                System.out.printf("ECN bits %s → %s",
-                  Integer.toBinaryString(ecnIn), Integer.toBinaryString(ecnOut));
+                System.out.printf("ECN bits %s → %s", ecnfmt(ecnIn), ecnfmt(ecnOut));
             } else {
                 System.out.print("no traffic class");
             }
-            System.out.printf("; JENS marking %6.2f%% (%s)", chance * 100.0,
+            System.out.printf("; JENS %6.2f%% (%s)", chance * 100.0,
               markJENS ? "marked: CE" : "not marked");
             if (markCoDel) {
                 System.out.print("; CoDel marked");

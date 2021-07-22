@@ -69,7 +69,7 @@ public final class JensReader {
     private static String unsfmt(final long ns) {
         final long ms = Long.divideUnsigned(ns, 1000000L);
         final long frac = Long.remainderUnsigned(ns, 1000000L);
-        return String.format("%d%c%09d", ms, decimal, frac);
+        return String.format("%d%c%06d", ms, decimal, frac);
     }
 
     private static JensReader init(final String[] args)
@@ -149,7 +149,7 @@ public final class JensReader {
             } else {
                 System.out.print("no traffic class");
             }
-            System.out.printf("; JENS marking %.3f (%s)", chance * 100.0,
+            System.out.printf("; JENS marking %6.2f%% (%s)", chance * 100.0,
               markJENS ? "marked: CE" : "not marked");
             if (markCoDel) {
                 System.out.print("; CoDel marked");

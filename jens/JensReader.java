@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 /**
  * <p>Example parser for the output of the “jensdmp” C program.</p>
@@ -50,7 +52,7 @@ import java.io.StringReader;
 public final class JensReader {
     public static void main(String[] args) {
         try {
-            final JensReader jr = init(new InputStreamReader(System.in));
+            final JensReader jr = init(args);
             jr.go();
         } catch (Exception e) {
             System.err.println("Error: " + e);
@@ -65,11 +67,22 @@ public final class JensReader {
         return String.format("%d.%09d", ms, frac);
     }
 
-    private static JensReader init(final Reader r)
-      throws ParserConfigurationException {
+    private static JensReader init(final String[] args)
+      throws ParserConfigurationException, IOException {
         final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         final DocumentBuilder db = dbf.newDocumentBuilder();
+
+        final ArrayList<String> argv = new ArrayList<>();
+        argv.add("./jensdmp");
+        argv.addAll(Arrays.asList(args));
+        final Process p = new ProcessBuilder(argv)
+          .redirectInput(ProcessBuilder.Redirect.INHERIT)
+          .redirectError(ProcessBuilder.Redirect.INHERIT)
+          .start();
+        Runtime.getRuntime().addShutdownHook(new Thread(p::destroy));
+        final Reader r = new InputStreamReader(p.getInputStream());
+
         return new JensReader(new BufferedReader(r), db);
     }
 

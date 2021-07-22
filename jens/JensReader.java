@@ -121,32 +121,55 @@ public final class JensReader {
         }
     }
 
+    private Element root;
+
+    @SuppressWarnings("SameParameterValue")
+    private double getFloat(final String attributeName) {
+        return Double.parseDouble(root.getAttribute(attributeName));
+    }
+
+    @SuppressWarnings("SameParameterValue")
+    private /* unsigned */ long get64X(final String attributeName) {
+        return Long.parseUnsignedLong(root.getAttribute(attributeName), 16);
+    }
+
+    private long get32X(final String attributeName) {
+        final int d32 = Integer.parseUnsignedInt(root.getAttribute(attributeName), 16);
+        // 0x00000000_00000000L‥0x00000000_FFFFFFFFL
+        return Integer.toUnsignedLong(d32);
+    }
+
+    private int get8b(final String attributeName) {
+        return Integer.parseUnsignedInt(root.getAttribute(attributeName), 2);
+    }
+
+    private boolean has(final String attributeName) {
+        return !("".equals(root.getAttribute(attributeName)));
+    }
+
     private boolean one(final String line) throws IOException, SAXException {
         if (line == null) {
             return false;
         }
         db.reset();
         final Document d = db.parse(new InputSource(new StringReader(line)));
-        final Element root = d.getDocumentElement();
-        final long ts = Long.parseUnsignedLong(root.getAttribute("ts"), 16);
-        System.out.printf("[%13s] ", unsfmt(ts));
+        root = d.getDocumentElement();
+        System.out.printf("[%13s] ", unsfmt(get64X("ts")));
         switch (root.getTagName()) {
         case "qsz": {
-            final int d32 = Integer.parseUnsignedInt(root.getAttribute("len"), 16);
-            final long len = Integer.toUnsignedLong(d32);
+            final long len = get32X("len");
             System.out.printf("queue-size: %d packets\n", len);
             break;
         }
         case "pkt": {
-            final int d32 = Integer.parseUnsignedInt(root.getAttribute("time"), 16);
-            final long time = Integer.toUnsignedLong(d32) * 1024;
-            final double chance = Double.parseDouble(root.getAttribute("chance"));
-            final int ecnIn = Integer.parseUnsignedInt(root.getAttribute("ecn-in"), 2);
-            final int ecnOut = Integer.parseUnsignedInt(root.getAttribute("ecn-out"), 2);
-            final boolean ecnValid = !("".equals(root.getAttribute("ecn-valid")));
-            final boolean markCoDel = !("".equals(root.getAttribute("slow")));
-            final boolean markJENS = !("".equals(root.getAttribute("mark")));
-            final boolean dropped = !("".equals(root.getAttribute("drop")));
+            final long time = get32X("time") * 1024;
+            final double chance = getFloat("chance");
+            final int ecnIn = get8b("ecn-in");
+            final int ecnOut = get8b("ecn-out");
+            final boolean ecnValid = has("ecn-valid");
+            final boolean markCoDel = has("slow");
+            final boolean markJENS = has("mark");
+            final boolean dropped = has("drop");
             System.out.printf("sojourn-time: %9s ms; ", unsfmt(time));
             if (ecnValid) {
                 System.out.printf("ECN bits %s → %s", ecnfmt(ecnIn), ecnfmt(ecnOut));

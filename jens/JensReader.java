@@ -59,6 +59,12 @@ public final class JensReader {
         System.exit(0);
     }
 
+    private static String unsfmt(final long ns) {
+        final long ms = Long.divideUnsigned(ns, 1000000L);
+        final long frac = Long.remainderUnsigned(ns, 1000000L);
+        return String.format("%d.%09d", ms, frac);
+    }
+
     private static JensReader init(final Reader r)
       throws ParserConfigurationException {
         final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -89,8 +95,46 @@ public final class JensReader {
         db.reset();
         final Document d = db.parse(new InputSource(new StringReader(line)));
         final Element root = d.getDocumentElement();
-        System.out.printf("element %s with id %s\n",
-          root.getTagName(), root.getAttribute("id"));
+        final long ts = Long.parseUnsignedLong(root.getAttribute("ts"), 16);
+        System.out.printf("[%s] ", unsfmt(ts));
+        switch (root.getTagName()) {
+        case "qsz": {
+            final int d32 = Integer.parseUnsignedInt(root.getAttribute("len"), 16);
+            final long len = Integer.toUnsignedLong(d32);
+            System.out.printf("queue-size: %d\n", len);
+            break;
+        }
+        case "pkt": {
+            final int d32 = Integer.parseUnsignedInt(root.getAttribute("time"), 16);
+            final long time = Integer.toUnsignedLong(d32) * 1024;
+            final double chance = Double.parseDouble(root.getAttribute("chance"));
+            final int ecnIn = Integer.parseUnsignedInt(root.getAttribute("ecn-in"), 2);
+            final int ecnOut = Integer.parseUnsignedInt(root.getAttribute("ecn-out"), 2);
+            final boolean ecnValid = !("".equals(root.getAttribute("ecn-valid")));
+            final boolean markCoDel = !("".equals(root.getAttribute("slow")));
+            final boolean markJENS = !("".equals(root.getAttribute("mark")));
+            final boolean dropped = !("".equals(root.getAttribute("drop")));
+            System.out.printf("sojourn-time: %s ms; ", unsfmt(time));
+            if (ecnValid) {
+                System.out.printf("ECN bits %s → %s",
+                  Integer.toBinaryString(ecnIn), Integer.toBinaryString(ecnOut));
+            } else {
+                System.out.print("no traffic class");
+            }
+            System.out.printf("; JENS marking %.3f (%s)", chance * 100.0,
+              markJENS ? "marked: CE" : "not marked");
+            if (markCoDel) {
+                System.out.print("; CoDel marked");
+            }
+            if (dropped) {
+                System.out.print("; dropped");
+            }
+            System.out.println();
+            break;
+        }
+        default:
+            System.out.printf("unknown: %s\n", root.getTagName());
+        }
         return true;
     }
 }

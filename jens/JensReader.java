@@ -55,17 +55,8 @@ public final class JensReader {
         } catch (Exception e) {
             System.err.println("Error: " + e);
             System.exit(1);
-        } finally {
-            System.out.printf("avg %s ms over %d records\n", nsfmt(tssum / tsnum), tsnum);
-            System.out.printf("min %s ms  max %s ms\n", nsfmt(tsmin), nsfmt(tsmax));
         }
         System.exit(0);
-    }
-
-    private static String nsfmt(final long ns) {
-        final long ms = ns / 1000000L;
-        final long frac = ns % 1000000L;
-        return String.format("%d.%09d", ms, frac);
     }
 
     private static JensReader init(final Reader r)
@@ -78,18 +69,10 @@ public final class JensReader {
 
     final BufferedReader reader;
     final DocumentBuilder db;
-    static long tsmin;
-    static long tsmax;
-    static long tssum;
-    static long tsnum;
 
     private JensReader(final BufferedReader r, final DocumentBuilder xdb) {
         reader = r;
         db = xdb;
-        tsmin = Long.MAX_VALUE;
-        tsmax = Long.MIN_VALUE;
-        tssum = 0;
-        tsnum = 0;
     }
 
     private void go() throws IOException, SAXException {
@@ -100,7 +83,6 @@ public final class JensReader {
     }
 
     private boolean one(final String line) throws IOException, SAXException {
-        final long tsbeg = System.nanoTime();
         if (line == null) {
             return false;
         }
@@ -109,20 +91,6 @@ public final class JensReader {
         final Element root = d.getDocumentElement();
         System.out.printf("element %s with id %s\n",
           root.getTagName(), root.getAttribute("id"));
-        final long tsend = System.nanoTime();
-
-        final long tsd = tsend - tsbeg;
-        tsmin = Math.min(tsmin, tsd);
-        tsmax = Math.max(tsmax, tsd);
-        final long newsum = tssum + tsd;
-        if (newsum < tssum) {
-            System.out.printf("avg %s ms over %d records\n", nsfmt(tssum / tsnum), tsnum);
-            tssum = tsd;
-            tsnum = 1;
-        } else {
-            tssum = newsum;
-            tsnum++;
-        }
         return true;
     }
 }

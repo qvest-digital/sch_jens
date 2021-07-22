@@ -21,5 +21,12 @@ ${PROG}: ${OBJS}
 clean:
 	-rm -f ${CLEANFILES}
 
+CLEANFILES+=	*.class
+
+all: JensReader.class
+
+JensReader.class: JensReader.java
+	javac JensReader.java
+
 run: all
-	sudo java --source 11 JensReader.java /sys/kernel/debug/sch_jens/0002:0
+	sudo java JensReader /sys/kernel/debug/sch_jens/0002:0

@@ -80,7 +80,7 @@ main(int argc, char *argv[])
 	struct pollfd pfd;
 	int pres;
 
-	printf("<foo ts=\"1\"/>\n");
+	printf("<pkt ts=\"1\" time=\"1\" chance=\"0.123456789\" ecn-in=\"00\" ecn-out=\"00\"/>\n");
 	if (argc > 0) exit(0);
 
 	if (argc != 2)

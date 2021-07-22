@@ -33,6 +33,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -61,14 +64,26 @@ public final class JensReader {
         System.exit(0);
     }
 
+    private static char decimal;
+
     private static String unsfmt(final long ns) {
         final long ms = Long.divideUnsigned(ns, 1000000L);
         final long frac = Long.remainderUnsigned(ns, 1000000L);
-        return String.format("%d.%09d", ms, frac);
+        return String.format("%d%c%09d", ms, decimal, frac);
     }
 
     private static JensReader init(final String[] args)
       throws ParserConfigurationException, IOException {
+        // this is awful but we can’t directly use NumberFormat…
+        final NumberFormat numberFormat = NumberFormat.getInstance();
+        if (numberFormat instanceof DecimalFormat) {
+            final DecimalFormat decimalFormat = (DecimalFormat) numberFormat;
+            final DecimalFormatSymbols symbols = decimalFormat.getDecimalFormatSymbols();
+            decimal = symbols.getDecimalSeparator();
+        } else {
+            decimal = '.';
+        }
+
         final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         final DocumentBuilder db = dbf.newDocumentBuilder();

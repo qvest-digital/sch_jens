@@ -102,11 +102,9 @@ enum {
 		TC_JENS_RELAY_SOJOURN_MARK, TC_JENS_RELAY_SOJOURN_DROP */
 	TC_JENS_RELAY_SOJOURN,
 
-#ifdef notyet
 	/* report length of queue periodically */
 	/* d32 = amount of packets in FIFO */
 	TC_JENS_RELAY_QUEUESZ,
-#endif
 
 	/* invalid, too high */
 	__TC_JENS_RELAY_MAX

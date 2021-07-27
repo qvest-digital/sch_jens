@@ -1,3 +1,22 @@
+iproute2 (5.10.0-4~jens+2) tarent; urgency=medium
+
+  * Update documentation wrt. markfree/markfull vs. interval/target
+  * Add examples for retrieving qdisc statistics
+  * Implement live measurement for per-packet records in the LKM
+  * Document debugfs requirement and example invocation for measurement
+  * Add /usr/libexec/jensdmp client for the debugfs-relayfs-based channel
+  * Ship LKM README and amend iproute2 README.Debian with useful infos
+  * Assign 2: as explicit handle to the jens queue in examples, so paths
+    are consistent and can be used in example instructions
+  * Implement Java™-side wrapper around jensdmp to speedily parse its
+    output (the records sent by the LKM), for per-packet records and
+    queue-size (periodic) records; the example formats them to stdout
+  * Add subbufs option for tc-jens(8) (configuring, enabling/disabling
+    live measurement) defaulting to disabled for speed/efficiency
+  * Install Java™ example code
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Tue, 27 Jul 2021 19:35:07 +0200
+
 iproute2 (5.10.0-4~jens+1) tarent; urgency=medium
 
   * Modified build of iproute2 (buster-backports), adding support

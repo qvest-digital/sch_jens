@@ -100,7 +100,6 @@ enum {
 	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
 		3:4=ECN bits on dequeue, TC_JENS_RELAY_SOJOURN_SLOW,
 		TC_JENS_RELAY_SOJOURN_MARK, TC_JENS_RELAY_SOJOURN_DROP */
-	/* note ECN bits on dequeue are invalid if TC_JENS_RELAY_SOJOURN_DROP */
 	TC_JENS_RELAY_SOJOURN,
 
 #ifdef notyet

@@ -130,12 +130,13 @@ static void jens_record_write(struct tc_jens_relay *record,
 static void jens_record_packet(struct sk_buff *skb, struct jens_sched_data *q,
     codel_time_t ldelay, __u8 flags)
 {
+	__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
 	struct tc_jens_relay r = {0};
 
 	r.type = TC_JENS_RELAY_SOJOURN;
 	r.d32 = ldelay;
 	r.e16 = /*XXX*/ 0xFFFF;
-	r.f8 = jens_update_record_flag(skb, flags);
+	r.f8 = jens_update_record_flag(skb, flags | (ecn << 3));
 	jens_record_write(&r, q);
 }
 
@@ -409,12 +410,8 @@ static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
 
 	struct sk_buff *skb = jens_dequeue_fq_int(sch, &ldelay);
 
-	if (skb) {
-		__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
-
-		jens_record_packet(skb, qdisc_priv(sch), ldelay,
-		    (ecn << 3));
-	}
+	if (skb)
+		jens_record_packet(skb, qdisc_priv(sch), ldelay, 0);
 	return (skb);
 }
 

@@ -267,6 +267,15 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 			u32 tmax = params->markfull - params->markfree;
 			/* now we have: 0 < t' < tmax' */
 
+			/* scale tmax' to 65535 to calculate the chance */
+			u64 c = t;
+			c *= 65535;
+			/* for rounding */
+			c += (tmax / 2);
+			do_div(c, tmax);
+			/* c is in [0; 65535] now */
+			chance = c;
+
 			/*
 			 * we want to mark with (t' / tmax' * 100)% probability
 			 * therefore we need a random number in [0; tmax'[ then

@@ -57,7 +57,7 @@ static void jens_params_init(struct jens_params *params)
 	params->target = MS2TIME(5);
 	params->markfree = MS2TIME(4);
 	params->markfull = MS2TIME(14);
-	params->subbufs = 1024;
+	params->subbufs = 0;
 }
 
 static void codel_vars_init(struct codel_vars *vars)

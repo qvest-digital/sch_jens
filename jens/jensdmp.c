@@ -190,4 +190,5 @@ consume(size_t idx)
 		    (rbuf[idx].f8 & BIT(2)) ? " ecn-valid=\"y\"" : "");
 		break;
 	}
+	fflush(stdout);
 }

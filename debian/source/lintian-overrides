@@ -11,4 +11,3 @@ iproute2 source: no-dep5-copyright
 # inherited issues from the Debian buster-backports package
 iproute2 source: orig-tarball-missing-upstream-signature
 iproute2 source: upstream-metadata-missing-bug-tracking
-iproute2 source: package-does-not-install-examples

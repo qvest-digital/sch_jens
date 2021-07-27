@@ -35,6 +35,6 @@ run: all javac
 	sudo java JensReaderDemo /sys/kernel/debug/sch_jens/0002:0
 
 install:
-	install -m 0755 -d ${DESTDIR}/usr/sbin
-	install -m 0755 jensdmp ${DESTDIR}/usr/sbin/
+	install -m 0755 -d ${DESTDIR}/usr/libexec
+	install -m 0755 jensdmp ${DESTDIR}/usr/libexec/
 	@echo do install the *.java examples

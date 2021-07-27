@@ -326,7 +326,7 @@ public final class JensReaderLib {
         }
     }
 
-    private static final String DEFAULT_JENSDMP_PATH = "/usr/sbin/jensdmp";
+    private static final String DEFAULT_JENSDMP_PATH = "/usr/libexec/jensdmp";
 
     /**
      * <p>Initialises a JensReader instance and returns it.</p>

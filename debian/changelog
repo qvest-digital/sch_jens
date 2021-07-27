@@ -14,8 +14,9 @@ iproute2 (5.10.0-4~jens+2) tarent; urgency=medium
   * Add subbufs option for tc-jens(8) (configuring, enabling/disabling
     live measurement) defaulting to disabled for speed/efficiency
   * Install Java™ example code
+  * Bump iproute2-doc to Recommends, it has the README with instructions
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Tue, 27 Jul 2021 19:35:07 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Tue, 27 Jul 2021 20:06:04 +0200
 
 iproute2 (5.10.0-4~jens+1) tarent; urgency=medium
 

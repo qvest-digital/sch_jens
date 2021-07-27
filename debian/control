@@ -33,8 +33,7 @@ Provides: arpd
 Conflicts: arpd, iproute (<< 20130000-1)
 Replaces: iproute
 Depends: ${misc:Depends}, ${shlibs:Depends}, libcap2-bin,
-Recommends: ${ipmods:Recommends}
-Suggests: iproute2-doc
+Recommends: iproute2-doc, ${ipmods:Recommends}
 Multi-Arch: foreign
 Description: networking and traffic control tools
  The iproute2 suite is a collection of utilities for networking and

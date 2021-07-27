@@ -14,7 +14,7 @@ Differences to fq_codel
 • The new parameter “markfull” loosely corresponds to the old
   parameter “ce_threshold”: all packets taking at least this
   long to sojourn are ECN CE-marked
-• The parameter “markfree” is a fully new concepts: packets
+• The parameter “markfree” is a fully new concept as packets
   taking more than this time will be ECN CE-marked based on
   a, currently linear, scale, depending on where in between
   the “markfree” and “markfull” times the sojourn time falls;
@@ -79,7 +79,9 @@ Record types define the following data members:
     ‣ 0x0000 = below or equal to markfree
     ‣ anything in between = relative value of chance of marking
       (this currently scales linearly based on the sojourn time
-      but may in the future use a gradual approach)
+      but may in the future use a gradual approach); note roun‐
+      ding may make the chance 0x0000 or 0xFFFF if sojourn time
+      is near markfree or markfull, respectively
   – f8 bitfield
     ‣ 0:1 ECN bits on enqueue
     ‣   2 ECN bits are valid (0 if they could not be determined)
@@ -89,7 +91,14 @@ Record types define the following data members:
     ‣   6 if ECN marked from markfree/markfull range
           (TC_JENS_RELAY_SOJOURN_MARK), even set if not ECN packet
     ‣   7 (TC_JENS_RELAY_SOJOURN_DROP) the packet was dropped not sent
+
 • TC_JENS_RELAY_QUEUESZ: d32 queue length
+
+• TC_JENS_RELAY_PADDING: none; shouldn’t occur but ignore silently
+
+• TC_JENS_RELAY_INVALID: none; must not occur (do warn)
+
+• TC_JENS_RELAY_MAX or higher are undefined/reserved for future changes
 
 Subbuffers are TC_JENS_RELAY_NRECORDS (64) records or 1 KiB each.
 There currently are 1024 subbuffers (will be made configurable).

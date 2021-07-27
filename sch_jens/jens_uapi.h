@@ -86,7 +86,7 @@ struct tc_jens_relay {
 /* compile-time check for correct size */
 extern struct tc_jens_relay tc_jens_relay_cta[sizeof(struct tc_jens_relay) == 16 ? 1 : -1];
 
-/* relay record types */
+/* relay record types (see README for details) */
 enum {
 	/* invalid (0), not initialised */
 	TC_JENS_RELAY_INVALID,

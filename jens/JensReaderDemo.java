@@ -59,7 +59,7 @@ public final class JensReaderDemo {
             } else {
                 System.out.print("no traffic class");
             }
-            System.out.printf("; JENS %6.2f%% (%s)", r.chance * 100.0,
+            System.out.printf("; JENS %7.3f%% (%s)", r.chance * 100.0,
               r.markJENS ? "marked: CE" : "not marked");
             if (r.markCoDel) {
                 System.out.print("; CoDel marked");

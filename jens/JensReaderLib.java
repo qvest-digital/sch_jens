@@ -71,7 +71,6 @@ public final class JensReaderLib {
      *
      * @author mirabilos (t.glaser@tarent.de)
      */
-    @SuppressWarnings("unused")
     @Documented
     @Retention(RetentionPolicy.SOURCE)
     @Target({ ElementType.TYPE_USE })
@@ -85,7 +84,12 @@ public final class JensReaderLib {
      * It may carry values from 0 to positive maximum.</p>
      *
      * <p>The optional attribute {@code max} documents the maximum expected value
-     * if it differs from Integer.MAX_VALUE or Long.MAX_VALUE, respectively.</p>
+     * if it differs from Byte.MAX_VALUE, Short.MAX_VALUE, Integer.MAX_VALUE or
+     * Long.MAX_VALUE, respectively.</p>
+     *
+     * <p>Values annotated thusly can be used in both {@link Unsigned} and
+     * {@link Signed} contexts and are safe for any standard arithmetic of
+     * their kind.</p>
      *
      * @author mirabilos (t.glaser@tarent.de)
      */
@@ -312,15 +316,17 @@ public final class JensReaderLib {
      * no longer needed. (The {@link JensReader#run()} method does this, and a
      * JVM shutdown hook to do so is also set up in case the process is killed.)</p>
      *
+     * @param jensdmpExecutable path to {@code jensdmp}, or {@code null} for default
      * @param args              arguments to pass to {@code jensdmp}
      * @param actor             an instance of an {@link AbstractJensActor} subclass
-     * @param jensdmpExecutable path to {@code jensdmp}, or {@code null} for default
      * @return an object whose {@link JensReader#run()} method can be called
      * @throws ParserConfigurationException if the XML parser complains
      * @throws IOException                  on most other errors
      */
-    public static JensReader init(final String[] args, final AbstractJensActor actor,
-      final Path jensdmpExecutable) throws ParserConfigurationException, IOException {
+    public static JensReader init(final Path jensdmpExecutable, final String[] args,
+      final AbstractJensActor actor) throws ParserConfigurationException, IOException {
+        /* configure decimal separator */
+
         // this is awful but we can’t directly use NumberFormat…
         final NumberFormat numberFormat = NumberFormat.getInstance();
         if (numberFormat instanceof DecimalFormat) {
@@ -330,6 +336,8 @@ public final class JensReaderLib {
         } else {
             decimal = '.';
         }
+
+        /* configure XML parser */
 
         final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);

@@ -21,6 +21,7 @@ Differences to fq_codel
   e.g. markfree=5, markfull=15, sojourn=10 → 50% are marked
   (note that the CoDel algorithm of marking packets when the
   “target” time isn’t reached within “interval” still applies)
+• The option “subbufs” enables live measurement, see below
 
 Live measurement
 ────────────────

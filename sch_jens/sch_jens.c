@@ -848,13 +848,14 @@ static int __init fq_codel_module_init(void)
 {
 	int rv;
 
-	if (!(jens_debugfs_main = debugfs_create_dir("sch_jens", NULL))) {
-		printk(KERN_WARNING "sch_jens: debugfs not available\n");
+	if (!(jens_debugfs_main = debugfs_create_dir("sch_jens", NULL)))
 		rv = -ENOSYS;
-	} else
+	else
 		rv = PTR_ERR_OR_ZERO(jens_debugfs_main);
-	if (rv)
+	if (rv) {
+		printk(KERN_WARNING "sch_jens: debugfs initialisation error\n");
 		goto e0;
+	}
 
 	rv = register_qdisc(&fq_codel_qdisc_ops);
 

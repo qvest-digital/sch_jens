@@ -86,7 +86,7 @@ struct tc_jens_relay {
 /* compile-time check for correct size */
 extern struct tc_jens_relay tc_jens_relay_cta[sizeof(struct tc_jens_relay) == 16 ? 1 : -1];
 
-/* relay record types */
+/* relay record types (see README for details) */
 enum {
 	/* invalid (0), not initialised */
 	TC_JENS_RELAY_INVALID,
@@ -95,7 +95,7 @@ enum {
 	TC_JENS_RELAY_PADDING,
 
 	/* report a single packet leaving our queue */
-	/* d32 = sojourn time in 1024 ns units */
+	/* d32 = sojourn time in 1024 ns units (-1 = drop on queue resize) */
 	/* e16 = ECN marking range/percentage */
 	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
 		3:4=ECN bits on dequeue, TC_JENS_RELAY_SOJOURN_SLOW,

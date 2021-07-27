@@ -162,7 +162,8 @@ struct codel_stats {
 
 typedef u32 (*codel_skb_len_t)(const struct sk_buff *skb);
 typedef codel_time_t (*codel_skb_time_t)(const struct sk_buff *skb);
-typedef void (*codel_skb_drop_t)(struct sk_buff *skb, void *ctx);
+typedef void (*jens_skb_drop_t)(struct sk_buff *skb, struct codel_vars *vars,
+				void *ctx);
 typedef struct sk_buff * (*codel_skb_dequeue_t)(struct codel_vars *vars,
 						void *ctx);
 

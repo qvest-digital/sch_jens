@@ -78,7 +78,6 @@ struct jens_sched_data {
 	struct list_head old_flows;	/* list of old flows */
 
 	spinlock_t	record_lock;	/* for record_chan */
-	u32		record_ctr;	/*XXX */
 };
 
 static struct dentry *jens_debugfs_main;
@@ -122,22 +121,25 @@ static void jens_record_write(struct tc_jens_relay *record,
 {
 	unsigned long flags;	/* used by spinlock macros */
 
+	if (!q->record_chan)
+		return;
 	record->ts = ktime_get_ns();
 	spin_lock_irqsave(&q->record_lock, flags);
-	record->d32 = q->record_ctr++;/*XXX*/
 	__relay_write(q->record_chan, record, sizeof(struct tc_jens_relay));
 	spin_unlock_irqrestore(&q->record_lock, flags);
 }
 
-static void jens_record_packet(struct sk_buff *skb, __u8 flags,
-    struct jens_sched_data *q)
+static void jens_record_packet(struct sk_buff *skb, struct jens_sched_data *q,
+    codel_time_t ldelay, __u8 flags)
 {
+	__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
 	struct tc_jens_relay r = {0};
+	struct jens_skb_cb *cb = get_jens_cb(skb);
 
 	r.type = TC_JENS_RELAY_SOJOURN;
-	r.d32 = /*XXX*/ 0xFFFFFFFF;
-	r.e16 = /*XXX*/ 0xFFFF;
-	r.f8 = jens_update_record_flag(skb, flags);
+	r.d32 = ldelay;
+	r.e16 = cb->chance;
+	r.f8 = cb->record_flag | flags | (ecn << 3);
 	jens_record_write(&r, q);
 }
 
@@ -241,7 +243,7 @@ static unsigned int fq_codel_drop(struct Qdisc *sch, unsigned int max_packets,
 	do {
 		skb = dequeue_head(flow);
 		len += qdisc_pkt_len(skb);
-		mem += get_codel_cb(skb)->mem_usage;
+		mem += get_jens_cb(skb)->mem_usage;
 		__qdisc_drop(skb, to_free);
 	} while (++i < max_packets && len < threshold);
 
@@ -285,8 +287,8 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 		q->new_flow_count++;
 		flow->deficit = q->quantum;
 	}
-	get_codel_cb(skb)->mem_usage = skb->truesize;
-	q->memory_usage += get_codel_cb(skb)->mem_usage;
+	get_jens_cb(skb)->mem_usage = skb->truesize;
+	q->memory_usage += /*get_jens_cb(skb)->mem_usage*/ skb->truesize;
 	memory_limited = q->memory_usage > q->memory_limit;
 	if (++sch->q.qlen <= sch->limit && !memory_limited)
 		return NET_XMIT_SUCCESS;
@@ -337,25 +339,26 @@ static struct sk_buff *dequeue_func(struct codel_vars *vars, void *ctx)
 	if (flow->head) {
 		skb = dequeue_head(flow);
 		q->backlogs[flow - q->flows] -= qdisc_pkt_len(skb);
-		q->memory_usage -= get_codel_cb(skb)->mem_usage;
+		q->memory_usage -= get_jens_cb(skb)->mem_usage;
 		sch->q.qlen--;
 		sch->qstats.backlog -= qdisc_pkt_len(skb);
 	}
 	return skb;
 }
 
-static void drop_func(struct sk_buff *skb, void *ctx)
+static void drop_func(struct sk_buff *skb, struct codel_vars *vars, void *ctx)
 {
 	struct Qdisc *sch = ctx;
 
 	if (skb)
-		jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP,
-		    qdisc_priv(sch));
+		jens_record_packet(skb, qdisc_priv(sch), vars->ldelay,
+		    TC_JENS_RELAY_SOJOURN_DROP);
 	kfree_skb(skb);
 	qdisc_qstats_drop(sch);
 }
 
-static struct sk_buff *jens_dequeue_fq_int(struct Qdisc *sch)
+static struct sk_buff *jens_dequeue_fq_int(struct Qdisc *sch,
+    codel_time_t *sojournp)
 {
 	struct jens_sched_data *q = qdisc_priv(sch);
 	struct sk_buff *skb;
@@ -389,6 +392,7 @@ begin:
 			list_del_init(&flow->flowchain);
 		goto begin;
 	}
+	*sojournp = flow->cvars.ldelay;
 	qdisc_bstats_update(sch, skb);
 	flow->deficit -= qdisc_pkt_len(skb);
 	/* We cant call qdisc_tree_reduce_backlog() if our qlen is 0,
@@ -405,13 +409,12 @@ begin:
 
 static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
 {
-	struct sk_buff *skb = jens_dequeue_fq_int(sch);
+	codel_time_t ldelay = (codel_time_t)-1;
 
-	if (skb) {
-		__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
+	struct sk_buff *skb = jens_dequeue_fq_int(sch, &ldelay);
 
-		jens_record_packet(skb, (ecn << 3), qdisc_priv(sch));
-	}
+	if (skb)
+		jens_record_packet(skb, qdisc_priv(sch), ldelay, 0);
 	return (skb);
 }
 
@@ -531,10 +534,12 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 
 	while (sch->q.qlen > sch->limit ||
 	       q->memory_usage > q->memory_limit) {
-		struct sk_buff *skb = jens_dequeue_fq_int(sch);
+		codel_time_t dummy_sojourn;
+		struct sk_buff *skb = jens_dequeue_fq_int(sch, &dummy_sojourn);
 
 		if (skb)
-			jens_record_packet(skb, TC_JENS_RELAY_SOJOURN_DROP, q);
+			jens_record_packet(skb, q, (codel_time_t)-1,
+			    TC_JENS_RELAY_SOJOURN_DROP);
 		q->cstats.drop_len += qdisc_pkt_len(skb);
 		rtnl_kfree_skbs(skb, skb);
 		q->cstats.drop_count++;
@@ -577,7 +582,6 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	q->cparams.mtu = psched_mtu(qdisc_dev(sch));
 	q->record_chan = NULL;
 	spin_lock_init(&q->record_lock);
-	q->record_ctr = 0;/*XXX*/
 
 	if (opt) {
 		err = fq_codel_change(sch, opt, extack);
@@ -846,13 +850,18 @@ static int __init fq_codel_module_init(void)
 {
 	int rv;
 
-	if (!(jens_debugfs_main = debugfs_create_dir("sch_jens", NULL))) {
-		printk(KERN_WARNING "sch_jens: debugfs not available\n");
+	if (!(jens_debugfs_main = debugfs_create_dir("sch_jens", NULL)))
 		rv = -ENOSYS;
-	} else
+	else
 		rv = PTR_ERR_OR_ZERO(jens_debugfs_main);
-	if (rv)
+	if (rv == -ENODEV) {
+		jens_debugfs_main = NULL;
+		printk(KERN_WARNING "sch_jens: debugfs not available, disabling\n");
+	} else if (rv) {
+		jens_debugfs_main = NULL;
+		printk(KERN_WARNING "sch_jens: debugfs initialisation error\n");
 		goto e0;
+	}
 
 	rv = register_qdisc(&fq_codel_qdisc_ops);
 

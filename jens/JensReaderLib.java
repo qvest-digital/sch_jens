@@ -58,6 +58,7 @@ import java.util.Arrays;
 public final class JensReaderLib {
     private static char decimal;
     private static Process p = null;
+    private static boolean needToInstallShutdownHook = true;
 
     /**
      * <p>Signed integer type.</p>
@@ -334,6 +335,13 @@ public final class JensReaderLib {
         dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         final DocumentBuilder db = dbf.newDocumentBuilder();
 
+        /* configure and start subprocess */
+
+        if (needToInstallShutdownHook) {
+            /* this is installed only once */
+            Runtime.getRuntime().addShutdownHook(new Thread(JensReaderLib::done));
+            needToInstallShutdownHook = false;
+        }
         final ArrayList<String> argv = new ArrayList<>();
         argv.add(jensdmpExecutable == null ? DEFAULT_JENSDMP_PATH :
           jensdmpExecutable.toAbsolutePath().toString());
@@ -342,11 +350,13 @@ public final class JensReaderLib {
           .redirectInput(ProcessBuilder.Redirect.INHERIT)
           .redirectError(ProcessBuilder.Redirect.INHERIT)
           .start();
+        /* everything below here MUST be within the following try block */
 
         try {
-            Runtime.getRuntime().addShutdownHook(new Thread(JensReaderLib::done));
+            /* access subprocess’ stdout */
             final Reader r = new InputStreamReader(p.getInputStream());
 
+            /* initialise internal parser instance */
             return new JensReader(new BufferedReader(r), actor, db);
         } catch (final Exception e) {
             // ensure the subprocess is cleaned up if there were errors
@@ -447,6 +457,14 @@ public final class JensReaderLib {
         }
     }
 
+    /**
+     * <p>Terminates the subprocess if it is still running.</p>
+     *
+     * <p>This is called with {@link JensReader#run()} finishes successfully
+     * and in a JVM shutdown hook but may be explicitly called if so desired.</p>
+     *
+     * <p>This method is synchronised and idempotent.</p>
+     */
     public static synchronized void done() {
         if (p != null) {
             p.destroy();

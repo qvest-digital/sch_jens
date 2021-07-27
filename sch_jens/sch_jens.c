@@ -132,11 +132,12 @@ static void jens_record_packet(struct sk_buff *skb, struct jens_sched_data *q,
 {
 	__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
 	struct tc_jens_relay r = {0};
+	struct jens_skb_cb *cb = get_jens_cb(skb);
 
 	r.type = TC_JENS_RELAY_SOJOURN;
 	r.d32 = ldelay;
 	r.e16 = /*XXX*/ 0xFFFF;
-	r.f8 = jens_update_record_flag(skb, flags | (ecn << 3));
+	r.f8 = cb->record_flag | flags | (ecn << 3);
 	jens_record_write(&r, q);
 }
 

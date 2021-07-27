@@ -109,12 +109,11 @@ static void jens_set_chance(struct sk_buff *skb, u16 data)
 	cb->chance = data;
 }
 
-static __u8 jens_update_record_flag(struct sk_buff *skb, __u8 data)
+static void jens_update_record_flag(struct sk_buff *skb, __u8 data)
 {
 	struct jens_skb_cb *cb = get_jens_cb(skb);
 
 	cb->record_flag |= data;
-	return (cb->record_flag);
 }
 
 #endif

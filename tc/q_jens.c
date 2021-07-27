@@ -56,6 +56,7 @@ static void explain(void)
 		"	[ limit PACKETS ] [ memory_limit BYTES ] [ drop_batch SIZE ]"
 		"\n\t	[ flows NUMBER ] [ quantum BYTES ] [ interval TIME ]"
 		"\n\t	[ target TIME ] [ markfree TIME ] [ markfull TIME ]"
+		"\n\t	[ subbufs NUMBER ]"
 		"\n");
 }
 
@@ -68,6 +69,7 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	unsigned int target = 0;
 	unsigned int markfree = ~0U;
 	unsigned int markfull = ~0U;
+	unsigned int subbufs = ~0U;
 	unsigned int interval = 0;
 	unsigned int quantum = 0;
 	unsigned int memory = ~0U;
@@ -116,6 +118,12 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 				fprintf(stderr, "Illegal \"markfull\"\n");
 				return -1;
 			}
+		} else if (strcmp(*argv, "subbufs") == 0) {
+			NEXT_ARG();
+			if (get_unsigned(&subbufs, *argv, 0)) {
+				fprintf(stderr, "Illegal \"subbufs\"\n");
+				return -1;
+			}
 		} else if (strcmp(*argv, "memory_limit") == 0) {
 			NEXT_ARG();
 			if (get_size(&memory, *argv)) {
@@ -154,6 +162,8 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		addattr_l(n, 1024, TCA_JENS_MARKFREE, &markfree, sizeof(markfree));
 	if (markfull != ~0U)
 		addattr_l(n, 1024, TCA_JENS_MARKFULL, &markfull, sizeof(markfull));
+	if (subbufs != ~0U)
+		addattr_l(n, 1024, TCA_JENS_SUBBUFS, &subbufs, sizeof(subbufs));
 	if (memory != ~0U)
 		addattr_l(n, 1024, TCA_JENS_MEMORY_LIMIT,
 			  &memory, sizeof(memory));
@@ -173,6 +183,7 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	unsigned int target;
 	unsigned int markfree;
 	unsigned int markfull;
+	unsigned int subbufs;
 	unsigned int quantum;
 	unsigned int memory_limit;
 	unsigned int drop_batch;
@@ -239,6 +250,11 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 		print_uint(PRINT_JSON, "markfull", NULL, markfull);
 		print_string(PRINT_FP, NULL, "markfull %s ",
 			     sprint_time(markfull, b1));
+	}
+	if (tb[TCA_JENS_SUBBUFS] &&
+	    RTA_PAYLOAD(tb[TCA_JENS_SUBBUFS]) >= sizeof(__u32)) {
+		subbufs = rta_getattr_u32(tb[TCA_JENS_SUBBUFS]);
+		print_uint(PRINT_ANY, "subbufs", "subbufs %u ", subbufs);
 	}
 
 	return 0;

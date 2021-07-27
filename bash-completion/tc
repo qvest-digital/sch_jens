@@ -302,8 +302,8 @@ _tc_qdisc_options()
             return 0
             ;;
         jens)
-            _tc_once_attr 'limit flows target interval quantum \
-                markfree markfull memory_limit drop_batch'
+            _tc_once_attr 'limit memory_limit drop_batch flows quantum \
+                interval target markfree markfull subbufs'
             return 0
             ;;
         gred)

@@ -19,6 +19,7 @@
 .Op Ic target Ar TIME
 .Op Ic markfree Ar TIME
 .Op Ic markfull Ar TIME
+.Op Ic subbufs Ar NUMBER
 .Sh DESCRIPTION
 JENS is a network limitation simulator used in an Adaptive Managed Latency
 scenario to aid in developing aware applications.
@@ -179,6 +180,16 @@ Default: 4\ ms
 is the minimum queue delay at which packets will be marked (see above)
 with 100% probability.
 Default: 14\ ms
+.It Ic subbufs
+enables debugfs functionality, for use with
+.Nm jensdmp
+or its Java\(rg wrapper.
+Set this to 0 to disable the functionality, any other value to enable it;
+1 will use a suitable default amount of subbuffers (currently 1024),
+any other value is used as number of subbuffers (containing 64 records,
+each sized 16 bytes, that is, 1\ KiB per subbuffer).
+This parameter can only be set at load time because memory has to be allocated.
+Default: 0
 .El
 .Sh STATISTICS
 Currently the same as in
@@ -192,7 +203,10 @@ or
 or that actually were marked while being over
 .Ic markfree .
 .Pp
-More information about statistics will come with a subsequent release.
+Further statistics are available using the debugfs functionality, enabled with
+.Ic subbufs Pq see above ;
+these are high-traffic, fine-grained, so enable only if needed and make sure
+to limit traffic.
 .Sh EXAMPLES
 Set up a queue with standard parameters and display its statistics:
 .Bd -literal
@@ -209,6 +223,10 @@ qdisc jens 2: root refcnt 2 limit 10240 memory_limit 32MB \e
 .Sh SEE ALSO
 .Xr tc 8 ,
 .Xr tc\-fq_codel 8
+.Pp
+.Pa /usr/share/doc/sch\-jens\-dkms/README
+.Pp
+.Pa /usr/share/doc/iproute2/examples/
 .Sh AUTHORS
 .An -nosplit
 .Nm sch_jens

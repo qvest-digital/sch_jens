@@ -106,7 +106,11 @@ public final class JensReaderDemo {
             final Path cwdJensdmp = Paths.get("jensdmp");
             // use it if so, use default path (null) otherwise
             final Path pathToJensdmp = Files.isExecutable(cwdJensdmp) ? cwdJensdmp : null;
-            JensReaderLib.init(pathToJensdmp, args, new DemoActor()).run();
+            JensReaderLib.JensReader reader = JensReaderLib.init(pathToJensdmp, args,
+              new DemoActor());
+            System.out.printf("[%13s] ", JensReaderLib.formatTimestamp(0));
+            System.out.println("JensReaderDemo ready to run!");
+            reader.run();
         } catch (Exception e) {
             System.err.println("Error: " + e);
             System.exit(1);

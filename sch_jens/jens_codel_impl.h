@@ -289,6 +289,7 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 					stats->ce_mark++;
 			}
 		}
+		jens_set_chance(skb, chance);
 	}
 	/**
 	 * maths proof, by example:

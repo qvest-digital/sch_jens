@@ -55,6 +55,7 @@
 struct jens_skb_cb {
 	codel_time_t enqueue_time;
 	unsigned int mem_usage;
+	u16 chance;
 	__u8 record_flag;
 };
 
@@ -99,6 +100,13 @@ static void jens_set_enqueue_data(struct sk_buff *skb)
 
 	cb->record_flag = jens_get_ecn(skb);
 	cb->enqueue_time = codel_get_time();
+}
+
+static void jens_set_chance(struct sk_buff *skb, u16 data)
+{
+	struct jens_skb_cb *cb = get_jens_cb(skb);
+
+	cb->chance = data;
 }
 
 static __u8 jens_update_record_flag(struct sk_buff *skb, __u8 data)

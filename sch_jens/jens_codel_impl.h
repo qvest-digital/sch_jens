@@ -186,7 +186,7 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 				     struct codel_stats *stats,
 				     codel_skb_len_t skb_len_func,
 				     codel_skb_time_t skb_time_func,
-				     codel_skb_drop_t drop_func,
+				     jens_skb_drop_t drop_func,
 				     codel_skb_dequeue_t dequeue_func)
 {
 	struct sk_buff *skb = dequeue_func(vars, ctx);
@@ -230,7 +230,7 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 					goto end;
 				}
 				stats->drop_len += skb_len_func(skb);
-				drop_func(skb, ctx);
+				drop_func(skb, vars, ctx);
 				stats->drop_count++;
 				skb = dequeue_func(vars, ctx);
 				if (!jens_should_drop(skb, ctx,
@@ -257,7 +257,7 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 			stats->ecn_mark++;
 		} else {
 			stats->drop_len += skb_len_func(skb);
-			drop_func(skb, ctx);
+			drop_func(skb, vars, ctx);
 			stats->drop_count++;
 
 			skb = dequeue_func(vars, ctx);

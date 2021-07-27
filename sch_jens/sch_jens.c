@@ -852,7 +852,9 @@ static int __init fq_codel_module_init(void)
 		rv = -ENOSYS;
 	else
 		rv = PTR_ERR_OR_ZERO(jens_debugfs_main);
-	if (rv) {
+	if (rv == -ENODEV)
+		printk(KERN_WARNING "sch_jens: debugfs not available, disabling\n");
+	else if (rv) {
 		printk(KERN_WARNING "sch_jens: debugfs initialisation error\n");
 		goto e0;
 	}

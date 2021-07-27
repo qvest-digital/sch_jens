@@ -101,4 +101,8 @@ Record types define the following data members:
 • TC_JENS_RELAY_MAX or higher are undefined/reserved for future changes
 
 Subbuffers are TC_JENS_RELAY_NRECORDS (64) records or 1 KiB each.
-There currently are 1024 subbuffers (will be made configurable).
+The configuration parameter subbufs (can only be set when creating, as
+memory must be allocated for the subbuffers) determines the amount of
+subbuffers created; use 1 for a suitable default (1024 currently) or
+0 to disable the measurement functionality. It is disabled as well when
+debugfs is not available.

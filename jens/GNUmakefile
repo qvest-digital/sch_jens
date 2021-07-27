@@ -23,10 +23,13 @@ clean:
 
 CLEANFILES+=	*.class
 
-all: JensReader.class
+all: JensReaderLib.class JensReaderDemo.class
 
-JensReader.class: JensReader.java
-	javac JensReader.java
+JensReaderLib.class: JensReaderLib.java
+	javac $^
+
+JensReaderDemo.class: JensReaderDemo.java
+	javac $^
 
 run: all
-	sudo java JensReader /sys/kernel/debug/sch_jens/0002:0
+	sudo java JensReaderDemo /sys/kernel/debug/sch_jens/0002:0

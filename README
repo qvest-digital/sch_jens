@@ -16,11 +16,9 @@ sudo tc qdisc del dev $dev parent 1:1
 sudo tc class del dev $dev parent 1: classid 1:1
 sudo tc qdisc del dev $dev root
 
-# Invoke jensdmp in its directory: (Java™ 11+)
-sudo java --source 11 JensReader.java /sys/kernel/debug/sch_jens/0002:0
-# -or- (Java™ 8)
-javac JensReader.java
-sudo java JensReader /sys/kernel/debug/sch_jens/0002:0
+# Invoke jensdmp in its directory:
+javac JensReaderDemo.java JensReaderLib.java
+sudo java JensReaderDemo /sys/kernel/debug/sch_jens/0002:0
 # -or- just
 make run
 # -or- (without Java™ example)

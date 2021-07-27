@@ -183,6 +183,11 @@ consume(size_t idx)
 		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_DROP) ? " drop=\"y\"" : "",
 		    (rbuf[idx].f8 & BIT(2)) ? " ecn-valid=\"y\"" : "");
 		break;
+
+	case TC_JENS_RELAY_QUEUESZ:
+		printf("<qsz ts=\"%llX\" len=\"%X\"/>\n",
+		    (unsigned long long)rbuf[idx].ts, rbuf[idx].d32);
+		break;
 	}
 	fflush(stdout);
 }

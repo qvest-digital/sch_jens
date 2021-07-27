@@ -121,6 +121,8 @@ static void jens_record_write(struct tc_jens_relay *record,
 {
 	unsigned long flags;	/* used by spinlock macros */
 
+	if (!q->record_chan)
+		return;
 	record->ts = ktime_get_ns();
 	spin_lock_irqsave(&q->record_lock, flags);
 	__relay_write(q->record_chan, record, sizeof(struct tc_jens_relay));
@@ -852,9 +854,11 @@ static int __init fq_codel_module_init(void)
 		rv = -ENOSYS;
 	else
 		rv = PTR_ERR_OR_ZERO(jens_debugfs_main);
-	if (rv == -ENODEV)
+	if (rv == -ENODEV) {
+		jens_debugfs_main = NULL;
 		printk(KERN_WARNING "sch_jens: debugfs not available, disabling\n");
-	else if (rv) {
+	} else if (rv) {
+		jens_debugfs_main = NULL;
 		printk(KERN_WARNING "sch_jens: debugfs initialisation error\n");
 		goto e0;
 	}

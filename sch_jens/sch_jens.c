@@ -284,7 +284,7 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 		flow->deficit = q->quantum;
 	}
 	get_jens_cb(skb)->mem_usage = skb->truesize;
-	q->memory_usage += get_jens_cb(skb)->mem_usage;
+	q->memory_usage += /*get_jens_cb(skb)->mem_usage*/ skb->truesize;
 	memory_limited = q->memory_usage > q->memory_limit;
 	if (++sch->q.qlen <= sch->limit && !memory_limited)
 		return NET_XMIT_SUCCESS;

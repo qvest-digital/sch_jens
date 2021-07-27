@@ -147,7 +147,7 @@ public final class JensReaderLib {
      * default methods will just not do anything) with the code that should
      * be executed on each record type.</p>
      *
-     * <p>Each method gets a {@link Record} instance as parameter; do use
+     * <p>Each method may access a {@link Record} instance {@code r}; do use
      * only the fields documented to be valid for the respective method.</p>
      *
      * @author mirabilos (t.glaser@tarent.de)
@@ -200,7 +200,7 @@ public final class JensReaderLib {
             /**
              * <p>Length of the queue (number of packets in the queue).</p>
              *
-             * <p>{@link #handleQueueSize(Record)} only.</p>
+             * <p>{@link #handleQueueSize()} only.</p>
              */
             public @Positive(max = 0xFFFFFFFFL) long len;
 
@@ -209,26 +209,26 @@ public final class JensReaderLib {
             /**
              * <p>Sojourn time of this packet in the FIFO.</p>
              *
-             * <p>{@link #handlePacket(Record)} only.</p>
+             * <p>{@link #handlePacket()} only.</p>
              */
             public @Positive(max = 0x3FFFFFFFC00L) long sojournTime;
             /**
              * <p>Chance in [0, 1] that this packet is to be ECN CE marked,
              * based on {@code markfull} and {@code markfree}.</p>
              *
-             * <p>{@link #handlePacket(Record)} only.</p>
+             * <p>{@link #handlePacket()} only.</p>
              */
             public double chance;
             /**
              * <p>ECN bits of the packet when arriving, if any (see {@link #ecnValid}).</p>
              *
-             * <p>{@link #handlePacket(Record)} only.</p>
+             * <p>{@link #handlePacket()} only.</p>
              */
             public @Positive(max = 3) int ecnIn;
             /**
              * <p>ECN bits of the packet when leaving, if any (see {@link #ecnValid}).</p>
              *
-             * <p>{@link #handlePacket(Record)} only.</p>
+             * <p>{@link #handlePacket()} only.</p>
              */
             public @Positive(max = 3) int ecnOut;
             /**
@@ -238,14 +238,14 @@ public final class JensReaderLib {
              * packets, not other packet types (such as ARP), and when the packet
              * fragment is not too short. Having this flag false is not a problem.</p>
              *
-             * <p>{@link #handlePacket(Record)} only.</p>
+             * <p>{@link #handlePacket()} only.</p>
              */
             public boolean ecnValid;
             /**
              * <p>Whether the packet was ECN CE marked because {@code target} was not
              * reached within {@code interval} (CoDel algorithm).</p>
              *
-             * <p>{@link #handlePacket(Record)} only.</p>
+             * <p>{@link #handlePacket()} only.</p>
              */
             public boolean markCoDel;
             /**
@@ -253,13 +253,13 @@ public final class JensReaderLib {
              * based on {@code markfull} and {@code markfree} as well as the
              * {@link #chance} and the actual random value from the kernel.</p>
              *
-             * <p>{@link #handlePacket(Record)} only.</p>
+             * <p>{@link #handlePacket()} only.</p>
              */
             public boolean markJENS;
             /**
              * <p>Whether the packet was dropped (instead of passed on) on leaving.</p>
              *
-             * <p>{@link #handlePacket(Record)} only.</p>
+             * <p>{@link #handlePacket()} only.</p>
              */
             public boolean dropped;
 
@@ -268,39 +268,45 @@ public final class JensReaderLib {
             /**
              * <p>The XML tag name of the record line.</p>
              *
-             * <p>{@link #handleUnknown(Record)} only.</p>
+             * <p>{@link #handleUnknown()} only.</p>
              */
             public String tagName;
+        }
+
+        protected final Record r;
+
+        public AbstractJensActor() {
+            r = new Record();
         }
 
         /**
          * <p>Handles queue-size records (periodically).</p>
          *
-         * <p>The default implementation does nothing. Override only when needed.</p>
+         * <p>Access the field {@link Record} {@code r} to get the record data.</p>
          *
-         * @param r auxilliary data
+         * <p>The default implementation does nothing. Override only when needed.</p>
          */
-        public void handleQueueSize(final Record r) {
+        public void handleQueueSize() {
         }
 
         /**
          * <p>Handles packet records (one for each packet leaving the queue).</p>
          *
-         * <p>The default implementation does nothing. Override only when needed.</p>
+         * <p>Access the field {@link Record} {@code r} to get the record data.</p>
          *
-         * @param r auxilliary data
+         * <p>The default implementation does nothing. Override only when needed.</p>
          */
-        public void handlePacket(final Record r) {
+        public void handlePacket() {
         }
 
         /**
          * <p>Handles unknown records (all other XML tags not listed above).</p>
          *
-         * <p>The default implementation does nothing. Override only when needed.</p>
+         * <p>Access the field {@link Record} {@code r} to get the record data.</p>
          *
-         * @param r auxilliary data
+         * <p>The default implementation does nothing. Override only when needed.</p>
          */
-        public void handleUnknown(final Record r) {
+        public void handleUnknown() {
         }
     }
 
@@ -382,13 +388,11 @@ public final class JensReaderLib {
         private final BufferedReader reader;
         private final DocumentBuilder db;
         private final AbstractJensActor actor;
-        private final AbstractJensActor.Record r;
         private Element e;
 
         private JensReader(final BufferedReader xreader, final AbstractJensActor xactor, final DocumentBuilder xdb) {
             reader = xreader;
             actor = xactor;
-            r = new AbstractJensActor.Record();
             db = xdb;
         }
 
@@ -439,26 +443,26 @@ public final class JensReaderLib {
             db.reset();
             final Document d = db.parse(new InputSource(new StringReader(line)));
             e = /* root element */ d.getDocumentElement();
-            r.tagName = e.getTagName();
-            r.timestamp = get64X("ts");
-            switch (r.tagName) {
+            actor.r.tagName = e.getTagName();
+            actor.r.timestamp = get64X("ts");
+            switch (actor.r.tagName) {
             case "qsz":
-                r.len = get32X("len");
-                actor.handleQueueSize(r);
+                actor.r.len = get32X("len");
+                actor.handleQueueSize();
                 break;
             case "pkt":
-                r.sojournTime = get32X("time") * 1024L;
-                r.chance = getFloat("chance");
-                r.ecnIn = get8b("ecn-in");
-                r.ecnOut = get8b("ecn-out");
-                r.ecnValid = has("ecn-valid");
-                r.markCoDel = has("slow");
-                r.markJENS = has("mark");
-                r.dropped = has("drop");
-                actor.handlePacket(r);
+                actor.r.sojournTime = get32X("time") * 1024L;
+                actor.r.chance = getFloat("chance");
+                actor.r.ecnIn = get8b("ecn-in");
+                actor.r.ecnOut = get8b("ecn-out");
+                actor.r.ecnValid = has("ecn-valid");
+                actor.r.markCoDel = has("slow");
+                actor.r.markJENS = has("mark");
+                actor.r.dropped = has("drop");
+                actor.handlePacket();
                 break;
             default:
-                actor.handleUnknown(r);
+                actor.handleUnknown();
                 break;
             }
             return true;

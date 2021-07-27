@@ -43,13 +43,13 @@ public final class JensReaderDemo {
      */
     private static class DemoActor extends JensReaderLib.AbstractJensActor {
         @Override
-        public void handleQueueSize(final Record r) {
+        public void handleQueueSize() {
             System.out.printf("[%13s] ", JensReaderLib.formatTimestamp(r.timestamp));
             System.out.printf("queue-size: %d packets\n", r.len);
         }
 
         @Override
-        public void handlePacket(final Record r) {
+        public void handlePacket() {
             System.out.printf("[%13s] ", JensReaderLib.formatTimestamp(r.timestamp));
             System.out.printf("sojourn-time: %9s ms; ", JensReaderLib.formatTimestamp(r.sojournTime));
             if (r.ecnValid) {
@@ -71,7 +71,8 @@ public final class JensReaderDemo {
         }
 
         @Override
-        public void handleUnknown(final Record r) {
+        public void handleUnknown() {
+            // we could extract the first line into a new method if needed
             System.out.printf("[%13s] ", JensReaderLib.formatTimestamp(r.timestamp));
             System.out.printf("unknown: %s\n", r.tagName);
         }

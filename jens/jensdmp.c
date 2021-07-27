@@ -83,7 +83,6 @@ main(int argc, char *argv[])
 	printf("<pkt ts=\"1\" time=\"1\" chance=\"0.123456789\" ecn-in=\"00\" ecn-out=\"00\"/>\n");
 	printf("<pkt ts=\"20\" time=\"3FFF\" chance=\"1\" slow=\"1\" mark=\"1\" drop=\"1\" ecn-valid=\"1\" ecn-in=\"01\" ecn-out=\"11\"/>\n");
 	printf("<qsz ts=\"FFFFFFFFFFFFFFFF\" len=\"FFFFFFFF\"/>\n");
-	if (argc > 0) exit(0);
 
 	if (argc != 2)
 		errx(255, "Usage: %s /path/to/debugfs/sch_jens/nnnn:0",
@@ -126,10 +125,10 @@ main(int argc, char *argv[])
 	if (n == 0)
 		goto eof;
 	off += n;
-	printf(" read(%04zX)", n);
+	//printf(" read(%04zX)", n);
 	if (off < sizeof(struct tc_jens_relay))
 		goto loop;
-	printf(" consume(%04zX)\n", off);
+	//printf(" consume(%04zX)\n", off);
 
 	n = 0;
 	while ((n + sizeof(struct tc_jens_relay)) <= off) {
@@ -152,35 +151,43 @@ main(int argc, char *argv[])
 	return (0);
 }
 
+#define show_invalid_records /* for now */
+
 static void
 consume(size_t idx)
 {
-	printf("%03zX [%llu.%09u] ", idx + 1U,
-	    (unsigned long long)(rbuf[idx].ts / 1000000000),
-	    (unsigned int)(rbuf[idx].ts % 1000000000));
+	//printf("%03zX [%llu.%09u] ", idx + 1U,
+	//    (unsigned long long)(rbuf[idx].ts / 1000000000),
+	//    (unsigned int)(rbuf[idx].ts % 1000000000));
 	switch (rbuf[idx].type) {
 	case TC_JENS_RELAY_INVALID:
 	default:
-		printf("INVALID(%02X)", rbuf[idx].type);
+#ifdef show_invalid_records
+		printf("<invalid type=\"%02X\"", rbuf[idx].type);
  dump:
-		printf(" f(%02X) e(%04X) d(%08X)\n", rbuf[idx].f8,
-		    rbuf[idx].e16, rbuf[idx].d32);
+		printf(" ts=\"%llX\" f=\"%02X\" e=\"%04X\" d=\"%08X\"/>\n",
+		    (unsigned long long)rbuf[idx].ts,
+		    rbuf[idx].f8, rbuf[idx].e16, rbuf[idx].d32);
+#endif
 		break;
 
 	case TC_JENS_RELAY_PADDING:
-		printf("padding");
+#ifdef show_invalid_records
+		printf("<padding");
 		goto dump;
+#endif
 
 	case TC_JENS_RELAY_SOJOURN:
-		printf("sojourn");
-		printf(" e(%04X) d(%08X)", rbuf[idx].e16, rbuf[idx].d32);/*XXX*/
-		printf(" (ECN %d%d→%d%d %svalid%s%s%s)\n",
+		printf("<pkt ts=\"%llX\" time=\"%X\" chance=\"%.7f\""
+		    " ecn-in=\"%d%d\" ecn-out=\"%d%d\"%s%s%s%s/>\n",
+		    (unsigned long long)rbuf[idx].ts, rbuf[idx].d32,
+		    (double)rbuf[idx].e16 / TC_JENS_RELAY_SOJOURN_PCTDIV,
 		    !!(rbuf[idx].f8 & BIT(1)), !!(rbuf[idx].f8 & BIT(0)),
 		    !!(rbuf[idx].f8 & BIT(4)), !!(rbuf[idx].f8 & BIT(3)),
-		    (rbuf[idx].f8 & BIT(2)) ? "" : "IN",
-		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_SLOW) ? ", slow" : "",
-		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_MARK) ? ", marked" : "",
-		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_DROP) ? ", dropped" : "");
+		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_SLOW) ? " slow=\"y\"" : "",
+		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_MARK) ? " mark=\"y\"" : "",
+		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_DROP) ? " drop=\"y\"" : "",
+		    (rbuf[idx].f8 & BIT(2)) ? " ecn-valid=\"y\"" : "");
 		break;
 	}
 }

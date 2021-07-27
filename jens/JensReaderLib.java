@@ -207,7 +207,11 @@ public final class JensReaderLib {
             /* only valid for Packet */
 
             /**
-             * <p>Sojourn time of this packet in the FIFO.</p>
+             * <p>Sojourn time of this packet in the FIFO, in nanoseconds.</p>
+             *
+             * <p>Note this may be 0x3FFFFFFFC00L, for example if the packet
+             * was dropped while the queue was resized, or if it could not
+             * be determined otherwise.</p>
              *
              * <p>{@link #handlePacket()} only.</p>
              */
@@ -215,6 +219,12 @@ public final class JensReaderLib {
             /**
              * <p>Chance in [0, 1] that this packet is to be ECN CE marked,
              * based on {@code markfull} and {@code markfree}.</p>
+             *
+             * <p>Mind that rounding occurred by the time this value is filled.</p>
+             *
+             * <p>Note: {@link #markJENS} indicates whether the packet was actually
+             * marked (or would be if it was ECN-capable), based on the random number
+             * retrieved from the kernel.</p>
              *
              * <p>{@link #handlePacket()} only.</p>
              */
@@ -245,6 +255,9 @@ public final class JensReaderLib {
              * <p>Whether the packet was ECN CE marked because {@code target} was not
              * reached within {@code interval} (CoDel algorithm).</p>
              *
+             * <p>Note that this flag can be set even if the packet was not ECN-capable.
+             * The packet is dropped by the CoDel algorithm in those cases.</p>
+             *
              * <p>{@link #handlePacket()} only.</p>
              */
             public boolean markCoDel;
@@ -252,6 +265,9 @@ public final class JensReaderLib {
              * <p>Whether the packet was ECN CE marked due to the JENS algorithm,
              * based on {@code markfull} and {@code markfree} as well as the
              * {@link #chance} and the actual random value from the kernel.</p>
+             *
+             * <p>Note that this flag can be set even if the packet was not ECN-capable.
+             * The packet is neither marked nor dropped in that case.</p>
              *
              * <p>{@link #handlePacket()} only.</p>
              */

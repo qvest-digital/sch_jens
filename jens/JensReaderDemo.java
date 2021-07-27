@@ -59,6 +59,9 @@ public final class JensReaderDemo {
             } else {
                 System.out.print("no traffic class");
             }
+            // note both of the following can indicate marking even for nōn-ECN packets
+            // in that case, they aren’t marked (obviously); CoDel drops them, JENS doesn’t
+            // (but JENS is defined to operate only with ECN-capable traffic) */
             System.out.printf("; JENS %7.3f%% (%s)", r.chance * 100.0,
               r.markJENS ? "marked: CE" : "not marked");
             if (r.markCoDel) {

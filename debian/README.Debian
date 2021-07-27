@@ -10,7 +10,7 @@ Same applies to the tc filter action ipt which needs iptables installed.
 jensdmp examples
 ----------------
 
-Buold and run with:
+Build and run with:
 
 $ javac JensReaderDemo.java JensReaderLib.java
 $ sudo java JensReaderDemo /sys/kernel/debug/sch_jens/0002:0

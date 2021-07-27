@@ -2,6 +2,7 @@ CC?=		cc
 CFLAGS?=	-Og -g -fstack-protector-strong
 CFLAGS+=	-Wformat -Werror=format-security -Wall -Wextra
 CPPFLAGS?=	-Wdate-time
+CPPFLAGS+=	-D_GNU_SOURCE
 LDFLAGS?=	-Wl,-z,relro -Wl,-z,now -Wl,--as-needed
 
 PROG=		jensdmp

@@ -9,7 +9,6 @@
  * (at your option) any later version.
  */
 
-#define _GNU_SOURCE
 #include <sys/types.h>
 #include <err.h>
 #include <errno.h>

@@ -142,43 +142,6 @@ static bool jens_should_drop(const struct sk_buff *skb,
 	return ok_to_drop;
 }
 
-static inline int
-jens_progressive_mark(u32 tmin, u32 t, u32 tmax)
-{
-	/* we know: tmin < t < tmax */
-	t -= tmin;
-	tmax -= tmin;
-	/* now we have: 0 < t < tmax */
-	/*
-	 * we want to mark with (t / tmax * 100)% probability
-	 * therefore we need a random number in [0; tmax[ and
-	 * mark if it is smaller than t
-	 */
-	return (prandom_u32_max(tmax) < t);
-
-	/**
-	 * maths proof, by example:
-	 *
-	 * tmin=0 tmax=10 - select a random number r ∈ [tmin;tmax[
-	 *
-	 * t	  %	list r < t | r >= t
-	 * ----+-------+----------------------
-	 * 0	  0	| 0,1,2,3,4,5,6,7,8,9	← can’t happen (as t > tmin)
-	 * 1	 10	0 | 1,2,3,4,5,6,7,8,9	10% of all possible r are < t
-	 * 2	 20	0,1 | 2,3,4,5,6,7,8,9	20%     "      "
-	 * 3	 30	0,1,2 | 3,4,5,6,7,8,9	(etc. pp)
-	 * 4	 40	0,1,2,3 | 4,5,6,7,8,9
-	 * 5	 50	0,1,2,3,4 | 5,6,7,8,9
-	 * 6	 60	0,1,2,3,4,5 | 6,7,8,9
-	 * 7	 70	0,1,2,3,4,5,6 | 7,8,9
-	 * 8	 80	0,1,2,3,4,5,6,7 | 8,9	(…)
-	 * 9	 90	0,1,2,3,4,5,6,7,8 | 9	90% of all possible r are < t
-	 * 10	100	0,1,2,3,4,5,6,7,8,9 |	← can’t happen (as t < tmax)
-	 *
-	 * even the cases that can’t happen would work correctly
-	 */
-}
-
 static struct sk_buff *jens_dequeue_codel(void *ctx,
 				     u32 *backlog,
 				     struct jens_params *params,
@@ -289,14 +252,56 @@ static struct sk_buff *jens_dequeue_codel(void *ctx,
 						    vars->rec_inv_sqrt);
 	}
  end:
-	if (skb && (codel_time_after_eq(vars->ldelay, params->markfull) ||
-	    (codel_time_after(vars->ldelay, params->markfree) &&
-	     jens_progressive_mark(params->markfree, vars->ldelay,
-				   params->markfull)))) {
-		jens_update_record_flag(skb, TC_JENS_RELAY_SOJOURN_MARK);
-		if (INET_ECN_set_ce(skb))
-			stats->ce_mark++;
+	if (skb) {
+		u16 chance;
+
+		if (codel_time_after_eq(vars->ldelay, params->markfull)) {
+			chance = 0xFFFF;
+			goto domark;
+		} else if (!codel_time_after(vars->ldelay, params->markfree))
+			chance = 0;
+		else {
+			/* we know: tmin < t < tmax */
+			/* tmin = markfree, t = ldelay, tmax = markfull */
+			u32 t = vars->ldelay - params->markfree;
+			u32 tmax = params->markfull - params->markfree;
+			/* now we have: 0 < t' < tmax' */
+
+			/*
+			 * we want to mark with (t' / tmax' * 100)% probability
+			 * therefore we need a random number in [0; tmax'[ then
+			 * ECN CE mark if the number is smaller than t'
+			 */
+			if (prandom_u32_max(tmax) < t) {
+ domark:
+				jens_update_record_flag(skb,
+				    TC_JENS_RELAY_SOJOURN_MARK);
+				if (INET_ECN_set_ce(skb))
+					stats->ce_mark++;
+			}
+		}
 	}
+	/**
+	 * maths proof, by example:
+	 *
+	 * tmin=0 tmax=10 - select a random number r ∈ [tmin;tmax[
+	 *
+	 * t	  %	list r < t | r >= t
+	 * ----+-------+----------------------
+	 * 0	  0	| 0,1,2,3,4,5,6,7,8,9	← can’t happen (as t > tmin)
+	 * 1	 10	0 | 1,2,3,4,5,6,7,8,9	10% of all possible r are < t
+	 * 2	 20	0,1 | 2,3,4,5,6,7,8,9	20%     "      "
+	 * 3	 30	0,1,2 | 3,4,5,6,7,8,9	(etc. pp)
+	 * 4	 40	0,1,2,3 | 4,5,6,7,8,9
+	 * 5	 50	0,1,2,3,4 | 5,6,7,8,9
+	 * 6	 60	0,1,2,3,4,5 | 6,7,8,9
+	 * 7	 70	0,1,2,3,4,5,6 | 7,8,9
+	 * 8	 80	0,1,2,3,4,5,6,7 | 8,9	(…)
+	 * 9	 90	0,1,2,3,4,5,6,7,8 | 9	90% of all possible r are < t
+	 * 10	100	0,1,2,3,4,5,6,7,8,9 |	← can’t happen (as t < tmax)
+	 *
+	 * even the cases that can’t happen would work correctly
+	 */
 	return skb;
 }
 

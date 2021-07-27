@@ -44,13 +44,13 @@ public final class JensReaderDemo {
     private static class DemoActor extends JensReaderLib.AbstractJensActor {
         @Override
         public void handleQueueSize() {
-            System.out.printf("[%13s] ", JensReaderLib.formatTimestamp(r.timestamp));
+            System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r.timestamp));
             System.out.printf("queue-size: %d packets\n", r.len);
         }
 
         @Override
         public void handlePacket() {
-            System.out.printf("[%13s] ", JensReaderLib.formatTimestamp(r.timestamp));
+            System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r.timestamp));
             System.out.printf("sojourn-time: %9s ms; ", JensReaderLib.formatTimestamp(r.sojournTime));
             if (r.ecnValid) {
                 System.out.printf("ECN bits %s → %s",
@@ -76,7 +76,7 @@ public final class JensReaderDemo {
         @Override
         public void handleUnknown() {
             // we could extract the first line into a new method if needed
-            System.out.printf("[%13s] ", JensReaderLib.formatTimestamp(r.timestamp));
+            System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r.timestamp));
             System.out.printf("unknown: %s\n", r.tagName);
         }
     }
@@ -108,7 +108,7 @@ public final class JensReaderDemo {
             final Path pathToJensdmp = Files.isExecutable(cwdJensdmp) ? cwdJensdmp : null;
             JensReaderLib.JensReader reader = JensReaderLib.init(pathToJensdmp, args,
               new DemoActor());
-            System.out.printf("[%13s] ", JensReaderLib.formatTimestamp(0));
+            System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(0));
             System.out.println("JensReaderDemo ready to run!");
             reader.run();
         } catch (Exception e) {

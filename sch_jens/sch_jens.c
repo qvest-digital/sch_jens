@@ -78,7 +78,6 @@ struct jens_sched_data {
 	struct list_head old_flows;	/* list of old flows */
 
 	spinlock_t	record_lock;	/* for record_chan */
-	u32		record_ctr;	/*XXX */
 };
 
 static struct dentry *jens_debugfs_main;
@@ -124,7 +123,6 @@ static void jens_record_write(struct tc_jens_relay *record,
 
 	record->ts = ktime_get_ns();
 	spin_lock_irqsave(&q->record_lock, flags);
-	record->d32 = q->record_ctr++;/*XXX*/
 	__relay_write(q->record_chan, record, sizeof(struct tc_jens_relay));
 	spin_unlock_irqrestore(&q->record_lock, flags);
 }
@@ -577,7 +575,6 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	q->cparams.mtu = psched_mtu(qdisc_dev(sch));
 	q->record_chan = NULL;
 	spin_lock_init(&q->record_lock);
-	q->record_ctr = 0;/*XXX*/
 
 	if (opt) {
 		err = fq_codel_change(sch, opt, extack);

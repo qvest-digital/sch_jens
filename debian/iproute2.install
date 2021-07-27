@@ -16,5 +16,6 @@ sbin/ss /bin
 sbin/tc
 sbin/tipc
 usr/lib/tc/
+usr/sbin/jensdmp
 usr/share/bash-completion/
 usr/share/man/

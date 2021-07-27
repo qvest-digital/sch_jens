@@ -33,3 +33,8 @@ JensReaderDemo.class: JensReaderDemo.java
 
 run: all
 	sudo java JensReaderDemo /sys/kernel/debug/sch_jens/0002:0
+
+install:
+	install -m 0755 -d ${DESTDIR}/usr/sbin
+	install -m 0755 jensdmp ${DESTDIR}/usr/sbin/
+	@echo do install the *.java examples

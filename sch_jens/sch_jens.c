@@ -136,7 +136,7 @@ static void jens_record_packet(struct sk_buff *skb, struct jens_sched_data *q,
 
 	r.type = TC_JENS_RELAY_SOJOURN;
 	r.d32 = ldelay;
-	r.e16 = /*XXX*/ 0xFFFF;
+	r.e16 = cb->chance;
 	r.f8 = cb->record_flag | flags | (ecn << 3);
 	jens_record_write(&r, q);
 }

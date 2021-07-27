@@ -147,8 +147,6 @@ main(int argc, char *argv[])
 	return (0);
 }
 
-#define show_invalid_records /* for now */
-
 static void
 consume(size_t idx)
 {

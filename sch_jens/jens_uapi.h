@@ -103,7 +103,8 @@ enum {
 	TC_JENS_RELAY_SOJOURN,
 
 	/* report length of queue periodically */
-	/* d32 = amount of packets in FIFO */
+	/* d32 = memory usage in bytes */
+	/* e16 = amount of packets in FIFO, 0xFFFF if more */
 	TC_JENS_RELAY_QUEUESZ,
 
 	/* invalid, too high */

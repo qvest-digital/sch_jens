@@ -78,6 +78,8 @@ struct jens_sched_data {
 	struct list_head old_flows;	/* list of old flows */
 
 	spinlock_t	record_lock;	/* for record_chan */
+#define QSZ_INTERVAL ((u64)5000000)	/* 5 ms in ns */
+	u64		qsz_next;	/* next time to emit queue-size */
 };
 
 static struct dentry *jens_debugfs_main;
@@ -129,8 +131,29 @@ static void jens_record_write(struct tc_jens_relay *record,
 	spin_unlock_irqrestore(&q->record_lock, flags);
 }
 
-static void jens_record_packet(struct sk_buff *skb, struct jens_sched_data *q,
-    codel_time_t ldelay, __u8 flags)
+static void jens_record_queuesz(struct Qdisc *sch, struct jens_sched_data *q)
+{
+	struct tc_jens_relay r = {0};
+
+	r.type = TC_JENS_RELAY_QUEUESZ;
+	r.d32 = q->memory_usage;
+	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
+	r.f8 = 0;
+	jens_record_write(&r, q);
+
+	q->qsz_next = ktime_get_ns() + QSZ_INTERVAL;
+}
+
+static inline void maybe_record_queuesz(struct Qdisc *sch, struct jens_sched_data *q)
+{
+	if (ktime_get_ns() < q->qsz_next)
+		return;
+
+	jens_record_queuesz(sch, q);
+}
+
+static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
+    struct jens_sched_data *q, codel_time_t ldelay, __u8 flags)
 {
 	__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
 	struct tc_jens_relay r = {0};
@@ -141,6 +164,10 @@ static void jens_record_packet(struct sk_buff *skb, struct jens_sched_data *q,
 	r.e16 = cb->chance;
 	r.f8 = cb->record_flag | flags | (ecn << 3);
 	jens_record_write(&r, q);
+
+	/* put out a queue-size record if it’s time */
+	if (r.ts >= q->qsz_next)
+		jens_record_queuesz(sch, q);
 }
 
 static unsigned int fq_codel_hash(const struct jens_sched_data *q,
@@ -272,6 +299,7 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 		if (ret & __NET_XMIT_BYPASS)
 			qdisc_qstats_drop(sch);
 		__qdisc_drop(skb, to_free);
+		maybe_record_queuesz(sch, q);
 		return ret;
 	}
 	idx--;
@@ -290,8 +318,10 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 	get_jens_cb(skb)->mem_usage = skb->truesize;
 	q->memory_usage += /*get_jens_cb(skb)->mem_usage*/ skb->truesize;
 	memory_limited = q->memory_usage > q->memory_limit;
-	if (++sch->q.qlen <= sch->limit && !memory_limited)
+	if (++sch->q.qlen <= sch->limit && !memory_limited) {
+		maybe_record_queuesz(sch, q);
 		return NET_XMIT_SUCCESS;
+	}
 
 	prev_backlog = sch->qstats.backlog;
 	prev_qlen = sch->q.qlen;
@@ -318,9 +348,11 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 	if (ret == idx) {
 		qdisc_tree_reduce_backlog(sch, prev_qlen - 1,
 					  prev_backlog - pkt_len);
+		maybe_record_queuesz(sch, q);
 		return NET_XMIT_CN;
 	}
 	qdisc_tree_reduce_backlog(sch, prev_qlen, prev_backlog);
+	maybe_record_queuesz(sch, q);
 	return NET_XMIT_SUCCESS;
 }
 
@@ -351,7 +383,7 @@ static void drop_func(struct sk_buff *skb, struct codel_vars *vars, void *ctx)
 	struct Qdisc *sch = ctx;
 
 	if (skb)
-		jens_record_packet(skb, qdisc_priv(sch), vars->ldelay,
+		jens_record_packet(skb, sch, qdisc_priv(sch), vars->ldelay,
 		    TC_JENS_RELAY_SOJOURN_DROP);
 	kfree_skb(skb);
 	qdisc_qstats_drop(sch);
@@ -414,7 +446,7 @@ static struct sk_buff *jens_dequeue_fq(struct Qdisc *sch)
 	struct sk_buff *skb = jens_dequeue_fq_int(sch, &ldelay);
 
 	if (skb)
-		jens_record_packet(skb, qdisc_priv(sch), ldelay, 0);
+		jens_record_packet(skb, sch, qdisc_priv(sch), ldelay, 0);
 	return (skb);
 }
 
@@ -538,7 +570,7 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 		struct sk_buff *skb = jens_dequeue_fq_int(sch, &dummy_sojourn);
 
 		if (skb)
-			jens_record_packet(skb, q, (codel_time_t)-1,
+			jens_record_packet(skb, sch, q, (codel_time_t)-1,
 			    TC_JENS_RELAY_SOJOURN_DROP);
 		q->cstats.drop_len += qdisc_pkt_len(skb);
 		rtnl_kfree_skbs(skb, skb);
@@ -633,6 +665,8 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 		sch->flags |= TCQ_F_CAN_BYPASS;
 	else
 		sch->flags &= ~TCQ_F_CAN_BYPASS;
+	q->qsz_next = q->cparams.subbufs ? ktime_get_ns() + QSZ_INTERVAL :
+	    /* disable since we don’t report anyway */ (u64)-1;
 	return 0;
 
 alloc_failure:

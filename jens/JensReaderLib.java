@@ -163,6 +163,7 @@ public final class JensReaderLib {
          * <p>QueueSize:</p><ul>
          * <li>{@link #timestamp}</li>
          * <li>{@link #len}</li>
+         * <li>{@link #mem}</li>
          * </ul>
          *
          * <p>Packet:</p><ul>
@@ -200,9 +201,19 @@ public final class JensReaderLib {
             /**
              * <p>Length of the queue (number of packets in the queue).</p>
              *
+             * <p>Capped at 0xFFFF, which will also be shown if there are more
+             * than 65535 packets in the queue. Normally, the queue is sizef for
+             * 10240 packets only, so this should not be an issue.</p>
+             *
              * <p>{@link #handleQueueSize()} only.</p>
              */
-            public @Positive(max = 0xFFFFFFFFL) long len;
+            public @Positive(max = 0x0000FFFFL) int len;
+            /**
+             * <p>Memory usage of the queue in bytes.</p>
+             *
+             * <p>{@link #handleQueueSize()} only.</p>
+             */
+            public @Positive(max = 0xFFFFFFFFL) long mem;
 
             /* only valid for Packet */
 
@@ -444,6 +455,11 @@ public final class JensReaderLib {
             return Integer.toUnsignedLong(d32);
         }
 
+        @SuppressWarnings("SameParameterValue")
+        private @Positive(max = 0x0000FFFFL) int get16X(final String attributeName) {
+            return Integer.parseInt(e.getAttribute(attributeName), 16);
+        }
+
         private @Unsigned int get8b(final String attributeName) {
             return Integer.parseUnsignedInt(e.getAttribute(attributeName), 2);
         }
@@ -462,8 +478,9 @@ public final class JensReaderLib {
             actor.r.tagName = e.getTagName();
             actor.r.timestamp = get64X("ts");
             switch (actor.r.tagName) {
-            case "qsz":
-                actor.r.len = get32X("len");
+            case "Qsz":
+                actor.r.len = get16X("len");
+                actor.r.mem = get32X("mem");
                 actor.handleQueueSize();
                 break;
             case "pkt":

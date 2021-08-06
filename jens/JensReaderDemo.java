@@ -45,7 +45,8 @@ public final class JensReaderDemo {
         @Override
         public void handleQueueSize() {
             System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r.timestamp));
-            System.out.printf("queue-size: %d packets\n", r.len);
+            System.out.printf("queue-size: %d packets, %.2f KiB\n", r.len,
+              (double) r.mem / 1024.0);
         }
 
         @Override

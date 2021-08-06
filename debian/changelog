@@ -1,3 +1,10 @@
+iproute2 (5.10.0-4~jens+3) tarent; urgency=medium
+
+  * Add queue size reporting on enqueue/dequeue when the last record
+    report was written at 5 ms ago or longer
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Sat, 07 Aug 2021 00:57:22 +0200
+
 iproute2 (5.10.0-4~jens+2) tarent; urgency=medium
 
   * Update documentation wrt. markfree/markfull vs. interval/target

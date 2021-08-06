@@ -16,5 +16,3 @@ $ javac JensReaderDemo.java JensReaderLib.java
 $ sudo java JensReaderDemo /sys/kernel/debug/sch_jens/0002:0
 
 This assumes tc-jens(8) with handle 2: and debugfs support.
-
-NOTE: queue-size support is not implemented kernel-side yet.

@@ -184,8 +184,9 @@ consume(size_t idx)
 		break;
 
 	case TC_JENS_RELAY_QUEUESZ:
-		printf("<qsz ts=\"%llX\" len=\"%X\"/>\n",
-		    (unsigned long long)rbuf[idx].ts, rbuf[idx].d32);
+		printf("<Qsz ts=\"%llX\" len=\"%X\" mem=\"%X\"/>\n",
+		    (unsigned long long)rbuf[idx].ts,
+		    (unsigned int)rbuf[idx].e16, rbuf[idx].d32);
 		break;
 	}
 	fflush(stdout);

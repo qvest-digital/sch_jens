@@ -102,13 +102,6 @@ static int jens_debugfs_destroy(struct dentry *dentry)
 static int jens_subbuf_init(struct rchan_buf *buf, void *subbuf_,
     void *prev_subbuf, size_t prev_padding)
 {
-	size_t n;
-	struct tc_jens_relay *subbuf = (struct tc_jens_relay *)subbuf_;
-
-	memset(subbuf_, '\0', TC_JENS_RELAY_SUBBUFSZ);
-	for (n = 0; n < TC_JENS_RELAY_NRECORDS; ++n)
-		subbuf[n].type = TC_JENS_RELAY_PADDING;
-
 	return (1);
 }
 

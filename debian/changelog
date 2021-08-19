@@ -1,8 +1,12 @@
-iproute2 (5.10.0-4~jens+4) UNRELEASED; urgency=medium
+iproute2 (5.10.0-4~jens+4) tarent; urgency=medium
 
   * Switch to 4 KiB-sized subbuffers for better performance
+  * Initialise new subbuffers with less overhead (asm checked)
+  * jensdmp reads up to 64 KiB at once for less overhead
+  * Stop fflush after every record in jensdmp (send XML batches)
+  * Update licence information
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 19 Aug 2021 05:28:02 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 19 Aug 2021 06:49:48 +0200
 
 iproute2 (5.10.0-4~jens+3) tarent; urgency=medium
 

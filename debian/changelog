@@ -1,3 +1,9 @@
+iproute2 (5.10.0-4~jens+4) UNRELEASED; urgency=medium
+
+  * Switch to 4 KiB-sized subbuffers for better performance
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 19 Aug 2021 05:28:02 +0200
+
 iproute2 (5.10.0-4~jens+3) tarent; urgency=medium
 
   * Add queue size reporting on enqueue/dequeue when the last record

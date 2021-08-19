@@ -111,6 +111,10 @@ main(int argc, char *argv[])
 			goto loop;
 		err(2, "poll");
 	}
+#ifndef NDEBUG
+	if (pres != 1)
+		errx(2, "poll returned %d", pres);
+#endif
 	/* pres == 1, (pfd.revents & (POLLIN | POLLRDNORM)) is true */
 	if ((n = read(fd, cbuf + off, sizeof(rbuf) - off)) == (size_t)-1) {
 		if (errno == EINTR)

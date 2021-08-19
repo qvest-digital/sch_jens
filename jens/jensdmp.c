@@ -30,8 +30,14 @@
 
 #define BIT(n) (1U << (n))
 
-struct tc_jens_relay rbuf[TC_JENS_RELAY_NRECORDS];
+#define RBUF_TARGETSIZE (65536U)
+#define RBUF_SUBBUFSIZE (RBUF_TARGETSIZE / (TC_JENS_RELAY_NRECORDS * sizeof(struct tc_jens_relay)))
+#define RBUF_ELEMENTLEN (RBUF_SUBBUFSIZE * TC_JENS_RELAY_NRECORDS)
+
+struct tc_jens_relay rbuf[RBUF_SUBBUFSIZE < 1 ? -1 : (long)RBUF_ELEMENTLEN];
 #define cbuf ((char *)rbuf)
+/* compile-time assertion */
+struct cta_rbufsize { char ok[sizeof(rbuf) == RBUF_TARGETSIZE ? 1 : -1]; };
 
 static void consume(size_t);
 

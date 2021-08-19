@@ -199,5 +199,4 @@ consume(size_t idx)
 		    (unsigned int)rbuf[idx].e16, rbuf[idx].d32);
 		break;
 	}
-	fflush(stdout);
 }

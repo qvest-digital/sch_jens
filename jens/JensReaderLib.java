@@ -1,3 +1,5 @@
+package de.telekom.llcto.jens.reader;
+
 /*-
  * Copyright © 2021
  *      mirabilos <t.glaser@tarent.de>
@@ -140,6 +142,53 @@ public final class JensReaderLib {
         return s.length() < 2 ? "0" + s : s;
     }
 
+    private static class JNI {
+        private int fd;
+        private final AbstractJensActor.Record[] rQueueSize;
+        private final AbstractJensActor.Record[] rPacket;
+        private final AbstractJensActor.Record[] rUnknown;
+        private int nQueueSize;
+        private int nPacket;
+        private int nUnknown;
+
+        static {
+            System.loadLibrary("jensdmpJNI");
+        }
+
+        private JNI() {
+            /* 256 is asserted in the C/JNI part */
+            rQueueSize = new AbstractJensActor.Record[256];
+            rPacket = new AbstractJensActor.Record[256];
+            rUnknown = new AbstractJensActor.Record[256];
+        }
+
+        private native String nativeOpen(final String fn);
+
+        //…
+        private native void nativeClose();
+
+        protected void open(final String filename) throws IOException {
+            final String err = nativeOpen(filename);
+
+            if (err != null) {
+                throw new IOException(err);
+            }
+        }
+
+        protected void close() {
+            if (fd != -1) {
+                nativeClose();
+                fd = -1;
+            }
+        }
+
+        @SuppressWarnings("deprecation")
+        @Override
+        protected void finalize() {
+            close();
+        }
+    }
+
     /**
      * <p>Callback class for incoming records from the kernel.</p>
      *
@@ -180,7 +229,7 @@ public final class JensReaderLib {
          *
          * <p>Unknown:</p><ul>
          * <li>{@link #timestamp}</li>
-         * <li>{@link #tagName}</li>
+         * <li>{@link #type}</li>
          * </ul>
          *
          * @author mirabilos (t.glaser@tarent.de)
@@ -293,11 +342,11 @@ public final class JensReaderLib {
             /* only valid for Unknown */
 
             /**
-             * <p>The XML tag name of the record line.</p>
+             * <p>The type octet of the record line.</p>
              *
              * <p>{@link #handleUnknown()} only.</p>
              */
-            public String tagName;
+            public byte type;
         }
 
         protected final Record r;
@@ -359,6 +408,8 @@ public final class JensReaderLib {
     public static JensReader init(final Path jensdmpExecutable, final String[] args,
       final AbstractJensActor actor) throws ParserConfigurationException, IOException {
         /* configure decimal separator */
+
+        new JNI().open(args[0]);
 
         // this is awful but we can’t directly use NumberFormat…
         final NumberFormat numberFormat = NumberFormat.getInstance();
@@ -475,9 +526,8 @@ public final class JensReaderLib {
             db.reset();
             final Document d = db.parse(new InputSource(new StringReader(line)));
             e = /* root element */ d.getDocumentElement();
-            actor.r.tagName = e.getTagName();
             actor.r.timestamp = get64X("ts");
-            switch (actor.r.tagName) {
+            switch (e.getTagName()) {
             case "Qsz":
                 actor.r.len = get16X("len");
                 actor.r.mem = get32X("mem");
@@ -495,6 +545,7 @@ public final class JensReaderLib {
                 actor.handlePacket();
                 break;
             default:
+                actor.r.type = /*XXX*/ (byte) 0xFF;
                 actor.handleUnknown();
                 break;
             }

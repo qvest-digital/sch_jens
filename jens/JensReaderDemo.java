@@ -1,3 +1,5 @@
+package de.telekom.llcto.jens.reader;
+
 /*-
  * Copyright © 2021
  *      mirabilos <t.glaser@tarent.de>
@@ -78,7 +80,7 @@ public final class JensReaderDemo {
         public void handleUnknown() {
             // we could extract the first line into a new method if needed
             System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r.timestamp));
-            System.out.printf("unknown: %s\n", r.tagName);
+            System.out.printf("unknown: %X\n", r.type);
         }
     }
 

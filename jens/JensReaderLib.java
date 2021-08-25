@@ -156,6 +156,7 @@ public final class JensReaderLib {
         }
 
         private JNI() {
+            fd = -1;
             /* 256 is asserted in the C/JNI part */
             rQueueSize = new AbstractJensActor.Record[256];
             rPacket = new AbstractJensActor.Record[256];
@@ -168,6 +169,8 @@ public final class JensReaderLib {
         private native void nativeClose();
 
         protected void open(final String filename) throws IOException {
+            close(); // in case it was open
+
             final String err = nativeOpen(filename);
 
             if (err != null) {

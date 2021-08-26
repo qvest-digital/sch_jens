@@ -58,6 +58,8 @@ static const JNINativeMethod methods[] = {
 };
 #undef METH
 
+static jstring e_GetStringUTFChars;
+
 /* de.telekom.llcto.jens.reader.JensReaderLib$JNI */
 static jclass cls_JNI;
 /* de.telekom.llcto.jens.reader.JensReaderLib$AbstractJensActor$Record */
@@ -94,7 +96,7 @@ static jfieldID o_REC_type;		// byte
 extern const int sys_nerr;
 extern const char * const sys_errlist[];
 #endif
-#warning strerror is not thread-safe, glibc strerror_r unreliable, and your glibc lacks strerrordesc_np
+#warning strerror is not thread-safe, glibc strerror_r unreliable, and your glibc lacks strerrordesc_np, using sys_errlist and sys_nerr
 static const char *
 Xstrerror(int eno)
 {
@@ -132,6 +134,7 @@ free_grefs(JNIEnv *env)
 } } while (/* CONSTCOND */ 0)
 	f(cls_REC);
 	f(cls_JNI);
+	f(e_GetStringUTFChars);
 #undef f
 }
 
@@ -146,6 +149,18 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 		log_err("load: failed to get JNI environment");
 		return (JNI_ERR);
 	}
+
+#define mkjstring(v,body) do {						\
+	jstring tmpstr;							\
+	if (!(tmpstr = (*env)->NewStringUTF(env, (body))) ||		\
+	    !((v) = (*env)->NewGlobalRef(env, tmpstr))) {		\
+		if (tmpstr)						\
+			(*env)->DeleteLocalRef(env, tmpstr);		\
+		log_err("failed to create %s jstring", #v);		\
+		goto unwind;						\
+	}								\
+	(*env)->DeleteLocalRef(env, tmpstr);				\
+} while (/* CONSTCOND */ 0)
 
 #define getclass(dst,name) do {						\
 	jclass tmpcls;							\
@@ -174,6 +189,8 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 #define getsfield(cls,name,sig)	_getid("field",  O, cls, name, #name, sig, "::", GetStaticFieldID)
 #define getsmeth(cls,name,sig)	_getid("method", M, cls, name, #name, sig, "::", GetStaticMethodID)
 #define getcons(cls,vn,sig)	_getid("constructor", i, cls, vn, "<init>", sig, "", GetMethodID)
+
+	mkjstring(e_GetStringUTFChars, "GetStringUTFChars failed");
 
 	getclass(JNI, "de/telekom/llcto/jens/reader/JensReaderLib$JNI");
 	getclass(REC, "de/telekom/llcto/jens/reader/JensReaderLib$AbstractJensActor$Record");
@@ -232,10 +249,13 @@ JNI_OnUnload(JavaVM *vm, void *reserved __unused)
 }
 
 static JNICALL jstring
-nativeOpen(JNIEnv *env, jobject obj, jstring name __unused)
+nativeOpen(JNIEnv *env, jobject obj, jstring name)
 {
 	jboolean sizeCheckFail = JNI_FALSE;
+	const char *fn;
+	int fd, eno;
 
+	/* assert that the Java arrays are sized correctly */
 #define sizeCheck(f) do {						\
 	jobject o = (*env)->GetObjectField(env, obj, o_JNI_ ## f);	\
 	jsize oz = (*env)->GetArrayLength(env, (jarray)o);		\
@@ -251,16 +271,36 @@ nativeOpen(JNIEnv *env, jobject obj, jstring name __unused)
 	sizeCheck(rUnknown);
 #undef sizeCheck
 	if (sizeCheckFail != JNI_FALSE) {
-		errno = /*EBADRPC*/ EUCLEAN;
+		eno = /*EBADRPC*/ EUCLEAN;
 		goto err_out;
 	}
 
-	errno = ENOSYS;
+	/* actually open the relayfs file */
+	if (!(fn = (*env)->GetStringUTFChars(env, name, NULL)))
+		return (e_GetStringUTFChars);
+	fd = open(fn, O_RDONLY);
+	eno = errno;
+	(*env)->ReleaseStringUTFChars(env, name, fn);
+	(*env)->SetIntField(env, obj, o_JNI_fd, (jint)fd);
+	if (fd != -1)
+		return (/* success */ NULL);
  err_out:
-	return (jstrerror(env, errno));
+	return (jstrerror(env, eno));
 }
 
 static JNICALL void
-nativeClose(JNIEnv *env __unused, jobject obj __unused)
+nativeClose(JNIEnv *env, jobject obj)
 {
+	jint fd;
+
+	fd = (*env)->GetIntField(env, obj, o_JNI_fd);
+	if (close((int)fd)) {
+		int eno = errno;
+		const char *ep = strerrordesc_np(eno);
+
+		if (ep)
+			log_warn("close(%d) failed: %s", (int)fd, ep);
+		else
+			log_err("close(%d) failed: errno %d", (int)fd, eno);
+	}
 }

@@ -21,31 +21,18 @@ package de.telekom.llcto.jens.reader;
  * of said person’s immediate fault when using the work as intended.
  */
 
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.xml.sax.InputSource;
-import org.xml.sax.SAXException;
-
-import javax.xml.XMLConstants;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import java.io.BufferedReader;
+import java.io.Closeable;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.StringReader;
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.nio.file.Path;
+import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.stream.Stream;
 
 /**
  * <p>Example parser component for the output of the “jensdmp” C program.</p>
@@ -59,8 +46,6 @@ import java.util.Arrays;
  */
 public final class JensReaderLib {
     private static char decimal;
-    private static Process p = null;
-    private static boolean needToInstallShutdownHook = true;
 
     /**
      * <p>Signed integer type.</p>
@@ -103,7 +88,7 @@ public final class JensReaderLib {
     }
 
     /**
-     * <p>Unsigned integer type</p>
+     * <p>Unsigned integer type.</p>
      *
      * <p>This type is an <b>unsigned</b> integer type and needs special handling.
      * It may carry values from 0 to (2 * positive maximum + 1).</p>
@@ -117,6 +102,22 @@ public final class JensReaderLib {
     @Retention(RetentionPolicy.SOURCE)
     @Target({ ElementType.TYPE_USE })
     public @interface Unsigned {
+    }
+
+    /**
+     * <p>Used by JNI code.</p>
+     *
+     * <p>This field is used (read and/or written) by native code. (Intended via
+     * https://stackoverflow.com/a/5284371/2171120 to tell IntelliJ to ignore the
+     * unused and/or uninitialised state of the annotated field.)</p>
+     *
+     * <p>This class is used by native code and therefore must not be renamed or
+     * moved to a different package. Its members (fields and/or methods) may not
+     * be renamed.</p>
+     */
+    @Retention(RetentionPolicy.SOURCE)
+    @Target({ ElementType.FIELD, ElementType.TYPE })
+    public @interface UsedByJNI {
     }
 
     /**
@@ -142,33 +143,55 @@ public final class JensReaderLib {
         return s.length() < 2 ? "0" + s : s;
     }
 
+    /**
+     * <p>Internal hook point for the native interface. Class must not be moved
+     * or renamed for the native code to be able to attach.</p>
+     *
+     * @author mirabilos (t.glaser@tarent.de)
+     */
+    @UsedByJNI
     private static class JNI {
+        @UsedByJNI
         private int fd;
+        @UsedByJNI
         private final AbstractJensActor.Record[] rQueueSize;
+        @UsedByJNI
         private final AbstractJensActor.Record[] rPacket;
+        @UsedByJNI
         private final AbstractJensActor.Record[] rUnknown;
+        @UsedByJNI
         private int nQueueSize;
+        @UsedByJNI
         private int nPacket;
+        @UsedByJNI
         private int nUnknown;
+        @UsedByJNI
+        private final ByteBuffer buf;
 
         static {
             System.loadLibrary("jensdmpJNI");
         }
 
+        private static AbstractJensActor.Record[] mkarr() {
+            return Stream.generate(AbstractJensActor.Record::new).limit(4096).toArray(AbstractJensActor.Record[]::new);
+        }
+
         private JNI() {
             fd = -1;
-            /* 256 is asserted in the C/JNI part */
-            rQueueSize = new AbstractJensActor.Record[256];
-            rPacket = new AbstractJensActor.Record[256];
-            rUnknown = new AbstractJensActor.Record[256];
+            /* the sizes are checked in the JNI code */
+            buf = ByteBuffer.allocateDirect(65536);
+            rQueueSize = mkarr();
+            rPacket = mkarr();
+            rUnknown = mkarr();
         }
 
         private native String nativeOpen(final String fn);
 
-        //…
+        private native String nativeRead();
+
         private native void nativeClose();
 
-        protected void open(final String filename) throws IOException {
+        private void open(final String filename) throws IOException {
             close(); // in case it was open
 
             final String err = nativeOpen(filename);
@@ -178,7 +201,29 @@ public final class JensReaderLib {
             }
         }
 
-        protected void close() {
+        private boolean read(final AbstractJensActor actor) throws IOException, InterruptedException {
+            final String err = nativeRead();
+
+            if (Thread.interrupted()) {
+                throw new InterruptedException();
+            }
+            if (err != null) {
+                throw new IOException(err);
+            }
+
+            if (nQueueSize > 0) {
+                actor.handleQueueSize(rQueueSize, nQueueSize);
+            }
+            if (nPacket > 0) {
+                actor.handlePacket(rPacket, nPacket);
+            }
+            if (nUnknown > 0) {
+                actor.handleUnknown(rUnknown, nUnknown);
+            }
+            return (nQueueSize + nPacket + nUnknown) > 0;
+        }
+
+        private void close() {
             if (fd != -1) {
                 nativeClose();
                 fd = -1;
@@ -197,10 +242,15 @@ public final class JensReaderLib {
      *
      * <p>Subclass this, overriding only the methods needed (the inherited
      * default methods will just not do anything) with the code that should
-     * be executed on each record type.</p>
+     * be executed on each record type in small batches.</p>
      *
-     * <p>Each method may access a {@link Record} instance {@code r}; do use
-     * only the fields documented to be valid for the respective method.</p>
+     * <p>Each method is passed a {@link Record} array and the amount of
+     * valid records of its corresponding type in the array for this invocation;
+     * make sure to only use the fields documented for the respective method.
+     * The length is guaranteed to be positive (between 1 and some small enough
+     * number, such as 4096). Since callbacks are processed in batches use the
+     * {@link Record#timestamp} to keep track of the relative order and
+     * duration; don’t assume “live” operation.</p>
      *
      * @author mirabilos (t.glaser@tarent.de)
      */
@@ -237,6 +287,7 @@ public final class JensReaderLib {
          *
          * @author mirabilos (t.glaser@tarent.de)
          */
+        @UsedByJNI
         protected static final class Record {
 
             /* valid for all record types */
@@ -257,13 +308,13 @@ public final class JensReaderLib {
              * than 65535 packets in the queue. Normally, the queue is sizef for
              * 10240 packets only, so this should not be an issue.</p>
              *
-             * <p>{@link #handleQueueSize()} only.</p>
+             * <p>{@link #handleQueueSize(Record[], int)} only.</p>
              */
             public @Positive(max = 0x0000FFFFL) int len;
             /**
              * <p>Memory usage of the queue in bytes.</p>
              *
-             * <p>{@link #handleQueueSize()} only.</p>
+             * <p>{@link #handleQueueSize(Record[], int)} only.</p>
              */
             public @Positive(max = 0xFFFFFFFFL) long mem;
 
@@ -276,7 +327,7 @@ public final class JensReaderLib {
              * was dropped while the queue was resized, or if it could not
              * be determined otherwise.</p>
              *
-             * <p>{@link #handlePacket()} only.</p>
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             public @Positive(max = 0x3FFFFFFFC00L) long sojournTime;
             /**
@@ -289,19 +340,19 @@ public final class JensReaderLib {
              * marked (or would be if it was ECN-capable), based on the random number
              * retrieved from the kernel.</p>
              *
-             * <p>{@link #handlePacket()} only.</p>
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             public double chance;
             /**
              * <p>ECN bits of the packet when arriving, if any (see {@link #ecnValid}).</p>
              *
-             * <p>{@link #handlePacket()} only.</p>
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             public @Positive(max = 3) int ecnIn;
             /**
              * <p>ECN bits of the packet when leaving, if any (see {@link #ecnValid}).</p>
              *
-             * <p>{@link #handlePacket()} only.</p>
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             public @Positive(max = 3) int ecnOut;
             /**
@@ -311,7 +362,7 @@ public final class JensReaderLib {
              * packets, not other packet types (such as ARP), and when the packet
              * fragment is not too short. Having this flag false is not a problem.</p>
              *
-             * <p>{@link #handlePacket()} only.</p>
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             public boolean ecnValid;
             /**
@@ -321,7 +372,7 @@ public final class JensReaderLib {
              * <p>Note that this flag can be set even if the packet was not ECN-capable.
              * The packet is dropped by the CoDel algorithm in those cases.</p>
              *
-             * <p>{@link #handlePacket()} only.</p>
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             public boolean markCoDel;
             /**
@@ -332,13 +383,13 @@ public final class JensReaderLib {
              * <p>Note that this flag can be set even if the packet was not ECN-capable.
              * The packet is neither marked nor dropped in that case.</p>
              *
-             * <p>{@link #handlePacket()} only.</p>
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             public boolean markJENS;
             /**
              * <p>Whether the packet was dropped (instead of passed on) on leaving.</p>
              *
-             * <p>{@link #handlePacket()} only.</p>
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             public boolean dropped;
 
@@ -347,73 +398,58 @@ public final class JensReaderLib {
             /**
              * <p>The type octet of the record line.</p>
              *
-             * <p>{@link #handleUnknown()} only.</p>
+             * <p>{@link #handleUnknown(Record[], int)} only.</p>
              */
             public byte type;
-        }
-
-        protected final Record r;
-
-        public AbstractJensActor() {
-            r = new Record();
         }
 
         /**
          * <p>Handles queue-size records (periodically).</p>
          *
-         * <p>Access the field {@link Record} {@code r} to get the record data.</p>
-         *
          * <p>The default implementation does nothing. Override only when needed.</p>
+         *
+         * @param r array of {@link Record}s with the data to process
+         * @param n amount of {@link Record} elements in the {@code r} array
          */
-        public void handleQueueSize() {
+        public void handleQueueSize(final AbstractJensActor.Record[] r, final int n) {
         }
 
         /**
          * <p>Handles packet records (one for each packet leaving the queue).</p>
          *
-         * <p>Access the field {@link Record} {@code r} to get the record data.</p>
-         *
          * <p>The default implementation does nothing. Override only when needed.</p>
+         *
+         * @param r array of {@link Record}s with the data to process
+         * @param n amount of {@link Record} elements in the {@code r} array
          */
-        public void handlePacket() {
+        public void handlePacket(final AbstractJensActor.Record[] r, final int n) {
         }
 
         /**
          * <p>Handles unknown records (all other XML tags not listed above).</p>
          *
-         * <p>Access the field {@link Record} {@code r} to get the record data.</p>
-         *
          * <p>The default implementation does nothing. Override only when needed.</p>
+         *
+         * @param r array of {@link Record}s with the data to process
+         * @param n amount of {@link Record} elements in the {@code r} array
          */
-        public void handleUnknown() {
+        public void handleUnknown(final AbstractJensActor.Record[] r, final int n) {
         }
     }
-
-    private static final String DEFAULT_JENSDMP_PATH = "/usr/libexec/jensdmp";
 
     /**
      * <p>Initialises a JensReader instance and returns it.</p>
      *
      * <p>(This is a separate method because throwing exceptions in
-     * constructors is not a very good idea, and this method can throw a lot.)</p>
+     * constructors is not a very good idea, and this method can throw.)</p>
      *
-     * <p>Make sure to call {@link #done()} to terminate the subprocess if it is
-     * no longer needed. (The {@link JensReader#run()} method does this, and a
-     * JVM shutdown hook to do so is also set up in case the process is killed.)</p>
-     *
-     * @param jensdmpExecutable path to {@code jensdmp}, or {@code null} for default
-     * @param args              arguments to pass to {@code jensdmp}
-     * @param actor             an instance of an {@link AbstractJensActor} subclass
+     * @param args  arguments to pass; for now, the path to the relayfs file
+     * @param actor an instance of an {@link AbstractJensActor} subclass
      * @return an object whose {@link JensReader#run()} method can be called
-     * @throws ParserConfigurationException if the XML parser complains
-     * @throws IOException                  on most other errors
+     * @throws IOException on most errors
      */
-    public static JensReader init(final Path jensdmpExecutable, final String[] args,
-      final AbstractJensActor actor) throws ParserConfigurationException, IOException {
+    public static JensReader init(final String[] args, final AbstractJensActor actor) throws IOException {
         /* configure decimal separator */
-
-        new JNI().open(args[0]);
-
         // this is awful but we can’t directly use NumberFormat…
         final NumberFormat numberFormat = NumberFormat.getInstance();
         if (numberFormat instanceof DecimalFormat) {
@@ -424,150 +460,54 @@ public final class JensReaderLib {
             decimal = '.';
         }
 
-        /* configure XML parser */
-
-        final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-        final DocumentBuilder db = dbf.newDocumentBuilder();
-
-        /* configure and start subprocess */
-
-        if (needToInstallShutdownHook) {
-            /* this is installed only once */
-            Runtime.getRuntime().addShutdownHook(new Thread(JensReaderLib::done));
-            needToInstallShutdownHook = false;
-        }
-        final ArrayList<String> argv = new ArrayList<>();
-        argv.add(jensdmpExecutable == null ? DEFAULT_JENSDMP_PATH :
-          jensdmpExecutable.toAbsolutePath().toString());
-        argv.addAll(Arrays.asList(args));
-        p = new ProcessBuilder(argv)
-          .redirectInput(ProcessBuilder.Redirect.INHERIT)
-          .redirectError(ProcessBuilder.Redirect.INHERIT)
-          .start();
-        /* everything below here MUST be within the following try block */
-
-        try {
-            /* access subprocess’ stdout */
-            final Reader r = new InputStreamReader(p.getInputStream());
-
-            /* initialise internal parser instance */
-            return new JensReader(new BufferedReader(r), actor, db);
-        } catch (final Exception e) {
-            // ensure the subprocess is cleaned up if there were errors
-            done();
-            throw e;
-        }
+        /* open the relayfs file */
+        final JNI reader = new JNI();
+        reader.open(args[0]);
+        /* go on */
+        return new JensReader(reader, actor);
     }
 
     /**
-     * Internal class doing the actual reading and parsing.
+     * <p>Methods doing the actual reading and parsing in a loop and cleaning up.</p>
      *
      * @author mirabilos (t.glaser@tarent.de)
      */
-    protected static class JensReader {
-        private final BufferedReader reader;
-        private final DocumentBuilder db;
+    protected static class JensReader implements Closeable {
+        private final JNI reader;
         private final AbstractJensActor actor;
-        private Element e;
 
-        private JensReader(final BufferedReader xreader, final AbstractJensActor xactor, final DocumentBuilder xdb) {
+        private JensReader(final JNI xreader, final AbstractJensActor xactor) {
             reader = xreader;
             actor = xactor;
-            db = xdb;
         }
 
         /**
-         * <p>Reads records from the {@code jensdmp} subprocess and calls the actor.</p>
+         * <p>Reads records from the kernel and calls the actor.</p>
          *
-         * <p>If this method returns, the subprocess has signalled EOF.</p>
+         * <p>If this method returns, the relayfs channel has signalled EOF.</p>
          *
-         * @throws IOException  if reading from the subprocess fails
-         * @throws SAXException if parsing the subprocess’ output fails
+         * @throws InterruptedException if the current Thread was interrupted
+         * @throws IOException          if reading from the kernel fails
          */
-        public void run() throws IOException, SAXException {
+        public void run() throws IOException, InterruptedException {
             //noinspection StatementWithEmptyBody
-            while (handleLine(reader.readLine())) {
+            while (reader.read(actor)) {
                 // nothing
             }
-            done();
+            reader.close();
         }
 
-        @SuppressWarnings("SameParameterValue")
-        private double getFloat(final String attributeName) {
-            return Double.parseDouble(e.getAttribute(attributeName));
-        }
-
-        @SuppressWarnings("SameParameterValue")
-        private @Unsigned long get64X(final String attributeName) {
-            return Long.parseUnsignedLong(e.getAttribute(attributeName), 16);
-        }
-
-        private @Positive(max = 0xFFFFFFFFL) long get32X(final String attributeName) {
-            final @Unsigned int d32 = Integer.parseUnsignedInt(e.getAttribute(attributeName), 16);
-            // 0x00000000_00000000L‥0x00000000_FFFFFFFFL
-            return Integer.toUnsignedLong(d32);
-        }
-
-        @SuppressWarnings("SameParameterValue")
-        private @Positive(max = 0x0000FFFFL) int get16X(final String attributeName) {
-            return Integer.parseInt(e.getAttribute(attributeName), 16);
-        }
-
-        private @Unsigned int get8b(final String attributeName) {
-            return Integer.parseUnsignedInt(e.getAttribute(attributeName), 2);
-        }
-
-        private boolean has(final String attributeName) {
-            return !("".equals(e.getAttribute(attributeName)));
-        }
-
-        private boolean handleLine(final String line) throws IOException, SAXException {
-            if (line == null) {
-                return false;
-            }
-            db.reset();
-            final Document d = db.parse(new InputSource(new StringReader(line)));
-            e = /* root element */ d.getDocumentElement();
-            actor.r.timestamp = get64X("ts");
-            switch (e.getTagName()) {
-            case "Qsz":
-                actor.r.len = get16X("len");
-                actor.r.mem = get32X("mem");
-                actor.handleQueueSize();
-                break;
-            case "pkt":
-                actor.r.sojournTime = get32X("time") * 1024L;
-                actor.r.chance = getFloat("chance");
-                actor.r.ecnIn = get8b("ecn-in");
-                actor.r.ecnOut = get8b("ecn-out");
-                actor.r.ecnValid = has("ecn-valid");
-                actor.r.markCoDel = has("slow");
-                actor.r.markJENS = has("mark");
-                actor.r.dropped = has("drop");
-                actor.handlePacket();
-                break;
-            default:
-                actor.r.type = /*XXX*/ (byte) 0xFF;
-                actor.handleUnknown();
-                break;
-            }
-            return true;
-        }
-    }
-
-    /**
-     * <p>Terminates the subprocess if it is still running.</p>
-     *
-     * <p>This is called with {@link JensReader#run()} finishes successfully
-     * and in a JVM shutdown hook but may be explicitly called if so desired.</p>
-     *
-     * <p>This method is synchronised and idempotent.</p>
-     */
-    public static synchronized void done() {
-        if (p != null) {
-            p.destroy();
-            p = null;
+        /**
+         * <p>Releases any native resources opened by this JensReader.</p>
+         *
+         * <p>This method is intended to be called if the {@link Thread} running
+         * this JensReader instance is to be terminated externally, as opposed
+         * to by reading end of file. It is implicitly run after {@link #run()}
+         * finishes but may be explicitly called multiple times.</p>
+         */
+        @Override
+        public void close() {
+            reader.close();
         }
     }
 }

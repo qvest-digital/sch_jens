@@ -21,21 +21,17 @@ package de.telekom.llcto.jens.reader;
  * of said person’s immediate fault when using the work as intended.
  */
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-
 /**
- * <p>Example main() for the parser for the output of “jensdmp”.</p>
+ * <p>Example main() for the sch_jens relayfs channel reader.</p>
  *
  * <p>This is not an example of good error handling… namely, it does not have
- * any at all. This merely serves to instruct how to parse the output.</p>
+ * any at all. This merely serves to instruct how to parse the statistics.</p>
  *
  * @author mirabilos (t.glaser@tarent.de)
  */
 public final class JensReaderDemo {
     /**
-     * <p>Callback actions for incoming lines.</p>
+     * <p>Callback actions for incoming records.</p>
      *
      * <p>This example just prints all lines. (Note: it is not necessary to
      * override <i>all</i> methods; any methods not overrided will simply
@@ -45,75 +41,80 @@ public final class JensReaderDemo {
      */
     private static class DemoActor extends JensReaderLib.AbstractJensActor {
         @Override
-        public void handleQueueSize() {
-            System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r.timestamp));
-            System.out.printf("queue-size: %d packets, %.2f KiB\n", r.len,
-              (double) r.mem / 1024.0);
+        public void handleQueueSize(final JensReaderLib.AbstractJensActor.Record[] r, final int n) {
+            for (int i = 0; i < n; ++i) {
+                System.out.printf("%03d/%03d ", i + 1, n);
+                System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r[i].timestamp));
+                System.out.printf("queue-size: %d packet%s, %.2f KiB\n", r[i].len,
+                  r[i].len == 1 ? "" : "s", (double) r[i].mem / 1024.0);
+            }
         }
 
         @Override
-        public void handlePacket() {
-            System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r.timestamp));
-            System.out.printf("sojourn-time: %9s ms; ", JensReaderLib.formatTimestamp(r.sojournTime));
-            if (r.ecnValid) {
-                System.out.printf("ECN bits %s → %s",
-                  JensReaderLib.formatECNBits(r.ecnIn),
-                  JensReaderLib.formatECNBits(r.ecnOut));
-            } else {
-                System.out.print("no traffic class");
+        public void handlePacket(final JensReaderLib.AbstractJensActor.Record[] r, final int n) {
+            for (int i = 0; i < n; ++i) {
+                System.out.printf("%03d/%03d ", i + 1, n);
+                System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r[i].timestamp));
+                System.out.printf("sojourn-time: %9s ms; ", JensReaderLib.formatTimestamp(r[i].sojournTime));
+                if (r[i].ecnValid) {
+                    System.out.printf("ECN bits %s → %s",
+                      JensReaderLib.formatECNBits(r[i].ecnIn),
+                      JensReaderLib.formatECNBits(r[i].ecnOut));
+                } else {
+                    System.out.print("no traffic class");
+                }
+                // note both of the following can indicate marking even for nōn-ECN packets
+                // in that case, they aren’t marked (obviously); CoDel drops them, JENS doesn’t
+                // (but JENS is defined to operate only with ECN-capable traffic) */
+                System.out.printf("; JENS %7.3f%% (%s)", r[i].chance * 100.0,
+                  r[i].markJENS ? "marked: CE" : "not marked");
+                if (r[i].markCoDel) {
+                    System.out.print("; CoDel marked");
+                }
+                if (r[i].dropped) {
+                    System.out.print("; dropped");
+                }
+                System.out.println();
             }
-            // note both of the following can indicate marking even for nōn-ECN packets
-            // in that case, they aren’t marked (obviously); CoDel drops them, JENS doesn’t
-            // (but JENS is defined to operate only with ECN-capable traffic) */
-            System.out.printf("; JENS %7.3f%% (%s)", r.chance * 100.0,
-              r.markJENS ? "marked: CE" : "not marked");
-            if (r.markCoDel) {
-                System.out.print("; CoDel marked");
-            }
-            if (r.dropped) {
-                System.out.print("; dropped");
-            }
-            System.out.println();
         }
 
         @Override
-        public void handleUnknown() {
-            // we could extract the first line into a new method if needed
-            System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r.timestamp));
-            System.out.printf("unknown: %X\n", r.type);
+        public void handleUnknown(final JensReaderLib.AbstractJensActor.Record[] r, final int n) {
+            for (int i = 0; i < n; ++i) {
+                // we could extract the first two lines into a new method if needed
+                System.out.printf("%03d/%03d ", i + 1, n);
+                System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r[i].timestamp));
+                System.out.printf("unknown: %X\n", r[i].type);
+            }
         }
     }
 
     /**
-     * <p>Runs {@code jensdmp} as a subprocess, parsing its output.</p>
+     * <p>Retrieves {@code sch_jens} relayfs channel statistics and prints them.</p>
      *
-     * <p>The {@code jensdmp} executable is searched for in the current working
-     * directory; it is used if it exists and is executable; otherwise, the
-     * standard path is used. The {@code args[]} passed to the main function
-     * are handed on to {@code jensdmp} unchanged; do make sure to pass anything
-     * {@code jensdmp} needs, specifically the debugfs path.</p>
+     * <p>The {@code args[]} passed to the main function are handed on to the
+     * reader library unchanged. Currently, only one argument is expected, namely
+     * the debugfs path.</p>
      *
      * <p>Received records are parsed (using {@link JensReaderLib}); each is
      * (using {@link DemoActor}) merely formatted to stdout.</p>
      *
-     * <p>Because {@code jensdmp} must run as superuser initially to open the
-     * debugfs file (even though it drops privileges later) this program must
-     * also run as root (even though it does not drop privileges; JENS runs
-     * as root anyway and this is intended as JENS integration example).</p>
+     * <p>This program requires superuser privileges in order to access the
+     * debugfs file backing the relayfs channel. It does not drop privileges;
+     * JENS runs as root anyway and this is an integration example).</p>
      *
-     * @param args arguments to pass to {@code jensdmp}
+     * @param args arguments to pass to the reader
      */
     public static void main(String[] args) {
         try {
-            // see if ./jensdmp is executable
-            final Path cwdJensdmp = Paths.get("jensdmp");
-            // use it if so, use default path (null) otherwise
-            final Path pathToJensdmp = Files.isExecutable(cwdJensdmp) ? cwdJensdmp : null;
-            JensReaderLib.JensReader reader = JensReaderLib.init(pathToJensdmp, args,
-              new DemoActor());
-            System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(0));
-            System.out.println("JensReaderDemo ready to run!");
-            reader.run();
+            // reader is autocloseable
+            try (JensReaderLib.JensReader reader = JensReaderLib.init(args,
+              new DemoActor())) {
+                System.out.printf("%03d/%03d ", 0, 0);
+                System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(0));
+                System.out.println("JensReaderDemo ready to run!");
+                reader.run();
+            }
         } catch (Exception e) {
             System.err.println("Error: " + e);
             System.exit(1);

@@ -35,6 +35,16 @@
 #include <linux/types.h>
 #include "../sch_jens/jens_uapi.h"
 
+#ifndef INFTIM
+#define INFTIM		(-1)
+#endif
+
+#define RBUF_TARGETSIZE (65536U)
+#define RBUF_SUBBUFSIZE (RBUF_TARGETSIZE / (TC_JENS_RELAY_NRECORDS * sizeof(struct tc_jens_relay)))
+#define RBUF_ELEMENTLEN (RBUF_SUBBUFSIZE * TC_JENS_RELAY_NRECORDS)
+#define RBUF_BYTELENGTH (RBUF_ELEMENTLEN * sizeof(struct tc_jens_relay))
+
+#define BIT(n)		(1U << (n))
 #define NELEM(a)	(sizeof(a) / sizeof((a)[0]))
 #define __unused	__attribute__((__unused__))
 #define ZCS(x)		(x), sizeof(x)
@@ -47,31 +57,39 @@
 static jboolean jniVerbose = JNI_TRUE;
 
 static JNICALL jstring nativeOpen(JNIEnv *, jobject, jstring);
-//…
+static JNICALL jstring nativeRead(JNIEnv *, jobject);
 static JNICALL void nativeClose(JNIEnv *, jobject);
 
 #define METH(name,signature) \
 	{ #name, signature, (void *)(name) }
 static const JNINativeMethod methods[] = {
 	METH(nativeOpen, "(Ljava/lang/String;)Ljava/lang/String;"),
+	METH(nativeRead, "()Ljava/lang/String;"),
 	METH(nativeClose, "()V"),
 };
 #undef METH
 
 static jstring e_GetStringUTFChars;
+static jstring e_RecordFail;
+static jstring e_UnalignedRead;
 
 /* de.telekom.llcto.jens.reader.JensReaderLib$JNI */
 static jclass cls_JNI;
 /* de.telekom.llcto.jens.reader.JensReaderLib$AbstractJensActor$Record */
 static jclass cls_REC;
+/* java.lang.Thread */
+static jclass cls_THR;
+
+static jmethodID M_THR_interrupted;	// bool()
 
 static jfieldID o_JNI_fd;		// int
-static jfieldID o_JNI_rQueueSize;	// AbstractJensActor.Record[256]
-static jfieldID o_JNI_rPacket;		// AbstractJensActor.Record[256]
-static jfieldID o_JNI_rUnknown;		// AbstractJensActor.Record[256]
+static jfieldID o_JNI_rQueueSize;	// AbstractJensActor.Record[4096]
+static jfieldID o_JNI_rPacket;		// AbstractJensActor.Record[4096]
+static jfieldID o_JNI_rUnknown;		// AbstractJensActor.Record[4096]
 static jfieldID o_JNI_nQueueSize;	// int
 static jfieldID o_JNI_nPacket;		// int
 static jfieldID o_JNI_nUnknown;		// int
+static jfieldID o_JNI_buf;		// ByteBuffer
 
 static jfieldID o_REC_timestamp;	// @Unsigned long
 // queue-size
@@ -132,9 +150,12 @@ free_grefs(JNIEnv *env)
 	(*env)->DeleteGlobalRef(env, (x));	\
 	(x) = NULL;				\
 } } while (/* CONSTCOND */ 0)
+	f(cls_THR);
 	f(cls_REC);
 	f(cls_JNI);
 	f(e_GetStringUTFChars);
+	f(e_RecordFail);
+	f(e_UnalignedRead);
 #undef f
 }
 
@@ -191,9 +212,14 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 #define getcons(cls,vn,sig)	_getid("constructor", i, cls, vn, "<init>", sig, "", GetMethodID)
 
 	mkjstring(e_GetStringUTFChars, "GetStringUTFChars failed");
+	mkjstring(e_RecordFail, "Failure accessing a Record array element");
+	mkjstring(e_UnalignedRead, "relayfs read no multiple of record size");
 
 	getclass(JNI, "de/telekom/llcto/jens/reader/JensReaderLib$JNI");
 	getclass(REC, "de/telekom/llcto/jens/reader/JensReaderLib$AbstractJensActor$Record");
+	getclass(THR, "java/lang/Thread");
+
+	getsmeth(THR, interrupted, "()Z");
 
 	getfield(JNI, fd, "I");
 	getfield(JNI, rQueueSize, "[Lde/telekom/llcto/jens/reader/JensReaderLib$AbstractJensActor$Record;");
@@ -202,6 +228,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getfield(JNI, nQueueSize, "I");
 	getfield(JNI, nPacket, "I");
 	getfield(JNI, nUnknown, "I");
+	getfield(JNI, buf, "Ljava/nio/ByteBuffer;");
 	getfield(REC, timestamp, "J");
 	getfield(REC, len, "I");
 	getfield(REC, mem, "J");
@@ -258,10 +285,10 @@ nativeOpen(JNIEnv *env, jobject obj, jstring name)
 	/* assert that the Java arrays are sized correctly */
 #define sizeCheck(f) do {						\
 	jobject o = (*env)->GetObjectField(env, obj, o_JNI_ ## f);	\
-	jsize oz = (*env)->GetArrayLength(env, (jarray)o);		\
-	if ((size_t)oz != (size_t)TC_JENS_RELAY_NRECORDS) {		\
-		log_err("wrong length %zu (expected %zu) for %s array",	\
-		    (size_t)oz, (size_t)TC_JENS_RELAY_NRECORDS, #f);	\
+	jsize oz = o ? (*env)->GetArrayLength(env, (jarray)o) : -1;	\
+	if ((size_t)oz != (size_t)RBUF_ELEMENTLEN) {			\
+		log_err("wrong length %zd (expected %zu) for %s array",	\
+		    (ssize_t)oz, (size_t)RBUF_ELEMENTLEN, #f);		\
 		sizeCheckFail = JNI_TRUE;				\
 	}								\
 	(*env)->DeleteLocalRef(env, o);					\
@@ -270,6 +297,16 @@ nativeOpen(JNIEnv *env, jobject obj, jstring name)
 	sizeCheck(rPacket);
 	sizeCheck(rUnknown);
 #undef sizeCheck
+	do {
+		jobject o = (*env)->GetObjectField(env, obj, o_JNI_buf);
+		void *ob = o ? (*env)->GetDirectBufferAddress(env, o) : NULL;
+		jlong n = o ? (*env)->GetDirectBufferCapacity(env, o) : -2L;
+		if (ob == NULL || n != (jlong)RBUF_BYTELENGTH) {
+			log_err("wrong length %ld for ByteBuffer", (long)n);
+			sizeCheckFail = JNI_TRUE;
+		}
+		(*env)->DeleteLocalRef(env, o);
+	} while (/* CONSTCOND */ 0);
 	if (sizeCheckFail != JNI_FALSE) {
 		eno = /*EBADRPC*/ EUCLEAN;
 		goto err_out;
@@ -303,4 +340,143 @@ nativeClose(JNIEnv *env, jobject obj)
 		else
 			log_err("close(%d) failed: errno %d", (int)fd, eno);
 	}
+}
+
+static int
+notInterrupted(JNIEnv *env)
+{
+	jboolean is_interrupted = (*env)->CallStaticBooleanMethod(env,
+	    cls_THR, M_THR_interrupted);
+	jboolean has_exception = (*env)->ExceptionCheck(env);
+
+	return (is_interrupted == JNI_FALSE && has_exception == JNI_FALSE);
+}
+
+static JNICALL jstring
+nativeRead(JNIEnv *env, jobject obj)
+{
+	size_t n;
+	int fd, eno, i;
+	struct tc_jens_relay *buf, *hadPadding = NULL;
+	jint nP = 0, nQ = 0, nU = 0;
+	jobjectArray aP, aQ, aU;
+	jobject to;
+	struct pollfd pfd;
+	union {
+		__u64 u;
+		jlong s;
+		char c[sizeof(__u64) == sizeof(jlong) ? 1 : -1];
+	} U64;
+	/*union {
+		__u32 u;
+		jint s;
+		char c[sizeof(__u32) == sizeof(jint) ? 1 : -1];
+	} U32;*/
+	union {
+		__u8 u;
+		jbyte s;
+		char c[sizeof(__u8) == sizeof(jbyte) ? 1 : -1];
+	} U8;
+
+	fd = (int)((*env)->GetIntField(env, obj, o_JNI_fd));
+	aP = (jobjectArray)((*env)->GetObjectField(env, obj, o_JNI_rPacket));
+	aQ = (jobjectArray)((*env)->GetObjectField(env, obj, o_JNI_rQueueSize));
+	aU = (jobjectArray)((*env)->GetObjectField(env, obj, o_JNI_rUnknown));
+	to = (*env)->GetObjectField(env, obj, o_JNI_buf);
+	buf = (*env)->GetDirectBufferAddress(env, to);
+	(*env)->DeleteLocalRef(env, to);
+
+ poll_loop:
+	pfd.fd = fd;
+	pfd.events = POLLIN;
+	eno = ECHRNG;
+	i = poll(&pfd, 1, INFTIM);
+	if (i == -1 && (eno = errno) == EINTR && notInterrupted(env))
+		goto poll_loop;
+	if (i != 1)
+		goto err_out;
+ read_loop:
+	if ((n = read(fd, buf, RBUF_BYTELENGTH)) == (size_t)-1) {
+		if ((eno = errno) == EINTR && notInterrupted(env))
+			goto read_loop;
+ err_out:
+		return (jstrerror(env, eno));
+	}
+	if (n == 0)
+		goto eof;
+	if ((n % sizeof(struct tc_jens_relay)) != 0)
+		return (e_UnalignedRead);
+	n /= sizeof(struct tc_jens_relay);
+
+	while (n--) {
+		switch (buf->type) {
+		case TC_JENS_RELAY_PADDING:
+			hadPadding = buf;
+			break;
+		case TC_JENS_RELAY_INVALID:
+		default:
+			if (!(to = (*env)->GetObjectArrayElement(env, aU, nU)))
+				return (e_RecordFail);
+			U64.u = buf->ts;
+			(*env)->SetLongField(env, to, o_REC_timestamp, U64.s);
+			U8.u = buf->type;
+			(*env)->SetByteField(env, to, o_REC_type, U8.s);
+			(*env)->DeleteLocalRef(env, to);
+			++nU;
+			break;
+		case TC_JENS_RELAY_QUEUESZ:
+			if (!(to = (*env)->GetObjectArrayElement(env, aQ, nQ)))
+				return (e_RecordFail);
+			U64.u = buf->ts;
+			(*env)->SetLongField(env, to, o_REC_timestamp, U64.s);
+			(*env)->SetIntField(env, to, o_REC_len,
+			    (jint)(unsigned int)buf->e16);
+			(*env)->SetLongField(env, to, o_REC_mem,
+			    (jlong)(unsigned long long)buf->d32);
+			(*env)->DeleteLocalRef(env, to);
+			++nQ;
+			break;
+		case TC_JENS_RELAY_SOJOURN:
+			if (!(to = (*env)->GetObjectArrayElement(env, aP, nP)))
+				return (e_RecordFail);
+			U64.u = buf->ts;
+			(*env)->SetLongField(env, to, o_REC_timestamp, U64.s);
+			(*env)->SetLongField(env, to, o_REC_sojournTime,
+			    (jlong)(1024ULL * (unsigned long long)buf->d32));
+			(*env)->SetDoubleField(env, to, o_REC_chance,
+			    (jdouble)((double)buf->e16 / TC_JENS_RELAY_SOJOURN_PCTDIV));
+			(*env)->SetIntField(env, to, o_REC_ecnIn,
+			    (jint)((0U + buf->f8) & 0x03U));
+			(*env)->SetIntField(env, to, o_REC_ecnOut,
+			    (jint)(((0U + buf->f8) >> 3) & 0x03U));
+			(*env)->SetBooleanField(env, to, o_REC_ecnValid,
+			    buf->f8 & BIT(2) ? JNI_TRUE : JNI_FALSE);
+			(*env)->SetBooleanField(env, to, o_REC_markCoDel,
+			    buf->f8 & TC_JENS_RELAY_SOJOURN_SLOW ? JNI_TRUE : JNI_FALSE);
+			(*env)->SetBooleanField(env, to, o_REC_markJENS,
+			    buf->f8 & TC_JENS_RELAY_SOJOURN_MARK ? JNI_TRUE : JNI_FALSE);
+			(*env)->SetBooleanField(env, to, o_REC_dropped,
+			    buf->f8 & TC_JENS_RELAY_SOJOURN_DROP ? JNI_TRUE : JNI_FALSE);
+			(*env)->DeleteLocalRef(env, to);
+			++nP;
+			break;
+		}
+		++buf;
+	}
+	/* add one padding element but only if there were no others */
+	if (hadPadding && !(nP + nQ + nU)) {
+		if (!(to = (*env)->GetObjectArrayElement(env, aU, nU)))
+			return (e_RecordFail);
+		U64.u = hadPadding->ts;
+		(*env)->SetLongField(env, to, o_REC_timestamp, U64.s);
+		U8.u = hadPadding->type;
+		(*env)->SetByteField(env, to, o_REC_type, U8.s);
+		(*env)->DeleteLocalRef(env, to);
+		++nU;
+	}
+ eof:
+	(*env)->SetIntField(env, obj, o_JNI_nPacket, nP);
+	(*env)->SetIntField(env, obj, o_JNI_nQueueSize, nQ);
+	(*env)->SetIntField(env, obj, o_JNI_nUnknown, nU);
+	return (NULL);
 }

@@ -9,7 +9,8 @@ LDFLAGS?=	-Wl,-z,relro -Wl,-z,now -Wl,--as-needed
 JNIDIR?=	/usr/lib/jvm/default-java
 JNICFLAGS+=	${CFLAGS} -fPIC -fvisibility=hidden
 JNICPPFLAGS+=	${CPPFLAGS} -I${JNIDIR}/include -I${JNIDIR}/include/linux
-JNILDFLAGS+=	-shared -Wl,-soname,libjensdmpJNI.so -Wl,--no-undefined
+JNILDFLAGS+=	${LDFLAGS} -Wl,--no-undefined
+JNILDFLAGS+=	-shared -Wl,-soname,libjensdmpJNI.so
 
 PROG=		jensdmp
 SRCS?=		${PROG}.c
@@ -54,8 +55,8 @@ run: all .built/java
 	sudo $e java -cp .built $p.JensReaderDemo /sys/kernel/debug/sch_jens/0002:0
 
 install:
-	install -m 0755 -d ${DESTDIR}/usr/lib
-	install -m 0644 ${JLIB} ${DESTDIR}/usr/lib/
+	install -m 0755 -d ${DESTDIR}/usr/lib/jni
+	install -m 0644 ${JLIB} ${DESTDIR}/usr/lib/jni/
 	install -m 0755 -d ${DESTDIR}/usr/libexec
 	install -m 0755 ${PROG} ${DESTDIR}/usr/libexec/
 	@echo do install the *.java examples

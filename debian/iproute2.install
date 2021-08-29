@@ -15,6 +15,7 @@ sbin/rtmon
 sbin/ss /bin
 sbin/tc
 sbin/tipc
+usr/lib/jni/libjensdmpJNI.so
 usr/lib/tc/
 usr/libexec/jensdmp
 usr/share/bash-completion/

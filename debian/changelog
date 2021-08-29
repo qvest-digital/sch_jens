@@ -1,3 +1,11 @@
+iproute2 (5.10.0-4~jens+5) tarent; urgency=medium
+
+  * Build and install jensdmpJNI DLL
+  * Use jensdmpJNI library in JensReaderLib example
+  * Convert JensReader to bulk API for performance
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Sun, 29 Aug 2021 12:16:09 +0200
+
 iproute2 (5.10.0-4~jens+4) tarent; urgency=medium
 
   * Switch to 4 KiB-sized subbuffers for better performance

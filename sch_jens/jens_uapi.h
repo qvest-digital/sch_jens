@@ -6,11 +6,11 @@
 #define __NET_SCHED_JENS_UAPI_H
 
 /* JHTB */
-#define TC_HTB_NUMPRIO		8
-#define TC_HTB_MAXDEPTH		8
-#define TC_HTB_PROTOVER		3 /* the same as HTB and TC's major */
+#define TC_JHTB_NUMPRIO		8
+#define TC_JHTB_MAXDEPTH	8
+#define TC_JHTB_PROTOVER	3 /* the same as HTB and TC's major */
 
-struct tc_htb_opt {
+struct tc_jhtb_opt {
 	struct tc_ratespec 	rate;
 	struct tc_ratespec 	ceil;
 	__u32	buffer;
@@ -19,7 +19,7 @@ struct tc_htb_opt {
 	__u32	level;		/* out only */
 	__u32	prio;
 };
-struct tc_htb_glob {
+struct tc_jhtb_glob {
 	__u32 version;		/* to match HTB/TC */
 	__u32 rate2quantum;	/* bps->quantum divisor */
 	__u32 defcls;		/* default class number */
@@ -29,24 +29,23 @@ struct tc_htb_glob {
 	__u32 direct_pkts; /* count of non shaped packets */
 };
 enum {
-	TCA_HTB_UNSPEC,
-	TCA_HTB_PARMS,
-	TCA_HTB_INIT,
-	TCA_HTB_CTAB,
-	TCA_HTB_RTAB,
-	TCA_HTB_DIRECT_QLEN,
-	TCA_HTB_RATE64,
-	TCA_HTB_CEIL64,
-	TCA_HTB_PAD,
-	__TCA_HTB_MAX,
+	TCA_JHTB_UNSPEC,
+	TCA_JHTB_PARMS,
+	TCA_JHTB_INIT,
+	TCA_JHTB_CTAB,
+	TCA_JHTB_RTAB,
+	TCA_JHTB_DIRECT_QLEN,
+	TCA_JHTB_RATE64,
+	TCA_JHTB_CEIL64,
+	TCA_JHTB_PAD,
+	__TCA_JHTB_MAX,
 };
 
-#define TCA_HTB_MAX (__TCA_HTB_MAX - 1)
+#define TCA_JHTB_MAX (__TCA_JHTB_MAX - 1)
 
-struct tc_htb_xstats {
+struct tc_jhtb_xstats {
 	__u32 lends;
 	__u32 borrows;
-	__u32 giants;	/* unused since 'Make HTB scheduler work with TSO.' */
 	__s32 tokens;
 	__s32 ctokens;
 };

@@ -31,7 +31,9 @@
 #include <string.h>
 #include <unistd.h>
 
+/* prerequisite kernel headers */
 #include <linux/types.h>
+#include <linux/pkt_sched.h>
 #include "../sch_jens/jens_uapi.h"
 
 #ifndef INFTIM

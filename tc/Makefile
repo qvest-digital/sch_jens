@@ -35,6 +35,7 @@ TCMODULES += f_tcindex.o
 TCMODULES += q_ingress.o
 TCMODULES += q_hfsc.o
 TCMODULES += q_htb.o
+TCMODULES += q_jhtb.o
 TCMODULES += q_drr.o
 TCMODULES += q_qfq.o
 TCMODULES += m_gact.o

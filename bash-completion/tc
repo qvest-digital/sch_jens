@@ -4,7 +4,7 @@
 
 QDISC_KIND=' choke codel bfifo pfifo pfifo_head_drop fq fq_codel gred hhf \
             mqprio multiq netem pfifo_fast pie fq_pie red rr sfb sfq tbf atm \
-            cbq drr dsmark hfsc htb prio qfq jens '
+            cbq drr dsmark hfsc htb prio qfq jens jhtb '
 FILTER_KIND=' basic bpf cgroup flow flower fw route rsvp tcindex u32 matchall '
 ACTION_KIND=' gact mirred bpf sample '
 
@@ -377,6 +377,10 @@ _tc_qdisc_options()
             return 0
             ;;
         htb)
+            _tc_once_attr 'default r2q direct_qlen debug'
+            return 0
+            ;;
+        jhtb)
             _tc_once_attr 'default r2q direct_qlen debug'
             return 0
             ;;

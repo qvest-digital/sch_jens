@@ -1,4 +1,4 @@
-# GNUmakefile for the sch_jens Linux kernel module
+# GNUmakefile for the sch_jens/sch_jhtb Linux kernel modules
 # © 2021 mirabilos <t.glaser@tarent.de>, for Deutsche Telekom
 # Licence: GPLv2, same as the Linux kernel
 
@@ -31,8 +31,10 @@ uninstall:
 
 unload:
 	-rmmod sch_jens
+	-rmmod sch_jhtb
 
 load: unload
 	insmod sch_jens.ko
+	insmod sch_jhtb.ko
 
 .PHONY: all clean install mpost unload load

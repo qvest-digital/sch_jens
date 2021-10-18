@@ -5,7 +5,54 @@
 #ifndef __NET_SCHED_JENS_UAPI_H
 #define __NET_SCHED_JENS_UAPI_H
 
+/* JHTB */
+#define TC_JHTB_NUMPRIO		8
+#define TC_JHTB_MAXDEPTH	8
+#define TC_JHTB_PROTOVER	3 /* the same as HTB and TC's major */
+
+struct tc_jhtb_opt {
+	struct tc_ratespec 	rate;
+	struct tc_ratespec 	ceil;
+	__u32	buffer;
+	__u32	cbuffer;
+	__u32	quantum;
+	__u32	level;		/* out only */
+	__u32	prio;
+};
+struct tc_jhtb_glob {
+	__u32 version;		/* to match HTB/TC */
+	__u32 rate2quantum;	/* bps->quantum divisor */
+	__u32 defcls;		/* default class number */
+	__u32 debug;		/* debug flags */
+
+	/* stats */
+	__u32 direct_pkts; /* count of non shaped packets */
+};
+enum {
+	TCA_JHTB_UNSPEC,
+	TCA_JHTB_PARMS,
+	TCA_JHTB_INIT,
+	TCA_JHTB_CTAB,
+	TCA_JHTB_RTAB,
+	TCA_JHTB_DIRECT_QLEN,
+	TCA_JHTB_RATE64,
+	TCA_JHTB_CEIL64,
+	TCA_JHTB_PAD,
+	__TCA_JHTB_MAX,
+};
+
+#define TCA_JHTB_MAX (__TCA_JHTB_MAX - 1)
+
+struct tc_jhtb_xstats {
+	__u32 lends;
+	__u32 borrows;
+	__s32 tokens;
+	__s32 ctokens;
+};
+
 /* JENS */
+
+#define JENS_QUANTUM_MAX (1 << 20)
 
 enum {
 	TCA_JENS_UNSPEC,

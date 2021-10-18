@@ -1,2 +1,2 @@
-obj-m := sch_jens.o
+obj-m := sch_jens.o sch_jhtb.o
 #ccflags-y += -fverbose-asm -save-temps=obj

@@ -494,6 +494,7 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 {
 	struct jens_sched_data *q = qdisc_priv(sch);
 	struct nlattr *tb[TCA_JENS_MAX + 1];
+	u32 quantum = 0;
 	int err;
 
 	if (!opt)
@@ -527,6 +528,13 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 		    q->flows_cnt > 65536)
 			return -EINVAL;
 	}
+	if (tb[TCA_JENS_QUANTUM]) {
+		quantum = max(256U, nla_get_u32(tb[TCA_JENS_QUANTUM]));
+		if (quantum > JENS_QUANTUM_MAX) {
+			NL_SET_ERR_MSG(extack, "Invalid quantum");
+			return -EINVAL;
+		}
+	}
 	sch_tree_lock(sch);
 
 	if (tb[TCA_JENS_TARGET]) {
@@ -555,8 +563,8 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 	if (tb[TCA_JENS_LIMIT])
 		sch->limit = nla_get_u32(tb[TCA_JENS_LIMIT]);
 
-	if (tb[TCA_JENS_QUANTUM])
-		q->quantum = max(256U, nla_get_u32(tb[TCA_JENS_QUANTUM]));
+	if (quantum)
+		q->quantum = quantum;
 
 	if (tb[TCA_JENS_DROP_BATCH_SIZE])
 		q->drop_batch_size = max(1U, nla_get_u32(tb[TCA_JENS_DROP_BATCH_SIZE]));

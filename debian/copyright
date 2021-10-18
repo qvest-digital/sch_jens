@@ -41,6 +41,14 @@ Copyright: 2021 mirabilos <t.glaser@tarent.de>
            2021 Deutsche Telekom LLCTO
 License: MirBSD
 
+Files: sch_jens/sch_jhtb.c
+       man/man8/tc-jhtb.8
+Copyright: 2021 mirabilos <t.glaser@tarent.de>
+           Martin Devera <devik@cdi.cz> and others
+           bert hubert <ahu@ds9a.nl>
+License: GPL-2
+Comment: (for sch_jhtb.c) v2 or later
+
 Files: sch_jens/*
        man/man8/tc-jens.8
 Copyright: 2021 mirabilos <t.glaser@tarent.de>

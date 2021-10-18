@@ -286,9 +286,8 @@ static int jhtb_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 
 		if (!hopt->level) {
 			print_int(PRINT_ANY, "prio", "prio %d ", (int)hopt->prio);
-			if (show_details)
-				print_int(PRINT_ANY, "quantum", "quantum %d ",
-					  (int)hopt->quantum);
+			print_int(PRINT_ANY, "quantum", "quantum %d ",
+				  (int)hopt->quantum);
 		}
 
 		rate64 = hopt->rate.rate;
@@ -336,9 +335,9 @@ static int jhtb_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 
 		print_int(PRINT_ANY, "r2q", "r2q %d", gopt->rate2quantum);
 		print_0xhex(PRINT_ANY, "default", " default %#llx", gopt->defcls);
-		print_uint(PRINT_ANY, "direct_packets_stat",
-			   " direct_packets_stat %u", gopt->direct_pkts);
 		if (show_details) {
+			print_uint(PRINT_ANY, "direct_packets_stat",
+				   " direct_packets_stat %u", gopt->direct_pkts);
 			sprintf(b1, "%d.%d", gopt->version >> 16, gopt->version & 0xffff);
 			print_string(PRINT_ANY, "ver", " ver %s", b1);
 		}

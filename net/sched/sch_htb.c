@@ -1224,7 +1224,11 @@ static void htb_destroy_class(struct Qdisc *sch, struct htb_class *cl)
 {
 	if (!cl->level) {
 		WARN_ON(!cl->leaf.q);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)
 		qdisc_destroy(cl->leaf.q);
+#else
+		qdisc_put(cl->leaf.q);
+#endif
 	}
 	gen_kill_estimator(&cl->rate_est);
 	tcf_block_put(cl->block);
@@ -1425,7 +1429,11 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 			/* turn parent into inner node */
 			qdisc_reset(parent->leaf.q);
 			qdisc_tree_reduce_backlog(parent->leaf.q, qlen, backlog);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)
 			qdisc_destroy(parent->leaf.q);
+#else
++			qdisc_put(parent->leaf.q);
+#endif
 			if (parent->prio_activity)
 				htb_deactivate(q, parent);
 

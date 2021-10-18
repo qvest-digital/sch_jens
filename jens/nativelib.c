@@ -33,6 +33,7 @@
 #include <jni.h>
 
 #include <linux/types.h>
+#include <net/pkt_sched.h>
 #include "../sch_jens/jens_uapi.h"
 
 #ifndef INFTIM

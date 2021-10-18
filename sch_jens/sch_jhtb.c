@@ -1,3 +1,6 @@
+/* part of sch_jhtb (fork of sch_htb) for JENS, Deutsche Telekom LLCTO */
+/* Copyright © 2021 mirabilos <t.glaser@tarent.de> */
+
 /*
  * net/sched/sch_htb.c	Hierarchical token bucket, feed tree version
  *
@@ -40,6 +43,7 @@
 #include <net/netlink.h>
 #include <net/sch_generic.h>
 #include <net/pkt_sched.h>
+#include "jens_uapi.h"
 #include <net/pkt_cls.h>
 
 /* HTB algorithm.
@@ -1627,7 +1631,7 @@ static const struct Qdisc_class_ops htb_class_ops = {
 
 static struct Qdisc_ops htb_qdisc_ops __read_mostly = {
 	.cl_ops		=	&htb_class_ops,
-	.id		=	"htb",
+	.id		=	"jhtb",
 	.priv_size	=	sizeof(struct htb_sched),
 	.enqueue	=	htb_enqueue,
 	.dequeue	=	htb_dequeue,
@@ -1650,4 +1654,6 @@ static void __exit htb_module_exit(void)
 
 module_init(htb_module_init)
 module_exit(htb_module_exit)
+MODULE_AUTHOR("Deutsche Telekom LLCTO");
 MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("bandwidth limiter for JENS");

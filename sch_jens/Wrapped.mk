@@ -1,4 +1,4 @@
-# GNUmakefile for the sch_jens Linux kernel module, Kbuild wrapper
+# GNUmakefile for the sch_jens/sch_jhtb Linux kernel module, Kbuild wrapper
 # © 2021 mirabilos <t.glaser@tarent.de>, for Deutsche Telekom
 # Licence: GPLv2, same as the Linux kernel
 

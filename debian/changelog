@@ -1,3 +1,9 @@
+sch-jens (0~20211018.0) tarent; urgency=medium
+
+  * Add sch_jhtb, for now the same as htb
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 18 Oct 2021 23:17:37 +0200
+
 sch-jens (0~20210607.0) tarent; urgency=medium
 
   * Initial packaging

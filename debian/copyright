@@ -5,7 +5,7 @@ It is provided under the same licence as the Linux kernel,
 that is, the GPL, version 2, which can be read at
 /usr/share/common-licenses/GPL-2 on Debian systems.
 
-The code is a derivative of sch_fq_codel
+The sch_jens code is a derivative of sch_fq_codel
  © 2011–2012 Kathleen Nichols <nichols@pollere.com>
  © 2011–2012 Van Jacobson <van@pollere.net>
  © 2012 Michael D. Taht <dave.taht@bufferbloat.net>
@@ -13,6 +13,10 @@ The code is a derivative of sch_fq_codel
 also available under the GPLv2; parts of the code are also
 available under a 3-clause BSD licence, see the individual
 files (jens_codel*.h) for details.
+
+The sch_jhtb code is a derivative of sch_htb
+ © Martin Devera <devik@cdi.cz> and others
+also available under the GPLv2 or later.
 
 The file jens_uapi.h has the following GPL exception:
 

@@ -12,6 +12,11 @@ Architecture: all
 Depends: ${misc:Depends}
 Provides: sch-jens
 Description: E/// PoC-imitating scheduler for JENS
- This is a fork of sch_fq_codel, for tc(8), with changed behaviour
+ This is a bundle of kernel modules needed for JENS by DTAG LLCTO.
+ .
+ sch_jens is a fork of sch_fq_codel, for tc(8), with changed behaviour
  as regards CE marking of packets. The details are currently still
  being worked on.
+ .
+ sch_jhtb is a fork of sch_htb, with extra functionality. The details
+ are currently still being worked on.

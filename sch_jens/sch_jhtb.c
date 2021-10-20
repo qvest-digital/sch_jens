@@ -147,6 +147,7 @@ struct htb_class {
 
 	unsigned int drops ____cacheline_aligned_in_smp;
 	unsigned int		overlimits;
+	u64			handover_ns;
 };
 
 struct htb_level {
@@ -741,6 +742,11 @@ static s64 htb_do_events(struct htb_sched *q, const int level,
 			return 0;
 
 		cl = rb_entry(p, struct htb_class, pq_node);
+		if (unlikely(cl->handover_ns)) {
+			if (cl->handover_ns > q->now)
+				return (cl->handover_ns);
+			cl->handover_ns = 0;
+		}
 		if (cl->pq_key > q->now)
 			return cl->pq_key;
 
@@ -882,11 +888,18 @@ next:
 			goto next;
 		}
 
+		if (unlikely(cl->handover_ns)) {
+			if (cl->handover_ns > q->now)
+				goto handed_over;
+			cl->handover_ns = 0;
+		}
+
 		skb = cl->leaf.q->dequeue(cl->leaf.q);
 		if (likely(skb != NULL))
 			break;
 
 		qdisc_warn_nonwc("htb", cl->leaf.q);
+ handed_over:
 		htb_next_rb_node(level ? &cl->parent->inner.clprio[prio].ptr:
 					 &q->hlevel[0].hprio[prio].ptr);
 		cl = htb_lookup_leaf(hprio, prio);
@@ -985,6 +998,7 @@ static void htb_reset(struct Qdisc *sch)
 				if (cl->leaf.q)
 					qdisc_reset(cl->leaf.q);
 			}
+			cl->handover_ns = 0;
 			cl->prio_activity = 0;
 			cl->cmode = JHTB_CAN_SEND;
 		}
@@ -1005,6 +1019,7 @@ static const struct nla_policy htb_policy[TCA_JHTB_MAX + 1] = {
 	[TCA_JHTB_DIRECT_QLEN] = { .type = NLA_U32 },
 	[TCA_JHTB_RATE64] = { .type = NLA_U64 },
 	[TCA_JHTB_CEIL64] = { .type = NLA_U64 },
+	[TCA_JHTB_HANDOVER] = { .type = NLA_U32 },
 };
 
 static void htb_work_func(struct work_struct *work)
@@ -1505,6 +1520,13 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 	rate64 = tb[TCA_JHTB_RATE64] ? nla_get_u64(tb[TCA_JHTB_RATE64]) : 0;
 
 	ceil64 = tb[TCA_JHTB_CEIL64] ? nla_get_u64(tb[TCA_JHTB_CEIL64]) : 0;
+
+	if (tb[TCA_JHTB_HANDOVER]) {
+		u64 handover = nla_get_u32(tb[TCA_JHTB_HANDOVER]);
+
+		handover *= NSEC_PER_USEC;
+		cl->handover_ns = ktime_get_ns() + handover;
+	}
 
 	psched_ratecfg_precompute(&cl->rate, &hopt->rate, rate64);
 	psched_ratecfg_precompute(&cl->ceil, &hopt->ceil, ceil64);

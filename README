@@ -35,6 +35,14 @@ This can also be achieved with an /etc/fstab line as follows:
 
 	debugfs    /sys/kernel/debug  debugfs  defaults  0  0
 
+Trigger a handover simulation:
+
+dev=eth0
+rate=1000
+sudo tc class change dev $dev classid 1:1 jhtb rate ${rate}kbit ceil ${rate}kbit prio 1 handover 2000ms
+
+It will return to the given bandwidth once the handover period is over.
+
 ────────────────────────────────────────────────────────────────────────
 
 This is a set of utilities for Linux networking.

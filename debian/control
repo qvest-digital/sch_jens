@@ -70,5 +70,6 @@ Description: E/// PoC-imitating scheduler for JENS
  reporting of various KPIs. This is still up to later changes and
  extensions.
  .
- sch_jhtb is a fork of sch_htb, with extra functionality. The details
- are currently still being worked on.
+ sch_jhtb is a fork of sch_htb, with extra functionality. It allows
+ simulating a RAN handover, i.e. stopping network traffic for a time.
+ This is still up to later changes and extensions.

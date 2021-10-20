@@ -32,6 +32,8 @@ bytes
 priority
 .B ] [ quantum
 bytes
+.B ] [ handover
+time
 .B ]
 
 .SH DESCRIPTION
@@ -157,6 +159,11 @@ divided by the qdisc
 parameter.  If specified,
 .B r2q
 is ignored.
+
+.TP
+handover time
+Amount of time to stop all network traffic in this class for.
+It returns to the specified rate afterwards.
 
 .SH NOTES
 Due to Unix timing constraints, the maximum ceil rate is not infinite and may in fact be quite low. On Intel,

@@ -39,7 +39,7 @@ static void explain(void)
 		" debug    string of 16 numbers each 0-3 {0}\n\n"
 		" direct_qlen  Limit of the direct queue {in packets}\n"
 		"... class add ... jhtb rate R1 [burst B1] [mpu B] [overhead O]\n"
-		"                      [prio P] [slot S] [pslot PS]\n"
+		"                      [prio P] [slot S] [pslot PS] [handover TIME]\n"
 		"                      [ceil R2] [cburst B2] [mtu MTU] [quantum Q]\n"
 		" rate     rate allocated to this class (class can still borrow)\n"
 		" burst    max bytes burst which can be accumulated during idle period {computed}\n"
@@ -51,6 +51,7 @@ static void explain(void)
 		" mtu      max packet size we create rate map for {1600}\n"
 		" prio     priority of leaf; lower are served first {0}\n"
 		" quantum  how much bytes to serve from leaf at once {use r2q}\n"
+		" handover stop traffic for this long\n"
 		"\nTC JHTB version %d.%d\n", JHTB_TC_VER>>16, JHTB_TC_VER&0xffff
 		);
 }
@@ -122,6 +123,7 @@ static int jhtb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv, st
 	unsigned int linklayer  = LINKLAYER_ETHERNET; /* Assume ethernet */
 	struct rtattr *tail;
 	__u64 ceil64 = 0, rate64 = 0;
+	unsigned int handover = 0;
 
 	while (argc > 0) {
 		if (matches(*argv, "prio") == 0) {
@@ -200,6 +202,12 @@ static int jhtb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv, st
 				explain1("rate");
 				return -1;
 			}
+		} else if (strcmp(*argv, "handover") == 0) {
+			NEXT_ARG();
+			if (get_time(&handover, *argv)) {
+				explain1("handover");
+				return (-1);
+			}
 		} else if (strcmp(*argv, "help") == 0) {
 			explain();
 			return -1;
@@ -248,6 +256,9 @@ static int jhtb_parse_class_opt(struct qdisc_util *qu, int argc, char **argv, st
 	opt.cbuffer = tc_calc_xmittime(ceil64, cbuffer);
 
 	tail = addattr_nest(n, 1024, TCA_OPTIONS);
+
+	if (handover)
+		addattr_l(n, 1024, TCA_JHTB_HANDOVER, &handover, sizeof(handover));
 
 	if (rate64 >= (1ULL << 32))
 		addattr_l(n, 1124, TCA_JHTB_RATE64, &rate64, sizeof(rate64));

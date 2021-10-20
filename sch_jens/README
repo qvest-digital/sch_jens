@@ -121,3 +121,6 @@ sch_jhtb Linux kernel module
 Documentation on purpose, etc. tbd.
 
 For now, this is the same as htb.
+
+It can additionally stop network traffic for a period of time, if, in
+a tc class change command, a “handover” value is given.

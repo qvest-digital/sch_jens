@@ -245,3 +245,11 @@ or underdocumented for
 and has been collected based on casual study of the source code,
 independent descriptions of FQ_CoDel, mailing list posts, etc. and
 may therefore not be entirely correct.
+.Pp
+.Nm tc
+handles are per-interface; debugfs pathnames are global.
+When using the debugfs functionality
+.Pq non-zero Ic subbufs ,
+make sure that no two
+.Nm sch_jens
+queues have the same handle, globally.

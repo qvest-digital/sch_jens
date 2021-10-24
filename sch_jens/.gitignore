@@ -5,6 +5,7 @@
 *.s
 .*.cmd
 .*.o.d
+.show-hz
 .tmp_versions
 Module.symvers
 modules.order

@@ -22,6 +22,7 @@ all:
 
 clean:
 	${gmf_mk} clean
+	-rm -f .show-hz
 
 install:
 	${gmf_mk} modules_install
@@ -36,5 +37,19 @@ unload:
 load: unload
 	insmod sch_jens.ko
 	insmod sch_jhtb.ko
+
+show-hz:
+	@-rm -f .show-hz
+	@test ! -e .show-hz && test ! -h .show-hz
+	env SHOW_HZ_HACK=1 ${gmf_mk} modules
+	sed --posix -ne '/SHOW_HZ_before/,/SHOW_HZ_after/p' .tmp_SHOW_HZ.i | \
+	    tr '\n' ' ' | (cat; echo) | \
+	    sed --posix -e 's/^[^;]*;//' -e 's/ *;.*$$//' -e 's/^.*= *//' \
+	    >.show-hz
+	test -s .show-hz
+	env SHOW_HZ_HACK=1 ${gmf_mk} clean
+	@echo
+	@echo HZ = $$(cat .show-hz)
+	@rm -f .show-hz
 
 .PHONY: all clean install mpost unload load

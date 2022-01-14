@@ -7,6 +7,7 @@ sch-jens (5.10.0-4~jens+6+noport) UNRELEASED; urgency=medium
 sch-jens (0~20211018.0) tarent; urgency=medium
 
   * Add sch_jhtb, for now the same as htb
+  * Install README
 
  -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 18 Oct 2021 23:17:37 +0200
 

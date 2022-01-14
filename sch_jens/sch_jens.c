@@ -170,10 +170,18 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		jens_record_queuesz(sch, q);
 }
 
-static unsigned int fq_codel_hash(const struct jens_sched_data *q,
+static unsigned int jens_hash(const struct jens_sched_data *q,
 				  struct sk_buff *skb)
 {
-	return reciprocal_scale(skb_get_hash(skb), q->flows_cnt);
+	struct flow_keys keys;
+	__u32 hash;
+
+	skb_flow_dissect_flow_keys(skb, &keys,
+	    FLOW_DISSECTOR_F_STOP_AT_FLOW_LABEL);
+	memset(&keys.ports, 0, sizeof(keys.ports));
+	hash = flow_hash_from_keys(&keys);
+
+	return reciprocal_scale(hash, q->flows_cnt);
 }
 
 static unsigned int fq_codel_classify(struct sk_buff *skb, struct Qdisc *sch,
@@ -191,7 +199,7 @@ static unsigned int fq_codel_classify(struct sk_buff *skb, struct Qdisc *sch,
 
 	filter = rcu_dereference_bh(q->filter_list);
 	if (!filter)
-		return fq_codel_hash(q, skb) + 1;
+		return jens_hash(q, skb) + 1;
 
 	*qerr = NET_XMIT_SUCCESS | __NET_XMIT_BYPASS;
 	result = tcf_classify(skb, filter, &res, false);

@@ -1,3 +1,9 @@
+sch-jens (5.10.0-4~jens+6+noport) UNRELEASED; urgency=medium
+
+  * sch_jens: Drop src/dst port from queue categorisation hash
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Fri, 14 Jan 2022 03:56:35 +0100
+
 sch-jens (0~20211018.0) tarent; urgency=medium
 
   * Add sch_jhtb, for now the same as htb

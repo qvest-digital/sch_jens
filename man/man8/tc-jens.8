@@ -1,7 +1,7 @@
 .\" part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO
 .\"-
 .if \n(.g .hlm 0
-.Dd August 19, 2021
+.Dd January 19, 2022
 .Dt TC\-JENS 8
 .Os Linux
 .Sh NAME
@@ -20,6 +20,7 @@
 .Op Ic markfree Ar TIME
 .Op Ic markfull Ar TIME
 .Op Ic subbufs Ar NUMBER
+.Op Ic nouseport
 .Sh DESCRIPTION
 JENS is a network limitation simulator used in an Adaptive Managed Latency
 scenario to aid in developing aware applications.
@@ -190,6 +191,11 @@ any other value is used as number of subbuffers (containing 256 records,
 each sized 16 bytes, that is, 4\ KiB per subbuffer).
 This parameter can only be set at load time because memory has to be allocated.
 Default: 0
+.It Ic nouseport
+Omit both source and destination port number from the hash for
+queue classification.
+This can be used to simulate a single, multiplexed, RAN connection
+for all connections between each same pair of hosts.
 .El
 .Sh STATISTICS
 Currently the same as in

@@ -1,3 +1,9 @@
+iproute2 (5.10.0-4~jens+7) tarent; urgency=medium
+
+  * Add nouseport option to sch_jens
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 20 Jan 2022 02:37:07 +0100
+
 iproute2 (5.10.0-4~jens+6) tarent; urgency=medium
 
   * Add sch_jhtb, replacing htb

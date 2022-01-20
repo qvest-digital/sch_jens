@@ -51,8 +51,8 @@ Comment: (for sch_jhtb.c) v2 or later
 
 Files: sch_jens/*
        man/man8/tc-jens.8
-Copyright: 2021 mirabilos <t.glaser@tarent.de>
-           2021 Deutsche Telekom LLCTO
+Copyright: 2021, 2022 mirabilos <t.glaser@tarent.de>
+           2021, 2022 Deutsche Telekom LLCTO
            2011–2012 Kathleen Nichols <nichols@pollere.com>
            2011–2012 Van Jacobson <van@pollere.net>
            2012 Michael D. Taht <dave.taht@bufferbloat.net>
@@ -85,7 +85,7 @@ Copyright: 1996 Tom Lees <tom@lpsg.demon.co.uk>
            2005-2017 Alexander Wirt <formorer@debian.org>
            2008-2015 Andreas Henriksson <andreas@fatal.se>
            2017 Luca Boccassi <bluca@debian.org>
-           2021 mirabilos <t.glaser@tarent.de>
+           2021, 2022 mirabilos <t.glaser@tarent.de>
 License: GPL-2
 
 License: GPL-2

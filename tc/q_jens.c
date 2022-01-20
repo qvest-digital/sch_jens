@@ -1,5 +1,5 @@
 /* part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO */
-/* Copyright © 2021 mirabilos <t.glaser@tarent.de> */
+/* Copyright © 2021, 2022 mirabilos <t.glaser@tarent.de> */
 
 /*
  * Fair Queue Codel
@@ -56,7 +56,7 @@ static void explain(void)
 		"	[ limit PACKETS ] [ memory_limit BYTES ] [ drop_batch SIZE ]"
 		"\n\t	[ flows NUMBER ] [ quantum BYTES ] [ interval TIME ]"
 		"\n\t	[ target TIME ] [ markfree TIME ] [ markfull TIME ]"
-		"\n\t	[ subbufs NUMBER ]"
+		"\n\t	[ subbufs NUMBER ] [ nouseport ]"
 		"\n");
 }
 
@@ -73,6 +73,7 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	unsigned int interval = 0;
 	unsigned int quantum = 0;
 	unsigned int memory = ~0U;
+	unsigned char nouseport = 0;
 	struct rtattr *tail;
 
 	while (argc > 0) {
@@ -136,6 +137,8 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 				fprintf(stderr, "Illegal \"interval\"\n");
 				return -1;
 			}
+		} else if (strcmp(*argv, "nouseport") == 0) {
+			nouseport = 1;
 		} else if (strcmp(*argv, "help") == 0) {
 			explain();
 			return -1;
@@ -148,6 +151,8 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	}
 
 	tail = addattr_nest(n, 1024, TCA_OPTIONS);
+	if (nouseport)
+		addattr_l(n, 1024, TCA_JENS_NOUSEPORT, NULL, 0);
 	if (limit)
 		addattr_l(n, 1024, TCA_JENS_LIMIT, &limit, sizeof(limit));
 	if (flows)
@@ -255,6 +260,9 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	    RTA_PAYLOAD(tb[TCA_JENS_SUBBUFS]) >= sizeof(__u32)) {
 		subbufs = rta_getattr_u32(tb[TCA_JENS_SUBBUFS]);
 		print_uint(PRINT_ANY, "subbufs", "subbufs %u ", subbufs);
+	}
+	if (tb[TCA_JENS_NOUSEPORT]) {
+		print_bool(PRINT_ANY, "nouseport", "nouseport ", true);
 	}
 
 	return 0;

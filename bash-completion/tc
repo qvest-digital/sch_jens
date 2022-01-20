@@ -304,6 +304,7 @@ _tc_qdisc_options()
         jens)
             _tc_once_attr 'limit memory_limit drop_batch flows quantum \
                 interval target markfree markfull subbufs'
+	    _tc_one_of_list 'nouseport'
             return 0
             ;;
         gred)

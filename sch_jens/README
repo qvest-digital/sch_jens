@@ -26,6 +26,8 @@ Differences to fq_codel
   (note that the CoDel algorithm of marking packets when the
   “target” time isn’t reached within “interval” still applies)
 • The option “subbufs” enables live measurement, see below
+• With the option “nouseport” given, neither source nor
+  destination port are used in the hash for queue classify
 
 Live measurement
 ────────────────

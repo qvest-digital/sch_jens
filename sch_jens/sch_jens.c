@@ -1,5 +1,5 @@
 /* part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO */
-/* Copyright © 2021 mirabilos <t.glaser@tarent.de> */
+/* Copyright © 2021, 2022 mirabilos <t.glaser@tarent.de> */
 
 /*
  * Fair Queue CoDel discipline
@@ -80,6 +80,7 @@ struct jens_sched_data {
 	spinlock_t	record_lock;	/* for record_chan */
 #define QSZ_INTERVAL ((u64)5000000)	/* 5 ms in ns */
 	u64		qsz_next;	/* next time to emit queue-size */
+	unsigned char	nouseport;	/* do not add port to classify */
 };
 
 static struct dentry *jens_debugfs_main;
@@ -178,7 +179,8 @@ static unsigned int jens_hash(const struct jens_sched_data *q,
 
 	skb_flow_dissect_flow_keys(skb, &keys,
 	    FLOW_DISSECTOR_F_STOP_AT_FLOW_LABEL);
-	memset(&keys.ports, 0, sizeof(keys.ports));
+	if (q->nouseport)
+		memset(&keys.ports, 0, sizeof(keys.ports));
 	hash = flow_hash_from_keys(&keys);
 
 	return reciprocal_scale(hash, q->flows_cnt);
@@ -495,6 +497,7 @@ static const struct nla_policy fq_codel_policy[TCA_JENS_MAX + 1] = {
 	[TCA_JENS_DROP_BATCH_SIZE] = { .type = NLA_U32 },
 	[TCA_JENS_MEMORY_LIMIT] = { .type = NLA_U32 },
 	[TCA_JENS_SUBBUFS]	= { .type = NLA_U32 },
+	[TCA_JENS_NOUSEPORT]	= { .type = NLA_FLAG },
 };
 
 static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
@@ -580,6 +583,8 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 	if (tb[TCA_JENS_MEMORY_LIMIT])
 		q->memory_limit = min(1U << 31, nla_get_u32(tb[TCA_JENS_MEMORY_LIMIT]));
 
+	q->nouseport = nla_get_flag(tb[TCA_JENS_NOUSEPORT]);
+
 	while (sch->q.qlen > sch->limit ||
 	       q->memory_usage > q->memory_limit) {
 		codel_time_t dummy_sojourn;
@@ -629,6 +634,7 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	codel_stats_init(&q->cstats);
 	q->cparams.mtu = psched_mtu(qdisc_dev(sch));
 	q->record_chan = NULL;
+	q->nouseport = 0;
 	spin_lock_init(&q->record_lock);
 
 	if (opt) {
@@ -706,6 +712,10 @@ static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 	opts = nla_nest_start_noflag(skb, TCA_OPTIONS);
 #endif
 	if (opts == NULL)
+		goto nla_put_failure;
+
+	if (q->nouseport &&
+	    nla_put_flag(skb, TCA_JENS_NOUSEPORT))
 		goto nla_put_failure;
 
 	if (nla_put_u32(skb, TCA_JENS_TARGET,

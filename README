@@ -21,7 +21,7 @@ sudo tc qdisc del dev $dev root
 # Invoke jensdmp in its directory:
 javac -d obj JensReaderDemo.java JensReaderLib.java
 sudo java -cp obj de.telekom.llcto.jens.reader.JensReaderDemo \
-    /sys/kernel/debug/sch_jens/0002:0
+    eth0 /sys/kernel/debug/sch_jens/0002:0
 # -or- just
 make run
 # -or- (without Java™ example)

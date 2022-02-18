@@ -50,6 +50,12 @@ as follows via relayfs:
 
 ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
 │ ts (timestamp)                │typ│fNN│ eNN   │ dNN (data)    │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ x8[16] (data)                                                 │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ y8[16] (data)                                                 │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ z (union, substructured as necessary)                         │
 └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 The .ts (timestamp) member is a 64-bit unsigned integer,
@@ -75,6 +81,8 @@ The remaining members are per-record-type data. They are:
 • d32 (32-bit unsigned integer)
   aliased as d16[2] (16-bit unsigned integer)
   aliased as d8[4] (8-bit unsigned integer)
+• x8, y8 (16-byte arrays e.g. for IP addresses)
+• z (sub-structured 16-byte union)
 Any data members not specified by the record type must not be accessed.
 
 Record types define the following data members:
@@ -98,6 +106,12 @@ Record types define the following data members:
     ‣   6 if ECN marked from markfree/markfull range
           (TC_JENS_RELAY_SOJOURN_MARK), even set if not ECN packet
     ‣   7 (TC_JENS_RELAY_SOJOURN_DROP) the packet was dropped not sent
+  – x8 source IP, if any
+  – y8 destination IP, if any
+  – z struct
+    ‣ __u32 psize (raw packet size, including Layer 2 framing,
+	e.g. 802.11 WLAN, or Ethernet header and trailer)
+    ‣ __u8 ipver (4 = IPv4; 6 = IPv6; 0 = other and x8/y8 are invalid)
 
 • TC_JENS_RELAY_QUEUESZ:
   – d32 memory usage (bytes)
@@ -109,12 +123,16 @@ Record types define the following data members:
 
 • TC_JENS_RELAY_MAX or higher are undefined/reserved for future changes
 
-Subbuffers are TC_JENS_RELAY_NRECORDS (256) records = 4 KiB each.
+Subbuffers are TC_JENS_RELAY_NRECORDS (256) records = 16 KiB each.
 The configuration parameter subbufs (can only be set when creating, as
 memory must be allocated for the subbuffers) determines the amount of
 subbuffers created; use 1 for a suitable default (1024 currently) or
 0 to disable the measurement functionality. It is disabled as well when
 debugfs is not available.
+
+IP addresses are formatted as 16 byte IPv6 address straight from the IP
+header; Legacy IP addresses are formatted as v4-mapped IPv6, i.e. the
+last four octets contain a raw in_addr.
 
 
 sch_jhtb Linux kernel module

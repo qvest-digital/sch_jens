@@ -1,5 +1,5 @@
 /*-
- * Copyright © 2021
+ * Copyright © 2021, 2022
  *	mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom
  *
@@ -30,6 +30,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
 /* prerequisite kernel headers */
 #include <linux/types.h>
@@ -160,17 +163,43 @@ main(int argc, char *argv[])
 	goto loop;
 
  eof:
+	putchar('\r');
+	fflush(NULL);
 	errx(3, "end of input reached");
  do_exit:
+	putchar('\r');
+	fflush(NULL);
 	warnx("exiting on signal %d", do_exit);
 	close(fd);
 
 	return (0);
 }
 
+#define IPADDRFMTLEN	(INET_ADDRSTRLEN > INET6_ADDRSTRLEN ? \
+			 INET_ADDRSTRLEN : INET6_ADDRSTRLEN)
+static inline void
+ipfmt(char dst[IPADDRFMTLEN], const unsigned char *src, int ipver)
+{
+	switch (ipver) {
+	case 4:
+		ipver = AF_INET;
+		src += 12;
+		break;
+	case 6:
+		ipver = AF_INET6;
+		break;
+	default:
+		errx(1, "unknown IP version: %d", ipver);
+	}
+	if (!inet_ntop(ipver, src, dst, IPADDRFMTLEN))
+		err(1, "inet_ntop");
+}
+
 static void
 consume(size_t idx)
 {
+	char ipsrc[IPADDRFMTLEN], ipdst[IPADDRFMTLEN];
+
 	//printf("%03zX [%llu.%09u] ", idx + 1U,
 	//    (unsigned long long)(rbuf[idx].ts / 1000000000),
 	//    (unsigned int)(rbuf[idx].ts % 1000000000));
@@ -194,15 +223,26 @@ consume(size_t idx)
 
 	case TC_JENS_RELAY_SOJOURN:
 		printf("<pkt ts=\"%llX\" time=\"%X\" chance=\"%.7f\""
-		    " ecn-in=\"%d%d\" ecn-out=\"%d%d\"%s%s%s%s/>\n",
+		    " ecn-in=\"%d%d\" ecn-out=\"%d%d\"",
 		    (unsigned long long)rbuf[idx].ts, rbuf[idx].d32,
 		    (double)rbuf[idx].e16 / TC_JENS_RELAY_SOJOURN_PCTDIV,
 		    !!(rbuf[idx].f8 & BIT(1)), !!(rbuf[idx].f8 & BIT(0)),
-		    !!(rbuf[idx].f8 & BIT(4)), !!(rbuf[idx].f8 & BIT(3)),
-		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_SLOW) ? " slow=\"y\"" : "",
-		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_MARK) ? " mark=\"y\"" : "",
-		    (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_DROP) ? " drop=\"y\"" : "",
-		    (rbuf[idx].f8 & BIT(2)) ? " ecn-valid=\"y\"" : "");
+		    !!(rbuf[idx].f8 & BIT(4)), !!(rbuf[idx].f8 & BIT(3)));
+		if (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_SLOW)
+			fputs(" slow=\"y\"", stdout);
+		if (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_MARK)
+			fputs(" mark=\"y\"", stdout);
+		if (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_DROP)
+			fputs(" drop=\"y\"", stdout);
+		if (rbuf[idx].f8 & BIT(2))
+			fputs(" ecn-valid=\"y\"", stdout);
+		if (rbuf[idx].z.zSOJOURN.ipver) {
+			ipfmt(ipsrc, rbuf[idx].x8, rbuf[idx].z.zSOJOURN.ipver);
+			ipfmt(ipdst, rbuf[idx].y8, rbuf[idx].z.zSOJOURN.ipver);
+			printf(" ip=\"%u\" srcip=\"%s\" dstip=\"%s\"",
+			    (unsigned)rbuf[idx].z.zSOJOURN.ipver, ipsrc, ipdst);
+		}
+		printf(" size=\"%u\"/>\n", rbuf[idx].z.zSOJOURN.psize);
 		break;
 
 	case TC_JENS_RELAY_QUEUESZ:

@@ -1,3 +1,12 @@
+iproute2 (5.10.0-4~jens+8) tarent; urgency=medium
+
+  * Change subbufs record size from 16 to 64, bump enum values
+  * Amend TC_JENS_RELAY_SOJOURN with IP address (and version) if present
+    and (full) skb data size
+  * /usr/share/doc/iproute2/README.Debian: LKM unloading on upgrades note
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Fri, 18 Feb 2022 18:26:21 +0100
+
 iproute2 (5.10.0-4~jens+7) tarent; urgency=medium
 
   * Add nouseport option to sch_jens

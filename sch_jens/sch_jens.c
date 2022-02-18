@@ -26,6 +26,7 @@
 #include <linux/vmalloc.h>
 #include <linux/debugfs.h>
 #include <linux/relay.h>
+#include <net/ipv6.h>
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
 #include "jens_uapi.h"
@@ -164,6 +165,31 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	r.d32 = ldelay;
 	r.e16 = cb->chance;
 	r.f8 = cb->record_flag | flags | (ecn << 3);
+	/* addresses */
+	switch (skb->protocol) {
+	case cpu_to_be16(ETH_P_IP):
+		if (skb_network_header(skb) + sizeof(struct iphdr) >
+		    skb_tail_pointer(skb))
+			goto noaddress;
+		ipv6_addr_set_v4mapped(ip_hdr(skb)->saddr, &r.xip);
+		ipv6_addr_set_v4mapped(ip_hdr(skb)->daddr, &r.yip);
+		r.z.zSOJOURN.ipver = 4;
+		break;
+	case cpu_to_be16(ETH_P_IPV6):
+		if (skb_network_header(skb) + sizeof(struct ipv6hdr) >
+		    skb_tail_pointer(skb))
+			goto noaddress;
+		memcpy(r.x8, ipv6_hdr(skb)->saddr.s6_addr, 16);
+		memcpy(r.y8, ipv6_hdr(skb)->daddr.s6_addr, 16);
+		r.z.zSOJOURN.ipver = 6;
+		break;
+	default:
+ noaddress:
+		r.z.zSOJOURN.ipver = 0;
+		break;
+	}
+	/* subtracting skb->mac_len doesn’t make much sense (trailer) */
+	r.z.zSOJOURN.psize = skb->len;
 	jens_record_write(&r, q);
 
 	/* put out a queue-size record if it’s time */

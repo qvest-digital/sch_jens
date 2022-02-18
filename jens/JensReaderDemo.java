@@ -1,7 +1,7 @@
 package de.telekom.llcto.jens.reader;
 
 /*-
- * Copyright © 2021
+ * Copyright © 2021, 2022
  *      mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom
  *
@@ -20,6 +20,9 @@ package de.telekom.llcto.jens.reader;
  * damage or existence of a defect, except proven that it results out
  * of said person’s immediate fault when using the work as intended.
  */
+
+import java.net.NetworkInterface;
+import java.util.Arrays;
 
 /**
  * <p>Example main() for the sch_jens relayfs channel reader.</p>
@@ -40,6 +43,10 @@ public final class JensReaderDemo {
      * @author mirabilos (t.glaser@tarent.de)
      */
     private static class DemoActor extends JensReaderLib.AbstractJensActor {
+        private DemoActor(final NetworkInterface iface) {
+            super(iface);
+        }
+
         @Override
         public void handleQueueSize(final JensReaderLib.AbstractJensActor.Record[] r, final int n) {
             for (int i = 0; i < n; ++i) {
@@ -74,6 +81,12 @@ public final class JensReaderDemo {
                 if (r[i].dropped) {
                     System.out.print("; dropped");
                 }
+                if (r[i].ipVer != 0) {
+                    System.out.printf("; IPv%d (%s → %s)", r[i].ipVer,
+                      getSourceIP(r[i]).getHostAddress(),
+                      getDestinationIP(r[i]).getHostAddress());
+                }
+                System.out.printf("; %d bytes", r[i].pktSize);
                 System.out.println();
             }
         }
@@ -92,9 +105,10 @@ public final class JensReaderDemo {
     /**
      * <p>Retrieves {@code sch_jens} relayfs channel statistics and prints them.</p>
      *
-     * <p>The {@code args[]} passed to the main function are handed on to the
-     * reader library unchanged. Currently, only one argument is expected, namely
-     * the debugfs path.</p>
+     * <p>The {@code args[]} passed to the main function is stripped its first
+     * element, which is expected to be the network interface name the sch_jens
+     * queue runs on; all subsequent elements are handed on to the reader library,
+     * which currently only expects one argument (the debugfs path), unchanged.</p>
      *
      * <p>Received records are parsed (using {@link JensReaderLib}); each is
      * (using {@link DemoActor}) merely formatted to stdout.</p>
@@ -106,10 +120,20 @@ public final class JensReaderDemo {
      * @param args arguments to pass to the reader
      */
     public static void main(String[] args) {
+        if (args.length < 2) {
+            System.err.println("usage: java JensReaderDemo ifname path…");
+            System.exit(1);
+        }
         try {
+            final NetworkInterface nif = NetworkInterface.getByName(args[0]);
+            if (nif == null) {
+                System.err.printf("network interface %s not found\n", args[0]);
+                System.exit(1);
+            }
+            final String[] subargs = Arrays.copyOfRange(args, 1, args.length);
             // reader is autocloseable
-            try (JensReaderLib.JensReader reader = JensReaderLib.init(args,
-              new DemoActor())) {
+            try (JensReaderLib.JensReader reader = JensReaderLib.init(subargs,
+              new DemoActor(nif))) {
                 System.out.printf("%03d/%03d ", 0, 0);
                 System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(0));
                 System.out.println("JensReaderDemo ready to run!");

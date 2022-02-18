@@ -1,5 +1,5 @@
 /*-
- * Copyright © 2020, 2021
+ * Copyright © 2020, 2021, 2022
  *	mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom
  *
@@ -29,6 +29,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <netinet/in.h>
 
 #include <jni.h>
 
@@ -85,9 +87,9 @@ static jclass cls_THR;
 static jmethodID M_THR_interrupted;	// bool()
 
 static jfieldID o_JNI_fd;		// int
-static jfieldID o_JNI_rQueueSize;	// AbstractJensActor.Record[4096]
-static jfieldID o_JNI_rPacket;		// AbstractJensActor.Record[4096]
-static jfieldID o_JNI_rUnknown;		// AbstractJensActor.Record[4096]
+static jfieldID o_JNI_rQueueSize;	// AbstractJensActor.Record[1024]
+static jfieldID o_JNI_rPacket;		// AbstractJensActor.Record[1024]
+static jfieldID o_JNI_rUnknown;		// AbstractJensActor.Record[1024]
 static jfieldID o_JNI_nQueueSize;	// int
 static jfieldID o_JNI_nPacket;		// int
 static jfieldID o_JNI_nUnknown;		// int
@@ -106,6 +108,10 @@ static jfieldID o_REC_ecnValid;		// bool
 static jfieldID o_REC_markCoDel;	// bool
 static jfieldID o_REC_markJENS;		// bool
 static jfieldID o_REC_dropped;		// bool
+static jfieldID o_REC_pktSize;		// long (u32)
+static jfieldID o_REC_ipVer;		// int
+static jfieldID o_REC_srcIP;		// byte[16]
+static jfieldID o_REC_dstIP;		// byte[16]
 // unknown
 static jfieldID o_REC_type;		// byte
 
@@ -242,6 +248,10 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getfield(REC, markCoDel, "Z");
 	getfield(REC, markJENS, "Z");
 	getfield(REC, dropped, "Z");
+	getfield(REC, pktSize, "J");
+	getfield(REC, ipVer, "I");
+	getfield(REC, srcIP, "[B");
+	getfield(REC, dstIP, "[B");
 	getfield(REC, type, "B");
 
 	rc = (*env)->RegisterNatives(env, cls_JNI, methods, NELEM(methods));
@@ -362,7 +372,7 @@ nativeRead(JNIEnv *env, jobject obj)
 	struct tc_jens_relay *buf, *hadPadding = NULL;
 	jint nP = 0, nQ = 0, nU = 0;
 	jobjectArray aP, aQ, aU;
-	jobject to;
+	jobject to, toip;
 	struct pollfd pfd;
 	union {
 		__u64 u;
@@ -459,6 +469,20 @@ nativeRead(JNIEnv *env, jobject obj)
 			    buf->f8 & TC_JENS_RELAY_SOJOURN_MARK ? JNI_TRUE : JNI_FALSE);
 			(*env)->SetBooleanField(env, to, o_REC_dropped,
 			    buf->f8 & TC_JENS_RELAY_SOJOURN_DROP ? JNI_TRUE : JNI_FALSE);
+			(*env)->SetIntField(env, to, o_REC_ipVer,
+			    (jint)(unsigned int)buf->z.zSOJOURN.ipver);
+			if (buf->z.zSOJOURN.ipver) {
+				toip = (*env)->GetObjectField(env, to, o_REC_srcIP);
+				(*env)->SetByteArrayRegion(env, toip, 0, 16,
+				    (const void *)buf->x8);
+				(*env)->DeleteLocalRef(env, toip);
+				toip = (*env)->GetObjectField(env, to, o_REC_dstIP);
+				(*env)->SetByteArrayRegion(env, toip, 0, 16,
+				    (const void *)buf->y8);
+				(*env)->DeleteLocalRef(env, toip);
+			}
+			(*env)->SetLongField(env, to, o_REC_pktSize,
+			    (jlong)(unsigned long long)buf->z.zSOJOURN.psize);
 			(*env)->DeleteLocalRef(env, to);
 			++nP;
 			break;

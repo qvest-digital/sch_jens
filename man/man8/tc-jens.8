@@ -1,7 +1,7 @@
 .\" part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO
 .\"-
 .if \n(.g .hlm 0
-.Dd January 19, 2022
+.Dd February 9, 2022
 .Dt TC\-JENS 8
 .Os Linux
 .Sh NAME
@@ -188,7 +188,7 @@ or its Java\(rg wrapper.
 Set this to 0 to disable the functionality, any other value to enable it;
 1 will use a suitable default amount of subbuffers (currently 1024),
 any other value is used as number of subbuffers (containing 256 records,
-each sized 16 bytes, that is, 4\ KiB per subbuffer).
+each sized 64 bytes, that is, 16\ KiB per subbuffer).
 This parameter can only be set at load time because memory has to be allocated.
 Default: 0
 .It Ic nouseport

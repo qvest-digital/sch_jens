@@ -7,12 +7,24 @@ Same applies to the tc filter action ipt which needs iptables installed.
  -- Alexander Wirt <formorer@debian.org>  Fri, 28 Dec 2007 11:56:28 +0100
 
 
+Upgrading
+---------
+
+After upgrading the packages, the old kernel modules must be unloaded:
+
+$ sudo rmmod sch_jens
+$ sudo rmmod sch_jhtb
+
+If either command fails, the module is either not loaded (ok) or still
+being actively used; unconfigure all queues first.
+
+
 jensdmp examples
 ----------------
 
 Build and run with:
 
 $ javac JensReaderDemo.java JensReaderLib.java
-$ sudo java JensReaderDemo /sys/kernel/debug/sch_jens/0002:0
+$ sudo java JensReaderDemo eth0 /sys/kernel/debug/sch_jens/0002:0
 
-This assumes tc-jens(8) with handle 2: and debugfs support.
+This assumes tc-jens(8) with handle 2: and debugfs support running on eth0.

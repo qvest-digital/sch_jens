@@ -1,7 +1,7 @@
 package de.telekom.llcto.jens.reader;
 
 /*-
- * Copyright © 2021
+ * Copyright © 2021, 2022
  *      mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom
  *
@@ -28,6 +28,10 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -58,6 +62,7 @@ public final class JensReaderLib {
      *
      * @author mirabilos (t.glaser@tarent.de)
      */
+    @SuppressWarnings("unused")
     @Documented
     @Retention(RetentionPolicy.SOURCE)
     @Target({ ElementType.TYPE_USE })
@@ -80,6 +85,7 @@ public final class JensReaderLib {
      *
      * @author mirabilos (t.glaser@tarent.de)
      */
+    @SuppressWarnings("unused")
     @Documented
     @Retention(RetentionPolicy.SOURCE)
     @Target({ ElementType.TYPE_USE })
@@ -173,7 +179,7 @@ public final class JensReaderLib {
         }
 
         private static AbstractJensActor.Record[] mkarr() {
-            return Stream.generate(AbstractJensActor.Record::new).limit(4096).toArray(AbstractJensActor.Record[]::new);
+            return Stream.generate(AbstractJensActor.Record::new).limit(1024).toArray(AbstractJensActor.Record[]::new);
         }
 
         private JNI() {
@@ -244,6 +250,9 @@ public final class JensReaderLib {
      * default methods will just not do anything) with the code that should
      * be executed on each record type in small batches.</p>
      *
+     * <p>This class needs to know the network interface the sch_jens queue is
+     * running on, so it can properly construct IP addresses when asked to.</p>
+     *
      * <p>Each method is passed a {@link Record} array and the amount of
      * valid records of its corresponding type in the array for this invocation;
      * make sure to only use the fields documented for the respective method.
@@ -255,6 +264,17 @@ public final class JensReaderLib {
      * @author mirabilos (t.glaser@tarent.de)
      */
     public static class AbstractJensActor {
+        protected final NetworkInterface networkInterface;
+
+        /**
+         * <p>Initialises a new AbstractJensActor or subclass thereof.</p>
+         *
+         * @param iface {@link NetworkInterface} on which the queue is running
+         */
+        public AbstractJensActor(final NetworkInterface iface) {
+            networkInterface = iface;
+        }
+
         /**
          * <p>Auxilliary data associated with the record.</p>
          *
@@ -278,6 +298,10 @@ public final class JensReaderLib {
          * <li>{@link #markCoDel}</li>
          * <li>{@link #markJENS}</li>
          * <li>{@link #dropped}</li>
+         * <li>{@link #pktSize}</li>
+         * <li>{@link #ipVer}</li>
+         * <li>{@link AbstractJensActor#getSourceIP(Record)}</li>
+         * <li>{@link AbstractJensActor#getDestinationIP(Record)}</li>
          * </ul>
          *
          * <p>Unknown:</p><ul>
@@ -297,6 +321,7 @@ public final class JensReaderLib {
              *
              * <p>Used in all record types.</p>
              */
+            @UsedByJNI
             public @Unsigned long timestamp;
 
             /* only valid for QueueSize */
@@ -310,12 +335,14 @@ public final class JensReaderLib {
              *
              * <p>{@link #handleQueueSize(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public @Positive(max = 0x0000FFFFL) int len;
             /**
              * <p>Memory usage of the queue in bytes.</p>
              *
              * <p>{@link #handleQueueSize(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public @Positive(max = 0xFFFFFFFFL) long mem;
 
             /* only valid for Packet */
@@ -329,6 +356,7 @@ public final class JensReaderLib {
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public @Positive(max = 0x3FFFFFFFC00L) long sojournTime;
             /**
              * <p>Chance in [0, 1] that this packet is to be ECN CE marked,
@@ -342,18 +370,21 @@ public final class JensReaderLib {
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public double chance;
             /**
              * <p>ECN bits of the packet when arriving, if any (see {@link #ecnValid}).</p>
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public @Positive(max = 3) int ecnIn;
             /**
              * <p>ECN bits of the packet when leaving, if any (see {@link #ecnValid}).</p>
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public @Positive(max = 3) int ecnOut;
             /**
              * <p>Whether the ECN bits are valid.</p>
@@ -364,6 +395,7 @@ public final class JensReaderLib {
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public boolean ecnValid;
             /**
              * <p>Whether the packet was ECN CE marked because {@code target} was not
@@ -374,6 +406,7 @@ public final class JensReaderLib {
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public boolean markCoDel;
             /**
              * <p>Whether the packet was ECN CE marked due to the JENS algorithm,
@@ -385,13 +418,47 @@ public final class JensReaderLib {
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public boolean markJENS;
             /**
              * <p>Whether the packet was dropped (instead of passed on) on leaving.</p>
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public boolean dropped;
+            /**
+             * <p>Real size of the packet, including Layer 2 framing.</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 0xFFFFFFFFL) long pktSize;
+            /**
+             * <p>IP version (4 or 6), or 0 to indicate not IP.</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 6) int ipVer;
+            /**
+             * <p>Bare source IP address of the packet.</p>
+             *
+             * <p>Only valid if {@link #ipVer} is 4 or 6.</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            private byte[] srcIP = new byte[16];
+            /**
+             * <p>Bare destination IP address of the packet.</p>
+             *
+             * <p>Only valid if {@link #ipVer} is 4 or 6.</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            private byte[] dstIP = new byte[16];
 
             /* only valid for Unknown */
 
@@ -400,7 +467,90 @@ public final class JensReaderLib {
              *
              * <p>{@link #handleUnknown(Record[], int)} only.</p>
              */
+            @UsedByJNI
             public byte type;
+        }
+
+        private static boolean mightNeedZoneID(final byte[] addr) {
+            if ((addr[0] & (byte) 0xE0) == 0x20) {
+                // global Unicast 2000::/3
+                return false;
+            }
+            if ((addr[0] == 0x00) && (addr[1] == 0x00) &&
+              (addr[2] == 0x00) && (addr[3] == 0x00) &&
+              (addr[4] == 0x00) && (addr[5] == 0x00) &&
+              (addr[6] == 0x00) && (addr[7] == 0x00) &&
+              (addr[8] == 0x00) && (addr[9] == 0x00)) {
+                if ((addr[10] == 0x00) && (addr[11] == 0x00) &&
+                  (addr[12] == 0x00) && (addr[13] == 0x00) &&
+                  (addr[14] == 0x00) && ((addr[15] & (byte) 0xFE) == 0x00)) {
+                    // ::/128, ::1/128
+                    return false;
+                }
+                //noinspection RedundantIfStatement
+                if ((addr[10] == (byte) 0xFF) && (addr[11] == (byte) 0xFF)) {
+                    // v4-mapped: convert to Inet4Address, MUST NOT be scoped
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /**
+         * <p>Constructs a Java™ IP address object for a record.</p>
+         *
+         * <p>If {@code ver} is neither 4 nor 6, {@code null} is returned;
+         * an {@link Inet4Address} or {@link Inet6Address}, possibly with
+         * zone/scope ID, otherwise. The zone/scope ID is omitted for ::1,
+         * :: or (most) global Unicast/Anycast addresses because if present
+         * it’s printing always, even if unnecessary.</p>
+         *
+         * @param ver  {@link Record#ipVer}
+         * @param addr {@link Record#srcIP} or {@link Record#dstIP}
+         * @return null if ver not in (4, 6); {@link InetAddress} otherwise
+         */
+        private InetAddress getIP(final int ver, final byte[] addr) {
+            switch (ver) {
+            case 6:
+                if (mightNeedZoneID(addr)) {
+                    try {
+                        return Inet6Address.getByAddress(null, addr, networkInterface);
+                    } catch (UnknownHostException e) {
+                        /* FALLTHROUGH */
+                    }
+                }
+                /* FALLTHROUGH */
+            case 4:
+                try {
+                    return InetAddress.getByAddress(addr);
+                } catch (UnknownHostException e) {
+                    /* NOTREACHED */
+                    throw new RuntimeException(e);
+                }
+                /* NOTREACHED */
+            default:
+                return null;
+            }
+        }
+
+        /**
+         * <p>Returns the source IP address of a record.</p>
+         *
+         * @param r record to return the source IP address of
+         * @return {@link InetAddress} corresponding to the IP, null if not IP
+         */
+        public final InetAddress getSourceIP(final AbstractJensActor.Record r) {
+            return getIP(r.ipVer, r.srcIP);
+        }
+
+        /**
+         * <p>Returns the destination IP address of a record.</p>
+         *
+         * @param r record to return the destination IP address of
+         * @return {@link InetAddress} corresponding to the IP, null if not IP
+         */
+        public final InetAddress getDestinationIP(final AbstractJensActor.Record r) {
+            return getIP(r.ipVer, r.dstIP);
         }
 
         /**

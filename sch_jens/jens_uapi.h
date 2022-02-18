@@ -131,14 +131,33 @@ struct tc_jens_relay {
 		__u16 d16[2];
 		__u8 d8[4];
 	};			/* 32 bits of user data */
+	union {
+		__u8 x8[16];	/* 128 bits of extra data */
+		struct in6_addr xip;
+	};
+	union {
+		__u8 y8[16];	/* 128 bits of yet more extra data */
+		struct in6_addr yip;
+	};
+	union {
+		__u8 z8[16];	/* 128 bits of structured extra data */
+		struct {
+			__u32 psize;
+			__u8 ipver;
+		} zSOJOURN;
+	} z;
 };
 /* compile-time check for correct size */
-extern struct tc_jens_relay tc_jens_relay_cta[sizeof(struct tc_jens_relay) == 16 ? 1 : -1];
+extern struct tc_jens_relay tc_jens_relay_cta[sizeof(struct tc_jens_relay) == 64 ? 1 : -1];
 
 /* relay record types (see README for details) */
 enum {
 	/* invalid (0), not initialised */
-	TC_JENS_RELAY_INVALID,
+	TC_JENS_RELAY_INVALID = 0,
+
+	TC_JENS_RELAY_OLDVER1,
+	TC_JENS_RELAY_OLDVER2,
+	TC_JENS_RELAY_OLDVER3,
 
 	/* initialised but skip as subbuffer padding */
 	TC_JENS_RELAY_PADDING,
@@ -149,6 +168,8 @@ enum {
 	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
 		3:4=ECN bits on dequeue, TC_JENS_RELAY_SOJOURN_SLOW,
 		TC_JENS_RELAY_SOJOURN_MARK, TC_JENS_RELAY_SOJOURN_DROP */
+	/* x8 = source IP, y8 = destination IP */
+	/* z.zSOJOURN = packet size, IP version (4, 6, 0 for not IP) */
 	TC_JENS_RELAY_SOJOURN,
 
 	/* report length of queue periodically */
@@ -159,6 +180,7 @@ enum {
 	/* invalid, too high */
 	__TC_JENS_RELAY_MAX
 };
+#define TC_JENS_RELAY_MIN TC_JENS_RELAY_PADDING
 #define TC_JENS_RELAY_MAX (__TC_JENS_RELAY_MAX - 1)
 
 /* convert d32 to nanoseconds as __u64 */

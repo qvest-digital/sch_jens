@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 2011-2012 Kathleen Nichols <nichols@pollere.com>
  *  Copyright (C) 2011-2012 Van Jacobson <van@pollere.com>
- *  Copyright (C) 2012 Michael D. Taht <dave.taht@bufferbloat.net>
+ *  Copyright (C) 2012 Michael D. Täht <dave.taht@bufferbloat.net>
  *  Copyright (C) 2012,2015 Eric Dumazet <edumazet@google.com>
  *
  * Redistribution and use in source and binary forms, with or without

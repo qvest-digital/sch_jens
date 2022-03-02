@@ -8,7 +8,7 @@
  *
  *  Copyright (C) 2011-2012 Kathleen Nichols <nichols@pollere.com>
  *  Copyright (C) 2011-2012 Van Jacobson <van@pollere.net>
- *  Copyright (C) 2012 Michael D. Taht <dave.taht@bufferbloat.net>
+ *  Copyright (C) 2012 Michael D. Täht <dave.taht@bufferbloat.net>
  *  Copyright (C) 2012,2015 Eric Dumazet <edumazet@google.com>
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@
  * Source : Kathleen Nichols and Van Jacobson
  * http://queue.acm.org/detail.cfm?id=2209336
  *
- * Implemented on linux by Dave Taht and Eric Dumazet
+ * Implemented on linux by Dave Täht and Eric Dumazet
  */
 
 /* CoDel uses a 1024 nsec clock, encoded in u32

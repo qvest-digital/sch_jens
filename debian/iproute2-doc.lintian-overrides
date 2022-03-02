@@ -1,6 +1,3 @@
-# False positives
-iproute2-doc: spelling-error-in-copyright Taht That
-
 # right but actually correct for a private package
 iproute2-doc: bugs-field-does-not-refer-to-debian-infrastructure
 

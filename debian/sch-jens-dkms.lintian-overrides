@@ -1,5 +1,2 @@
-# false positive, this person is really called that (hah!)
-sch-jens-dkms: spelling-error-in-copyright Taht That
-
 # right but actually correct for a private package
 sch-jens-dkms: bugs-field-does-not-refer-to-debian-infrastructure

@@ -1,3 +1,9 @@
+iproute2 (5.10.0-4~jens+9) tarent; urgency=medium
+
+  * Report flow ID for packets
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 09 Mar 2022 16:19:26 +0100
+
 iproute2 (5.10.0-4~jens+8) tarent; urgency=medium
 
   * Change subbufs record size from 16 to 64, bump enum values

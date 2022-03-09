@@ -144,6 +144,10 @@ struct tc_jens_relay {
 		struct {
 			__u32 psize;
 			__u8 ipver;
+			__u8 pad1;
+			__u8 pad2;
+			__u8 pad3;
+			__u32 flowid;
 		} zSOJOURN;
 	} z;
 };

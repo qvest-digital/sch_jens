@@ -302,6 +302,7 @@ public final class JensReaderLib {
          * <li>{@link #ipVer}</li>
          * <li>{@link AbstractJensActor#getSourceIP(Record)}</li>
          * <li>{@link AbstractJensActor#getDestinationIP(Record)}</li>
+         * <li>{@link #flowId}</li>
          * </ul>
          *
          * <p>Unknown:</p><ul>
@@ -459,6 +460,13 @@ public final class JensReaderLib {
              */
             @UsedByJNI
             private byte[] dstIP = new byte[16];
+            /**
+             * <p>Flow ID used by the CoDel algorithm.</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 0xFFFFFFFFL) long flowId;
 
             /* only valid for Unknown */
 

@@ -55,6 +55,7 @@
 struct jens_skb_cb {
 	codel_time_t enqueue_time;
 	unsigned int mem_usage;
+	__u32 flowid;
 	u16 chance;
 	__u8 record_flag;
 };

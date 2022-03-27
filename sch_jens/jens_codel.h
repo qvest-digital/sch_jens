@@ -46,8 +46,6 @@
 #include <linux/types.h>
 #include <linux/ktime.h>
 #include <linux/skbuff.h>
-#include <net/pkt_sched.h>
-#include <net/inet_ecn.h>
 
 /* Controlling Queue Delay (CoDel) algorithm
  * =========================================

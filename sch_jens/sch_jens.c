@@ -204,7 +204,11 @@ static unsigned int fq_codel_classify(struct sk_buff *skb, struct Qdisc *sch,
 		return jens_hash(q, skb) + 1;
 
 	*qerr = NET_XMIT_SUCCESS | __NET_XMIT_BYPASS;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
 	result = tcf_classify(skb, filter, &res, false);
+#else
+	result = tcf_classify(skb, NULL, filter, &res, false);
+#endif
 	if (result >= 0) {
 #ifdef CONFIG_NET_CLS_ACT
 		switch (result) {

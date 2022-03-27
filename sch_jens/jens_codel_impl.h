@@ -51,6 +51,8 @@
  * Implemented on linux by Dave Taht and Eric Dumazet
  */
 
+#include <net/inet_ecn.h>
+
 static void jens_params_init(struct jens_params *params)
 {
 	params->interval = MS2TIME(100);

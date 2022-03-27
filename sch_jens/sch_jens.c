@@ -29,6 +29,7 @@
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
 #include "jens_uapi.h"
+#include <net/inet_ecn.h>
 #include <net/pkt_cls.h>
 #include "jens_codel.h"
 #include "jens_codel_qdisc.h"

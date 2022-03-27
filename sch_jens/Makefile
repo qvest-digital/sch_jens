@@ -20,6 +20,11 @@ export gmf_kernelversion gmf_kernelbasedir gmf_kernelmakedir gmf_module_srcdir
 all:
 	${gmf_mk} modules
 
+versions:
+	@cd /lib/modules && for v in [4-9].*/; do \
+		echo make gmf_kernelversion=$${v%/}; \
+	done
+
 clean:
 	${gmf_mk} clean
 	-rm -f .show-hz
@@ -52,4 +57,4 @@ show-hz:
 	@echo HZ = $$(cat .show-hz)
 	@rm -f .show-hz
 
-.PHONY: all clean install mpost unload load
+.PHONY: all versions clean install mpost unload load

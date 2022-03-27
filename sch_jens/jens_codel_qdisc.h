@@ -51,6 +51,8 @@
  * Implemented on linux by Dave Täht and Eric Dumazet
  */
 
+#include <net/pkt_sched.h>
+
 /* Qdiscs using codel plugin must use jens_skb_cb in their own cb[] */
 struct jens_skb_cb {
 	codel_time_t enqueue_time;

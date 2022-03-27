@@ -60,7 +60,7 @@
     one less than their parent.
 */
 
-static int htb_hysteresis __read_mostly = 0; /* whether to use mode hysteresis for speedup */
+#define htb_hysteresis 0
 #define JHTB_VER 0x30011		/* major must be matched with number suplied by TC as version */
 
 #if JHTB_VER >> 16 != TC_JHTB_PROTOVER
@@ -68,9 +68,6 @@ static int htb_hysteresis __read_mostly = 0; /* whether to use mode hysteresis f
 #endif
 
 /* Module parameter and sysfs export */
-module_param    (htb_hysteresis, int, 0640);
-MODULE_PARM_DESC(htb_hysteresis, "Hysteresis mode, less CPU load, less accurate");
-
 static int htb_rate_est = 0; /* htb classes have a default rate estimator */
 module_param(htb_rate_est, int, 0640);
 MODULE_PARM_DESC(htb_rate_est, "setup a default rate estimator (4sec 16sec) for htb classes");

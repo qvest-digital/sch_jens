@@ -237,7 +237,13 @@ static struct htb_class *htb_classify(struct sk_buff *skb, struct Qdisc *sch,
 	}
 
 	*qerr = NET_XMIT_SUCCESS | __NET_XMIT_BYPASS;
-	while (tcf && (result = tcf_classify(skb, tcf, &res, false)) >= 0) {
+	while (tcf &&
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
+	    (result = tcf_classify(skb, tcf, &res, false)) >=
+#else
+	    (result = tcf_classify(skb, NULL, tcf, &res, false)) >=
+#endif
+	    0) {
 #ifdef CONFIG_NET_CLS_ACT
 		switch (result) {
 		case TC_ACT_QUEUED:

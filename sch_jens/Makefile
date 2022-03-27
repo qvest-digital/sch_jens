@@ -47,8 +47,10 @@ show-hz:
 	@-rm -f .show-hz
 	@test ! -e .show-hz && test ! -h .show-hz
 	env SHOW_HZ_HACK=1 ${gmf_mk} modules
-	test -s .tmp_SHOW_HZ.i
-	sed --posix -ne '/SHOW_HZ_before/,/SHOW_HZ_after/p' .tmp_SHOW_HZ.i | \
+	test -s .tmp_SHOW_HZ.i || test -s SHOW_HZ.i
+	sed --posix -ne '/SHOW_HZ_before/,/SHOW_HZ_after/p' $$(if \
+	    test -s .tmp_SHOW_HZ.i; then echo .tmp_SHOW_HZ.i; \
+	    else echo SHOW_HZ.i; fi) | \
 	    tr '\n' ' ' | (cat; echo) | \
 	    sed --posix -e 's/^[^;]*;//' -e 's/ *;.*$$//' -e 's/^.*= *//' \
 	    >.show-hz

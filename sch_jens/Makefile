@@ -47,6 +47,7 @@ show-hz:
 	@-rm -f .show-hz
 	@test ! -e .show-hz && test ! -h .show-hz
 	env SHOW_HZ_HACK=1 ${gmf_mk} modules
+	test -s .tmp_SHOW_HZ.i
 	sed --posix -ne '/SHOW_HZ_before/,/SHOW_HZ_after/p' .tmp_SHOW_HZ.i | \
 	    tr '\n' ' ' | (cat; echo) | \
 	    sed --posix -e 's/^[^;]*;//' -e 's/ *;.*$$//' -e 's/^.*= *//' \
@@ -57,4 +58,4 @@ show-hz:
 	@echo HZ = $$(cat .show-hz)
 	@rm -f .show-hz
 
-.PHONY: all versions clean install mpost unload load
+.PHONY: all versions clean install mpost unload load show-hz

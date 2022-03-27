@@ -1284,7 +1284,12 @@ static void htb_destroy(struct Qdisc *sch)
 	__qdisc_reset_queue(&q->direct_queue);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 12, 0)
 static int htb_delete(struct Qdisc *sch, unsigned long arg)
+#else
+static int htb_delete(struct Qdisc *sch, unsigned long arg,
+		      struct netlink_ext_ack *extack)
+#endif
 {
 	struct htb_sched *q = qdisc_priv(sch);
 	struct htb_class *cl = (struct htb_class *)arg;

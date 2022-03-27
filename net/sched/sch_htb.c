@@ -118,7 +118,11 @@ struct htb_class {
 	/*
 	 * Written often fields
 	 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
 	struct gnet_stats_basic_packed bstats;
+#else
+	struct gnet_stats_basic_sync bstats;
+#endif
 	struct tc_htb_xstats	xstats;	/* our special stats */
 
 	/* token bucket parameters */
@@ -1175,8 +1179,13 @@ htb_dump_class_stats(struct Qdisc *sch, unsigned long arg, struct gnet_dump *d)
 	cl->xstats.ctokens = clamp_t(s64, PSCHED_NS2TICKS(cl->ctokens),
 				     INT_MIN, INT_MAX);
 
-	if (gnet_stats_copy_basic(qdisc_root_sleeping_running(sch),
+	if (
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
+	    gnet_stats_copy_basic(qdisc_root_sleeping_running(sch),
 				  d, NULL, &cl->bstats) < 0 ||
+#else
+	    gnet_stats_copy_basic(d, NULL, &cl->bstats, true) < 0 ||
+#endif
 	    gnet_stats_copy_rate_est(d, &cl->rate_est) < 0 ||
 	    gnet_stats_copy_queue(d, NULL, &qs, qlen) < 0)
 		return -1;
@@ -1426,6 +1435,11 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 		if (!cl)
 			goto failure;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
+#else
+		gnet_stats_basic_sync_init(&cl->bstats);
+#endif
+
 		err = tcf_block_get(&cl->block, &cl->filter_list, sch, extack);
 		if (err) {
 			kfree(cl);
@@ -1435,7 +1449,11 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 			err = gen_new_estimator(&cl->bstats, NULL,
 						&cl->rate_est,
 						NULL,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
 						qdisc_root_sleeping_running(sch),
+#else
+						true,
+#endif
 						tca[TCA_RATE] ? : &est.nla);
 			if (err) {
 				tcf_block_put(cl->block);
@@ -1501,7 +1519,11 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 			err = gen_replace_estimator(&cl->bstats, NULL,
 						    &cl->rate_est,
 						    NULL,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 16, 0)
 						    qdisc_root_sleeping_running(sch),
+#else
+						    true,
+#endif
 						    tca[TCA_RATE]);
 			if (err)
 				return err;

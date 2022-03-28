@@ -21,8 +21,14 @@ all:
 	${gmf_mk} modules
 
 versions:
-	@cd /lib/modules && for v in [4-9].*/; do \
-		echo make gmf_kernelversion=$${v%/}; \
+	@b='[1m'; n='[0m'; ov=$(call shellescape,${gmf_kernelversion}); \
+	 cd /lib/modules && for v in [4-9].*/; do \
+		if test x"$${v%/}" = x"$$ov"; then \
+			i=$$n$$b; \
+		else \
+			i=$$n; \
+		fi; \
+		echo "$${i}make gmf_kernelversion=$${v%/}$${n}"; \
 	done
 
 clean:

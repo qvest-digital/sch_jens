@@ -116,8 +116,6 @@ static jfieldID o_REC_flowId;		// long (u32)
 // unknown
 static jfieldID o_REC_type;		// byte
 
-#undef HAVE_STRERRORDESC_NP	/* not on buster yet */
-
 #ifndef HAVE_STRERRORDESC_NP
 #ifdef NEED_SYS_NERR_DECL
 extern const int sys_nerr;

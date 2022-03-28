@@ -6,6 +6,17 @@ CPPFLAGS?=	-Wdate-time
 CPPFLAGS+=	-D_GNU_SOURCE
 LDFLAGS?=	-Wl,-z,relro -Wl,-z,now -Wl,--as-needed
 
+ifeq (,${JENS_MAKE_RECURSIVE})
+ifeq (ok,$(shell ${MAKE} JENS_MAKE_RECURSIVE=1 have_sednp >/dev/null 2>&1 && \
+    test -x have_sednp && echo ok))
+CPPFLAGS+=	-DHAVE_STRERRORDESC_NP
+endif
+else
+have_sednp: have_sednp.o
+	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} $^ ${LDADD}
+endif
+CLEANFILES+=	have_sednp.o have_sednp
+
 JNIDIR?=	/usr/lib/jvm/default-java
 JNICFLAGS+=	${CFLAGS} -fPIC -fvisibility=hidden
 JNICPPFLAGS+=	${CPPFLAGS} -I${JNIDIR}/include -I${JNIDIR}/include/linux

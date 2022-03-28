@@ -6,3 +6,10 @@ else
 obj-m := sch_jens.o sch_jhtb.o
 #ccflags-y += -fverbose-asm -save-temps=obj
 endif
+
+# work around stable kernel API+ABI breakage
+ifeq (4,$(strip ${VERSION}))
+ifeq (19,$(strip ${PATCHLEVEL}))
+ccflags-y += -DJENS_LINUX_4_19_SL=$(strip ${SUBLEVEL})
+endif
+endif

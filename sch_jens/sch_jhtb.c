@@ -1273,7 +1273,8 @@ static void htb_destroy_class(struct Qdisc *sch, struct htb_class *cl)
 {
 	if (!cl->level) {
 		WARN_ON(!cl->leaf.q);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)) && \
+    (!defined(JENS_LINUX_4_19_SL) || (JENS_LINUX_4_19_SL < 221))
 		qdisc_destroy(cl->leaf.q);
 #else
 		qdisc_put(cl->leaf.q);
@@ -1588,7 +1589,8 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
 	cl->cbuffer = PSCHED_TICKS2NS(hopt->cbuffer);
 
 	sch_tree_unlock(sch);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 20, 0)) && \
+    (!defined(JENS_LINUX_4_19_SL) || (JENS_LINUX_4_19_SL < 221))
 	qdisc_destroy(parent_qdisc);
 #else
 	qdisc_put(parent_qdisc);

@@ -13,3 +13,6 @@ ifeq (19,$(strip ${PATCHLEVEL}))
 ccflags-y += -DJENS_LINUX_4_19_SL=$(strip ${SUBLEVEL})
 endif
 endif
+
+# work around Linux adding flags it itself isn’t even ready for
+ccflags-y += -Wimplicit-fallthrough=4

@@ -1,3 +1,16 @@
+iproute2 (5.10.0-4~jens+10) tarent; urgency=medium
+
+  * jhtb: drop option “Hysteresis mode, less CPU load, less accurate”
+  * add Linux 5.16 compatibility and catch up with upstream’s diffs
+  * introduce “make versions” pseudo-target
+  * make “make show-hz” (with/without version) more robust
+  * handle API+ABI break in the so-called “stable” Linux kernel
+  * check for strerrordesc_np to allow building with latest glibc
+  * fix warnings from newer GCC
+  * revert reporting flow ID
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Sat, 04 Jun 2022 20:37:50 +0200
+
 iproute2 (5.10.0-4~jens+9) tarent; urgency=medium
 
   * Report flow ID for packets

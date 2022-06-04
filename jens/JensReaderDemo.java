@@ -86,7 +86,7 @@ public final class JensReaderDemo {
                       getSourceIP(r[i]).getHostAddress(),
                       getDestinationIP(r[i]).getHostAddress());
                 }
-                System.out.printf("; %d bytes; flow ID %d", r[i].pktSize, r[i].flowId);
+                System.out.printf("; %d bytes", r[i].pktSize);
                 System.out.println();
             }
         }

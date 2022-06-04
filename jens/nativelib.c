@@ -112,7 +112,6 @@ static jfieldID o_REC_pktSize;		// long (u32)
 static jfieldID o_REC_ipVer;		// int
 static jfieldID o_REC_srcIP;		// byte[16]
 static jfieldID o_REC_dstIP;		// byte[16]
-static jfieldID o_REC_flowId;		// long (u32)
 // unknown
 static jfieldID o_REC_type;		// byte
 
@@ -252,7 +251,6 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getfield(REC, srcIP, "[B");
 	getfield(REC, dstIP, "[B");
 	getfield(REC, type, "B");
-	getfield(REC, flowId, "J");
 
 	rc = (*env)->RegisterNatives(env, cls_JNI, methods, NELEM(methods));
 	if (rc != JNI_OK) {
@@ -483,8 +481,6 @@ nativeRead(JNIEnv *env, jobject obj)
 			}
 			(*env)->SetLongField(env, to, o_REC_pktSize,
 			    (jlong)(unsigned long long)buf->z.zSOJOURN.psize);
-			(*env)->SetLongField(env, to, o_REC_flowId,
-			    (jlong)(unsigned long long)buf->z.zSOJOURN.flowid);
 			(*env)->DeleteLocalRef(env, to);
 			++nP;
 			break;

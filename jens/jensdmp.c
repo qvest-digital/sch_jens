@@ -242,9 +242,7 @@ consume(size_t idx)
 			printf(" ip=\"%u\" srcip=\"%s\" dstip=\"%s\"",
 			    (unsigned)rbuf[idx].z.zSOJOURN.ipver, ipsrc, ipdst);
 		}
-		printf(" size=\"%u\" flow-id=\"%u\"/>\n",
-		    rbuf[idx].z.zSOJOURN.psize,
-		    rbuf[idx].z.zSOJOURN.flowid);
+		printf(" size=\"%u\"/>\n", rbuf[idx].z.zSOJOURN.psize);
 		break;
 
 	case TC_JENS_RELAY_QUEUESZ:

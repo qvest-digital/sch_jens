@@ -191,7 +191,6 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	}
 	/* subtracting skb->mac_len doesn’t make much sense (trailer) */
 	r.z.zSOJOURN.psize = skb->len;
-	r.z.zSOJOURN.flowid = cb->flowid;
 	jens_record_write(&r, q);
 
 	/* put out a queue-size record if it’s time */
@@ -360,8 +359,7 @@ static int fq_codel_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 	}
 	cb = get_jens_cb(skb);
 	cb->mem_usage = skb->truesize;
-	cb->flowid = idx;
-	q->memory_usage += /*get_jens_cb(skb)->mem_usage*/ skb->truesize;
+	q->memory_usage += cb->mem_usage;
 	memory_limited = q->memory_usage > q->memory_limit;
 	if (++sch->q.qlen <= sch->limit && !memory_limited) {
 		maybe_record_queuesz(sch, q);

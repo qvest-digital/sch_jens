@@ -175,7 +175,9 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		ipv6_addr_set_v4mapped(ip_hdr(skb)->saddr, &r.xip);
 		ipv6_addr_set_v4mapped(ip_hdr(skb)->daddr, &r.yip);
 		r.z.zSOJOURN.ipver = 4;
-		break;
+		r.z.zSOJOURN.nexthdr = ip_hdr(skb)->protocol;
+		goto have_nexthdr;
+		/* NOTREACHED */
 	case cpu_to_be16(ETH_P_IPV6):
 		if (skb_network_header(skb) + sizeof(struct ipv6hdr) >
 		    skb_tail_pointer(skb))
@@ -183,10 +185,39 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		memcpy(r.x8, ipv6_hdr(skb)->saddr.s6_addr, 16);
 		memcpy(r.y8, ipv6_hdr(skb)->daddr.s6_addr, 16);
 		r.z.zSOJOURN.ipver = 6;
+		r.z.zSOJOURN.nexthdr = ipv6_hdr(skb)->nexthdr;
+ have_nexthdr:
+		switch (r.z.zSOJOURN.nexthdr) {
+		case /* TCP */ 6:
+			if (skb_transport_header(skb) + sizeof(struct tcphdr) >
+			    skb_tail_pointer(skb))
+				goto no_nexthdr;
+			r.z.zSOJOURN.sport = ntohs(tcp_hdr(skb)->source);
+			r.z.zSOJOURN.dport = ntohs(tcp_hdr(skb)->dest);
+			break;
+		case /* UDP */ 17:
+			if (skb_transport_header(skb) + sizeof(struct udphdr) >
+			    skb_tail_pointer(skb))
+				goto no_nexthdr;
+			r.z.zSOJOURN.sport = ntohs(udp_hdr(skb)->source);
+			r.z.zSOJOURN.dport = ntohs(udp_hdr(skb)->dest);
+			break;
+		default:
+			if (0) {
+ no_nexthdr:
+				r.z.zSOJOURN.nexthdr = 59;
+			}
+			r.z.zSOJOURN.sport = 0;
+			r.z.zSOJOURN.dport = 0;
+			break;
+		}
 		break;
 	default:
  noaddress:
 		r.z.zSOJOURN.ipver = 0;
+		r.z.zSOJOURN.nexthdr = 0;
+		r.z.zSOJOURN.sport = 0;
+		r.z.zSOJOURN.dport = 0;
 		break;
 	}
 	/* subtracting skb->mac_len doesn’t make much sense (trailer) */

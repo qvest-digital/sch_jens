@@ -82,9 +82,24 @@ public final class JensReaderDemo {
                     System.out.print("; dropped");
                 }
                 if (r[i].ipVer != 0) {
-                    System.out.printf("; IPv%d (%s → %s)", r[i].ipVer,
-                      getSourceIP(r[i]).getHostAddress(),
-                      getDestinationIP(r[i]).getHostAddress());
+                    switch (r[i].nextHeader) {
+                    case 6:
+                        System.out.printf("; TCP/IPv%d (%s:%d → %s:%d)", r[i].ipVer,
+                          getSourceIP(r[i]).getHostAddress(), r[i].srcPort,
+                          getDestinationIP(r[i]).getHostAddress(), r[i].dstPort);
+                        break;
+                    case 17:
+                        System.out.printf("; UDP/IPv%d (%s:%d → %s:%d)", r[i].ipVer,
+                          getSourceIP(r[i]).getHostAddress(), r[i].srcPort,
+                          getDestinationIP(r[i]).getHostAddress(), r[i].dstPort);
+                        break;
+                    default:
+                        System.out.printf("; %d/IPv%d (%s → %s)",
+                          r[i].nextHeader, r[i].ipVer,
+                          getSourceIP(r[i]).getHostAddress(),
+                          getDestinationIP(r[i]).getHostAddress());
+                        break;
+                    }
                 }
                 System.out.printf("; %d bytes", r[i].pktSize);
                 System.out.println();

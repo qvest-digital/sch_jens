@@ -110,8 +110,11 @@ static jfieldID o_REC_markJENS;		// bool
 static jfieldID o_REC_dropped;		// bool
 static jfieldID o_REC_pktSize;		// long (u32)
 static jfieldID o_REC_ipVer;		// int
+static jfieldID o_REC_nextHeader;	// int
 static jfieldID o_REC_srcIP;		// byte[16]
 static jfieldID o_REC_dstIP;		// byte[16]
+static jfieldID o_REC_srcPort;		// int
+static jfieldID o_REC_dstPort;		// int
 // unknown
 static jfieldID o_REC_type;		// byte
 
@@ -248,8 +251,11 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getfield(REC, dropped, "Z");
 	getfield(REC, pktSize, "J");
 	getfield(REC, ipVer, "I");
+	getfield(REC, nextHeader, "I");
 	getfield(REC, srcIP, "[B");
 	getfield(REC, dstIP, "[B");
+	getfield(REC, srcPort, "I");
+	getfield(REC, dstPort, "I");
 	getfield(REC, type, "B");
 
 	rc = (*env)->RegisterNatives(env, cls_JNI, methods, NELEM(methods));
@@ -469,6 +475,8 @@ nativeRead(JNIEnv *env, jobject obj)
 			    buf->f8 & TC_JENS_RELAY_SOJOURN_DROP ? JNI_TRUE : JNI_FALSE);
 			(*env)->SetIntField(env, to, o_REC_ipVer,
 			    (jint)(unsigned int)buf->z.zSOJOURN.ipver);
+			(*env)->SetIntField(env, to, o_REC_nextHeader,
+			    (jint)(unsigned int)buf->z.zSOJOURN.nexthdr);
 			if (buf->z.zSOJOURN.ipver) {
 				toip = (*env)->GetObjectField(env, to, o_REC_srcIP);
 				(*env)->SetByteArrayRegion(env, toip, 0, 16,
@@ -479,6 +487,10 @@ nativeRead(JNIEnv *env, jobject obj)
 				    (const void *)buf->y8);
 				(*env)->DeleteLocalRef(env, toip);
 			}
+			(*env)->SetIntField(env, to, o_REC_srcPort,
+			    (jint)(unsigned int)buf->z.zSOJOURN.sport);
+			(*env)->SetIntField(env, to, o_REC_dstPort,
+			    (jint)(unsigned int)buf->z.zSOJOURN.dport);
 			(*env)->SetLongField(env, to, o_REC_pktSize,
 			    (jlong)(unsigned long long)buf->z.zSOJOURN.psize);
 			(*env)->DeleteLocalRef(env, to);

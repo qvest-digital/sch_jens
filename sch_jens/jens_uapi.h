@@ -144,6 +144,11 @@ struct tc_jens_relay {
 		struct {
 			__u32 psize;
 			__u8 ipver;
+			__u8 nexthdr;
+			__u16 sport;	/* host byteorder */
+			__u16 dport;	/* host byteorder */
+			__u16 pad1;
+			__u32 pad2;
 		} zSOJOURN;
 	} z;
 };
@@ -162,6 +167,13 @@ enum {
 	/* initialised but skip as subbuffer padding */
 	TC_JENS_RELAY_PADDING,
 
+	TC_JENS_RELAY_OLDVER4,
+
+	/* report length of queue periodically */
+	/* d32 = memory usage in bytes */
+	/* e16 = amount of packets in FIFO, 0xFFFF if more */
+	TC_JENS_RELAY_QUEUESZ,
+
 	/* report a single packet leaving our queue */
 	/* d32 = sojourn time in 1024 ns units (-1 = drop on queue resize) */
 	/* e16 = ECN marking range/percentage */
@@ -170,12 +182,8 @@ enum {
 		TC_JENS_RELAY_SOJOURN_MARK, TC_JENS_RELAY_SOJOURN_DROP */
 	/* x8 = source IP, y8 = destination IP */
 	/* z.zSOJOURN = packet size, IP version (4, 6, 0 for not IP) */
+	/* + if IP: L4 proto, if TCP/UDP also src/dst port */
 	TC_JENS_RELAY_SOJOURN,
-
-	/* report length of queue periodically */
-	/* d32 = memory usage in bytes */
-	/* e16 = amount of packets in FIFO, 0xFFFF if more */
-	TC_JENS_RELAY_QUEUESZ,
 
 	/* invalid, too high */
 	__TC_JENS_RELAY_MAX

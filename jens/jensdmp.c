@@ -239,8 +239,15 @@ consume(size_t idx)
 		if (rbuf[idx].z.zSOJOURN.ipver) {
 			ipfmt(ipsrc, rbuf[idx].x8, rbuf[idx].z.zSOJOURN.ipver);
 			ipfmt(ipdst, rbuf[idx].y8, rbuf[idx].z.zSOJOURN.ipver);
-			printf(" ip=\"%u\" srcip=\"%s\" dstip=\"%s\"",
-			    (unsigned)rbuf[idx].z.zSOJOURN.ipver, ipsrc, ipdst);
+			printf(" ip=\"%u\" l4=\"%u\" srcip=\"%s\" dstip=\"%s\"",
+			    (unsigned)rbuf[idx].z.zSOJOURN.ipver,
+			    (unsigned)rbuf[idx].z.zSOJOURN.nexthdr,
+			    ipsrc, ipdst);
+			if (rbuf[idx].z.zSOJOURN.nexthdr == 6 ||
+			    rbuf[idx].z.zSOJOURN.nexthdr == 17)
+				printf(" srcport=\"%u\" dstport=\"%u\"",
+			    (unsigned)rbuf[idx].z.zSOJOURN.sport,
+			    (unsigned)rbuf[idx].z.zSOJOURN.dport);
 		}
 		printf(" size=\"%u\"/>\n", rbuf[idx].z.zSOJOURN.psize);
 		break;

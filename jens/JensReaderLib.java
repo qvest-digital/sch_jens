@@ -300,8 +300,11 @@ public final class JensReaderLib {
          * <li>{@link #dropped}</li>
          * <li>{@link #pktSize}</li>
          * <li>{@link #ipVer}</li>
+         * <li>{@link #nextHeader}</li>
          * <li>{@link AbstractJensActor#getSourceIP(Record)}</li>
          * <li>{@link AbstractJensActor#getDestinationIP(Record)}</li>
+         * <li>{@link #srcPort}</li>
+         * <li>{@link #dstPort}</li>
          * </ul>
          *
          * <p>Unknown:</p><ul>
@@ -442,6 +445,13 @@ public final class JensReaderLib {
             @UsedByJNI
             public @Positive(max = 6) int ipVer;
             /**
+             * <p>IP header field “next header” iff this is an IP packet.</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 255) int nextHeader;
+            /**
              * <p>Bare source IP address of the packet.</p>
              *
              * <p>Only valid if {@link #ipVer} is 4 or 6.</p>
@@ -459,6 +469,26 @@ public final class JensReaderLib {
              */
             @UsedByJNI
             private byte[] dstIP = new byte[16];
+            /**
+             * <p>Source port of the packet.</p>
+             *
+             * <p>Only valid if {@link #ipVer} is 4 or 6
+             * and {@link #nextHeader} is 6 or 17.</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 65535) int srcPort;
+            /**
+             * <p>Destination port of the packet.</p>
+             *
+             * <p>Only valid if {@link #ipVer} is 4 or 6
+             * and {@link #nextHeader} is 6 or 17.</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 65535) int dstPort;
 
             /* only valid for Unknown */
 

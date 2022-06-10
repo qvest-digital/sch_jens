@@ -161,12 +161,53 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	__u8 ecn = jens_get_ecn(skb) & INET_ECN_MASK;
 	struct tc_jens_relay r = {0};
 	struct jens_skb_cb *cb = get_jens_cb(skb);
+	unsigned char *hdrp;
+	unsigned char *endoflineardata = skb->data + skb_headlen(skb);
 
 	r.type = TC_JENS_RELAY_SOJOURN;
 	r.d32 = ldelay;
 	r.e16 = cb->chance;
 	r.f8 = cb->record_flag | flags | (ecn << 3);
+
 	/* addresses */
+	switch (skb->protocol) {
+	case htons(ETH_P_IP):
+		hdrp = (void *)ip_hdr(skb);
+		if ((hdrp + sizeof(struct iphdr)) > endoflineardata)
+			goto done_addresses;
+		ipv6_addr_set_v4mapped(ip_hdr(skb)->saddr, &r.xip);
+		ipv6_addr_set_v4mapped(ip_hdr(skb)->daddr, &r.yip);
+		r.z.zSOJOURN.ipver = 4;
+		r.z.zSOJOURN.nexthdr = ip_hdr(skb)->protocol;
+		hdrp += /*… dynamic, NOT sizeof(struct iphdr) */;
+/*XXX note fragmentation info */
+		break;
+	case htons(ETH_P_IPV6):
+		hdrp = (void *)ipv6_hdr(skb);
+		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata)
+			goto done_addresses;
+		memcpy(r.x8, ipv6_hdr(skb)->saddr.s6_addr, 16);
+		memcpy(r.y8, ipv6_hdr(skb)->daddr.s6_addr, 16);
+		r.z.zSOJOURN.ipver = 6;
+		r.z.zSOJOURN.nexthdr = ipv6_hdr(skb)->nexthdr;
+		hdrp += 40;
+		break;
+	default:
+		goto done_addresses;
+	}
+ try_nexthdr:
+	switch (r.z.zSOJOURN.nexthdr) {
+	case 6:
+
+
+
+ no_nexthdr:
+	r.z.zSOJOURN.nexthdr = 59;
+	goto done_addresses;
+
+
+
+
 	switch (skb->protocol) {
 	case cpu_to_be16(ETH_P_IP):
 		if (skb_network_header(skb) + sizeof(struct iphdr) >
@@ -220,6 +261,8 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		r.z.zSOJOURN.dport = 0;
 		break;
 	}
+
+ done_addresses:
 	/* subtracting skb->mac_len doesn’t make much sense (trailer) */
 	r.z.zSOJOURN.psize = skb->len;
 	jens_record_write(&r, q);

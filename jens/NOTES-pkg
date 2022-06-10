@@ -1,0 +1,246 @@
+The following are tcpdump hexdump snippets, further
+analysed: IPv4/IPv6 TCP/UDP/ICMP partially fragmented
+and with other options set on some packages to see how
+they encode “on the wire” ☻ These are dev notes.
+
+IPv4 TCP (SYN)
+  23:50:12.546349 IP (tos 0x0, ttl 64, id 63334, offset 0, flags [DF], proto TCP (6), length 60)
+    172.26.3.108.60692 > 0.1.2.3.1234: Flags [SEW], cksum 0xb1b8 (incorrect -> 0xa0f2), seq 2269258580, win 64240, options [mss 1460,sackOK,TS val 1389759103 ecr 0,nop,wscale 7], length 0
+‣ L=60 = 20(5*4)+40+0
+45 00 00 3c	v4 IHL=5 TC=00 len=003C(60dec)				(1)
+f7 66 40 00	ID=F766 F=010(DF) FragOfs=0				(2)
+40 06 91 cb	TTL=40 P=06(TCP) CS=91CB				(3)
+ac 1a 03 6c	srcip							(4)
+00 01 02 03	dstip							(5)
+ed 14 04 d2	TCP: src=ED14 dst=04D2(1234dec)			(1)	end of IPv4 header
+87 42 23 54	seqno						(2)
+00 00 00 00	ackno						(3)
+a0 c2 fa f0	dataofs=A(*4=40dec) + flags/winsz		(4)
+b1 b8 00 00	cs=B1B8 urgp=0000				(5)
+02 04 05 b4	TCP options: 02(MSS,04 bytes)=05B4(1460dec)	(6)
+04 02 08 0a	04(SACK,02 bytes) 08(timestamp,0A bytes)	(7)
+52 d6 0a 7f	still Option 8					(8)
+00 00 00 00	still Option 8					(9)
+01 03 03 07	01(pad) 03(window-scale, 03 bytes)=07		(A)
+		TCP-PAYLOAD here (0 octets)			dataofs
+
+IPv4 UDP
+  23:50:30.426672 IP (tos 0x0, ttl 64, id 41219, offset 0, flags [DF], proto UDP (17), length 29)
+    172.26.3.108.43542 > 0.1.2.3.1234: [bad udp cksum 0xb1a4 -> 0x4769!] UDP, length 1
+‣ L=29 = 20+9 = 20+8+1
+45 00 00 1d	v4 IHL=5 TC=00 len=001D(29dec)				(1)
+a1 03 40 00	ID=A103 F=010(DF) FragOfs=0				(2)
+40 11 e8 42	TTL=40 P=11(UDP) CS=E842				(3)
+ac 1a 03 6c	srcip							(4)
+00 01 02 03	dstip							(5)
+aa 16 04 d2	UDP: src=AA16 dst=04D2(1234dec)				end of IPv4 header
+00 09 b1 a4	len=0009 cs=B1A4
+58		UDP-PAYLOAD
+
+IPv6 TCP (SYN)
+  23:51:06.927062 IP6 (flowlabel 0xf1446, hlim 64, next-header TCP (6) payload length: 40) 2001:470:1f0b:76c::20.38010 > 2001::1.1234: Flags [SEW], cksum 0x9773 (correct), seq 1296692144, win 65320, options [mss 1420,sackOK,TS val 4042816130 ecr 0,nop,wscale 7], length 0
+‣ L=80 = 40(const)+40+0
+60 0f 14 46	v6 TC=00 flow=F1446
+00 28 06 40	len=0028(40dec) nh=06(TCP) ttl=40
+20 01 04 70	srcip
+1f 0b 07 6c	"
+00 00 00 00	"
+00 00 00 20	"
+20 01 00 00	dstip
+00 00 00 00	"
+00 00 00 00	"
+00 00 00 01	"
+94 7a 04 d2	TCP: src=947A dst=04D2				(1)
+4d 49 f3 b0	seqno						(2)
+00 00 00 00	ackno						(3)
+a0 c2 ff 28	dataofs=A					(4)
+97 73 00 00	cs urgp						(5)
+02 04 05 8c	TCP options: 02(MSS,04 bytes)=058C(1420dec)	(6)
+04 02 08 0a	04(SACK,02 bytes) 08(timestamp,0A bytes)	(7)
+f0 f8 7a 82	still Option 8					(8)
+00 00 00 00	still Option 8					(9)
+01 03 03 07	01(pad) 03(window-scale, 03 bytes)=07		(A)
+		TCP-PAYLOAD here (0 octets)			dataofs
+
+IPv6 UDP
+  23:51:11.131509 IP6 (flowlabel 0x24fe0, hlim 64, next-header UDP (17) payload length: 9) 2001:470:1f0b:76c::20.49479 > 2001::1.1234: [udp sum ok] UDP, length 1
+‣ L=49 = 40+9 = 40+8(udp)+1
+60 02 4f e0	v6 TC=00 flow=24FE0
+00 09 11 40	len=0009(9dec) nh=11(UDP) ttl=40
+20 01 04 70	srcip
+1f 0b 07 6c	"
+00 00 00 00	"
+00 00 00 20	"
+20 01 00 00	dstip
+00 00 00 00	"
+00 00 00 00	"
+00 00 00 01	"
+c1 47 04 d2	UDP: src=C147 dst=04D2
+00 09 76 b8	len=9 cs=76B8
+58		UDP-PAYLOAD
+
+IPv6 TCP fragmented: first packet
+  00:05:09.561085 IP6 (hlim 255, next-header Fragment (44) payload length: 392) 2001:470:1f0b:76c::20 > 2001::1: frag (0x4662473f:0|384) DSTOPT (padn) 40876 > 1234: Flags [.], seq 1338628695:1338629035, ack 830265069, win 12800, length 340
+‣ L=432 = 40+392 = 40(ipv6)+8(frag)+24(dst)+20(tcp)+340(tcp-payload)
+60 00 00 00	v6 TC=00 flow=00000
+01 88 2c ff	len=0188(392dec) nh=2C(fragment) ttl=FF
+20 01 04 70	srcip
+1f 0b 07 6c	"
+00 00 00 00	"
+00 00 00 20	"
+20 01 00 00	dstip
+00 00 00 00	"
+00 00 00 00	"
+00 00 00 01	"
+3c 00 00 01	frag: nh=3C(dstopts) ofs='0001 & FFF8'=0 M=1		fixed len=8 octets
+46 62 47 3f	id=4662473F
+06 02 01 14	dstopts: nh=06(TCP) xlen=02(8*(0x02+1)) + options+padding	(0')
+00 00 00 00	options+padding							(0.)
+00 00 00 00	options+padding							(1')
+00 00 00 00	options+padding							(1.)
+00 00 00 00	options+padding							(2')
+00 00 00 00	options+padding							(2.)
+9f ac 04 d2	TCP: src=9FAC dst=04D2		(1)				past xlen
+4f c9 da 57	seqno				(2)
+31 7c d6 ed	ackno				(3)
+50 10 32 00	dataofs=5 + flags/winsz		(4)
+52 6d 00 00	cs/urgp				(5)
+3d 42 b1 74	TCP-PAYLOAD			dataofs
+27 72 c6 17
+03 f0 2a 0c
+17 d3 0b 2b
+66 f5 ee 77
+15 63 b8 41
+3c 39 07 52
+9d 9c d9 2e
+85 d4 2c 39
+6d fe 3b 4b
+9b 84 4b 25
+e4 e1 93 6f
+27 d7 4d 74
+b0 cf 48 3b
+d8 cd 43 09
+a6 0a bb 36
+44 84 81 18
+f3f8 6424 1341 8a68 e064 912e ae5e ef1f
+4915 0702 246f 102e ef63 5126 bf06 260c
+b58a a31a dc3a ce57 16e1 ef5b 612a 5320
+c0e7 472d 30eb 023e 9f6c 0415 e759 0e45
+33db 2d4a b63f 1040 4d4f fd3c 493e e60b
+f278 1712 ebeb d66b ce12 1345 5f77 535d
+8670 2211 b3f4 a634 874e a151 3740 6b4c
+8bc2 ea3d 2d59 5c08 7bc4 ec64 7fbb 4f62
+409a e670 5b29 7e13 2d1a 3f02 89af ed72
+7f98 8e41 1d7e 9028 48b6 137f 3423 325c
+f9b8 5e00 5e97 035b 964d 857c b9a0 a62d
+8f82 0619 35ba 8911 a0fa b472 c25d 3463
+ebf9 9951 ee49 b22f 0b9c 1a6f dd72 b163
+d935 891b daae 2d34 3cea 0441 5fa6 ab2c
+8da3 d468 c338 a612 96e6 1679 1866 bf26
+f191 021b 11ab 035e 9721 0f09 312c e90b
+6dd4 8171 c53b 4e0b bbdb d67e ec6c 1033
+
+IPv6 TCP fragmented: second and last packet
+  00:05:09.561097 IP6 (hlim 255, next-header Fragment (44) payload length: 180) 2001:470:1f0b:76c::20 > 2001::1: frag (0x4662473f:384|172)
+‣ L=220 = 40+180 = 40+8(fraghdr)+172(tcp-payload)
+60 00 00 00	v6 TC=00 flow=00000
+00 b4 2c ff	len=00B4(180dec) nh=2C(fragment) ttl=FF
+20 01 04 70	srcip
+1f 0b 07 6c	"
+00 00 00 00	"
+00 00 00 20	"
+20 01 00 00	dstip
+00 00 00 00	"
+00 00 00 00	"
+00 00 00 01	"
+3c 00 01 80	frag: nh=3C(dstopts) ofs='0180 & FFF8'=180(384dec) M=0
+46 62 47 3f	id=4662473F
+e2 b9 de 33	PAYLOAD (because frag ofs > 0)
+03 92 ea 7d
+21 90 42 0f
+db 72 3d 34
+62 29 ee 58
+b7 dd c7 0b
+95 13 e4 61
+f1 ab f4 71
+ec 97 51 1d
+35 0e 99 54
+b3 09 29 55
+d7 91 eb 6e
+23 58 4b 04
+bf a5 43 44
+b4 04 9d 52
+fc 8d d4 1f
+99 54 71 78
+f0 ee a1 13
+5c 34 80 4c
+26 f8 45 61
+b427 4826 f21a 9745 3e5e 0508 a5b9 4a41
+04c6 9a23 d67f 1411 d6e5 334d 719a 1c15
+9bbb 621c 91c1 0a4c 5d07 2d48 7d75 4150
+9553 f549 7e97 6f57 58e8 7e04 f77c e322
+3575 3763 edfb 6266 e828 d814 210d 8900
+230a fc3a 9b32 016a f89e 746f
+
+⇒ frag: unique (srcip,dstip,id) within $time
+
+IPv4 (with options) ICMP
+  00:11:45.634118 IP (tos 0x0, ttl 64, id 61831, offset 0, flags [DF], proto ICMP (1), length 124, options (timestamp TS{TSONLY 79905634@ ^ 0@ 0@ 0@ 0@ 0@ 0@ 0@ 0@}))
+    172.26.3.108 > 0.1.2.3: ICMP echo request, id 59972, seq 1, length 64
+‣ L=124 = 60(0F*4)+64(8+56)
+4f 00 00 7c	v4 IHL=F TC=00 len=007C(124dec)			(1)
+f1 87 40 00	ID=F187 F=010(DF) FragOfs=0			(2)
+40 01 f8 21	TTL=40 P=01(ICMP) CS=F821			(3)
+ac 1a 03 6c	srcip						(4)
+00 01 02 03	dstip						(5)
+44 28 09 00	opt: 44(timestamp,len=28)			(6)
+04 c3 43 62	opt (still timestamp)				(7)
+00 00 00 00	opt (  "     "  )				(8)
+00 00 00 00	opt (  "     "  )				(9)
+00 00 00 00	opt (  "     "  )				(A)
+00 00 00 00	opt (  "     "  )				(B)
+00 00 00 00	opt (  "     "  )				(C)
+00 00 00 00	opt (  "     "  )				(D)
+00 00 00 00	opt (  "     "  )				(E)
+00 00 00 00	opt (last 4 bytes of timestamp option)		(F)
+08 00 93 67	ICMP type 08 code 00 (echo request) CS=9367	end of IPv4 header
+ea 44 00 01	ID=EA44 seq=0001
+21 70 a2 62	payload: struct timeval (16 bytes) + data (10111213…)
+00 00 00 00
+ee ac 09 00 00 00 00 00 10 11 12 13 14 15 16 17
+18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25 26 27
+28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35 36 37
+
+IPv4 ICMP fragmented, first packet
+  00:38:27.008253 IP (tos 0x0, ttl 64, id 44528, offset 0, flags [+], proto ICMP (1), length 1500)
+    172.26.3.108 > 0.1.2.3: ICMP echo request, id 5158, seq 1, length 1480
+‣ L=1500=20+1480(8+1472)
+45 00 05 dc	v4 IHL=5 TC=00 len=05DC(1500dec)			(1)
+ad f0 20 00	ID=ADF0 F=001(MF) FragOfs=0				(2)
+40 01 f5 a6	TTL=40 P=01(ICMP) CS=F5A6				(3)
+ac 1a 03 6c	srcip							(4)
+00 01 02 03	dstip							(5)
+08 00 af f7	ICMP type 08 code 00 (echo request) CS=AFF7		end of IPv4 header
+14 26 00 01	ID=1426 seq=0001
+63 76 a2 62	payload: struct timeval (16 bytes) + data (10111213…)
+        0x0020:  0000 0000 2220 0000 0000 0000 1011 1213  ...."...........
+[…]
+        0x05d0:  b4b5 b6b7 b8b9 babb bcbd bebf            ............
+
+IPv4 ICMP fragmented, second and last packet
+  00:38:27.008262 IP (tos 0x0, ttl 64, id 44528, offset 1480, flags [none], proto ICMP (1), length 548)
+    172.26.3.108 > 0.1.2.3: ip-proto-1
+‣ L=548=20+528<frag>
+45 00 02 24	v4 IHL=5 TC=00 len=0224(548dec)				(1)
+ad f0 00 b9	ID=ADF0 F=000 FragOfs=00B9(185 = 1480/8)		(2)
+40 01 18 a6	TTL=40 P=01(ICMP) CS=18A6				(3)
+ac 1a 03 6c	srcip							(4)
+00 01 02 03	dstip							(5)
+c0 c1 c2 c3	PAYLOAD!						end of IPv4 header
+c4 c5 c6 c7
+c8 c9 ca cb
+[…]
+        0x0220:  cccd cecf                                ....
+
+⇒ 1480(8+1472)+528<frag> = 8+2000 (ping -s2000)
+⇒ frag: unique (srcip,dstip,protocol,ID) within $time (MDL)

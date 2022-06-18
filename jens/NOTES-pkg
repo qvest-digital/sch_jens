@@ -182,7 +182,7 @@ b427 4826 f21a 9745 3e5e 0508 a5b9 4a41
 3575 3763 edfb 6266 e828 d814 210d 8900
 230a fc3a 9b32 016a f89e 746f
 
-⇒ frag: unique (srcip,dstip,id) within $time
+⇒ frag: unique (srcip,dstip,id) within 60s
 
 IPv4 (with options) ICMP
   00:11:45.634118 IP (tos 0x0, ttl 64, id 61831, offset 0, flags [DF], proto ICMP (1), length 124, options (timestamp TS{TSONLY 79905634@ ^ 0@ 0@ 0@ 0@ 0@ 0@ 0@ 0@}))
@@ -244,3 +244,14 @@ c8 c9 ca cb
 
 ⇒ 1480(8+1472)+528<frag> = 8+2000 (ping -s2000)
 ⇒ frag: unique (srcip,dstip,protocol,ID) within $time (MDL)
+⇒ however:
+
+“With IPv4 things are more complicated; an initial timeout of 15 seconds is
+suggested when the first fragment is received. The TTL field value of each
+subsequent fragment received is then used to reset the timer value, as long as
+it is higher than the current value. This allows for a gap of up to 4.25
+minutes between the receipt of fragments which is ridiculously high,
+particularly in modern networks (as noted in RFC 4963). Should the timer
+expire, all fragments are discarded. An ICMP error of type 11: ‘Time Exceeded,
+code 1: ‘fragment reassembly time exceeded’ should be sent to the source
+should this occur. If fragment zero is not available, no message is sent.”

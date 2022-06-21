@@ -12,6 +12,13 @@
  *  Copyright (C) 2012,2015 Eric Dumazet <edumazet@google.com>
  */
 
+#undef JENS_IP_DECODER_DEBUG
+#if 0
+#define JENS_IP_DECODER_DEBUG(...)	/* nothing */
+#else
+#define JENS_IP_DECODER_DEBUG(...)	printk(__VA_ARGS__)
+#endif
+
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -178,8 +185,12 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		struct iphdr *ih4 = ip_hdr(skb);
 
 		hdrp = (void *)ih4;
-		if ((hdrp + sizeof(struct iphdr)) > endoflineardata)
+		if ((hdrp + sizeof(struct iphdr)) > endoflineardata) {
+			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: IPv4 too short\n");
 			goto done_addresses;
+		}
+		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: IPv4 %08X->%08X proto %u frag %d\n",
+		    htonl(ih4->saddr), htonl(ih4->daddr), ih4->protocol, ip_is_fragment(ih4) ? 1 : 0);
 		ipv6_addr_set_v4mapped(ih4->saddr, &r.xip);
 		ipv6_addr_set_v4mapped(ih4->daddr, &r.yip);
 		r.z.zSOJOURN.ipver = 4;
@@ -205,8 +216,20 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		struct ipv6hdr *ih6 = ipv6_hdr(skb);
 
 		hdrp = (void *)ih6;
-		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata)
+		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata) {
+			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: IPv6 too short\n");
 			goto done_addresses;
+		}
+		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: IPv6 %02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X->%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X nexthdr %u\n",
+		    ih6->saddr.s6_addr[0], ih6->saddr.s6_addr[1], ih6->saddr.s6_addr[2], ih6->saddr.s6_addr[3],
+		    ih6->saddr.s6_addr[4], ih6->saddr.s6_addr[5], ih6->saddr.s6_addr[6], ih6->saddr.s6_addr[7],
+		    ih6->saddr.s6_addr[8], ih6->saddr.s6_addr[9], ih6->saddr.s6_addr[10], ih6->saddr.s6_addr[11],
+		    ih6->saddr.s6_addr[12], ih6->saddr.s6_addr[13], ih6->saddr.s6_addr[14], ih6->saddr.s6_addr[15],
+		    ih6->daddr.s6_addr[0], ih6->daddr.s6_addr[1], ih6->daddr.s6_addr[2], ih6->daddr.s6_addr[3],
+		    ih6->daddr.s6_addr[4], ih6->daddr.s6_addr[5], ih6->daddr.s6_addr[6], ih6->daddr.s6_addr[7],
+		    ih6->daddr.s6_addr[8], ih6->daddr.s6_addr[9], ih6->daddr.s6_addr[10], ih6->daddr.s6_addr[11],
+		    ih6->daddr.s6_addr[12], ih6->daddr.s6_addr[13], ih6->daddr.s6_addr[14], ih6->daddr.s6_addr[15],
+		    ih6->nexthdr);
 		memcpy(r.x8, ih6->saddr.s6_addr, 16);
 		memcpy(r.y8, ih6->daddr.s6_addr, 16);
 		r.z.zSOJOURN.ipver = 6;
@@ -215,6 +238,7 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		break;
 	    }
 	default:
+		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: unknown proto %X\n", (unsigned)skb->protocol);
 		goto done_addresses;
 	}
 	/* we end here only if the packet is IPv4 or IPv6 */
@@ -224,28 +248,35 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	case 6:		/* TCP */
 	case 17:	/* UDP */
 		/* both begin with src and dst ports in this order */
-		if ((hdrp + 4) > endoflineardata)
+		if ((hdrp + 4) > endoflineardata) {
+			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: %u too short\n", r.z.zSOJOURN.nexthdr);
 			goto no_ports;
+		}
 		r.z.zSOJOURN.sport = ((unsigned int)hdrp[0] << 8) | hdrp[1];
 		r.z.zSOJOURN.dport = ((unsigned int)hdrp[2] << 8) | hdrp[3];
 		break;
 	case 0:		/* IPv6 hop-by-hop options */
 	case 43:	/* IPv6 routing */
 	case 60:	/* IPv6 destination options */
-		if ((hdrp + 4) > endoflineardata)
+		if ((hdrp + 4) > endoflineardata) {
+			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: %u too short\n", r.z.zSOJOURN.nexthdr);
 			goto no_ports;
+		}
 		r.z.zSOJOURN.nexthdr = hdrp[0];
 		hdrp += ((unsigned int)hdrp[1] + 1) * 8;
 		goto try_nexthdr;
 	case 44: {	/* IPv6 fragment */
 		__u16 fo;
 
-		if ((hdrp + 8) > endoflineardata)
+		if ((hdrp + 8) > endoflineardata) {
+			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: %u too short\n", r.z.zSOJOURN.nexthdr);
 			goto no_ports;
+		}
 		/* update failure cause */
 		noportinfo = 44;
 		/* first fragment? */
 		fo = (((unsigned int)hdrp[2] << 8) | hdrp[3]) & 0xFFF8U;
+		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: frag, ofs %u, nexthdr %u\n", fo, hdrp[0]);
 		if (fo) {
 			/* nope */
 			/*XXX cached frag info tbd (60s lifetime) */
@@ -258,20 +289,28 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		goto try_nexthdr;
 	    }
 	case 51:	/* IPsec AH */
-		if ((hdrp + 4) > endoflineardata)
+		if ((hdrp + 4) > endoflineardata) {
+			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: %u too short\n", r.z.zSOJOURN.nexthdr);
 			goto no_ports;
+		}
 		r.z.zSOJOURN.nexthdr = hdrp[0];
 		hdrp += ((unsigned int)hdrp[1] + 2) * 4;
 		goto try_nexthdr;
 	case 135:	/* Mobile IP */
 	case 139:	/* Host Identity Protocol v2 */
 	case 140:	/* SHIM6: Site Multihoming by IPv6 Intermediation */
-		if ((hdrp + 4) > endoflineardata || hdrp[0] == 59)
+		if ((hdrp + 4) > endoflineardata) {
+			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: %u too short\n", r.z.zSOJOURN.nexthdr);
+			goto done_addresses;
+		}
+		/* this kind of extension header has no payload normally */
+		if (hdrp[0] == 59)
 			goto done_addresses;
 		r.z.zSOJOURN.nexthdr = hdrp[0];
 		hdrp += ((unsigned int)hdrp[1] + 1) * 8;
 		goto try_nexthdr;
 	default:	/* any other L4 protocol, unknown extension headers */
+		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: unknown exthdr %u\n", r.z.zSOJOURN.nexthdr);
 		break;
 	}
 	/* we end here if either nexthdr is TCP/UDP and ports are filled in */

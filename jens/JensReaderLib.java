@@ -445,7 +445,15 @@ public final class JensReaderLib {
             @UsedByJNI
             public @Positive(max = 6) int ipVer;
             /**
-             * <p>IP header field “next header” iff this is an IP packet.</p>
+             * <p>IP header field “next header” (Legacy IP “protocol”).</p>
+             *
+             * <p>Values are these taken from an IP fixed or extension
+             * header; additionally, it can be either 44 if the protocol
+             * could not be determined due to packet fragmentation, or 59
+             * when other reasons prevent determining it (note 59 is also
+             * valid for some IPv6 packets).</p>
+             *
+             * <p>Only valid if {@link #ipVer} is 4 or 6.</p>
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */

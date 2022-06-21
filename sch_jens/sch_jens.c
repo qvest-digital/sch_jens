@@ -30,6 +30,7 @@
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
 #include "jens_uapi.h"
+#include <net/ip.h>
 #include <net/inet_ecn.h>
 #include <net/pkt_cls.h>
 #include "jens_codel.h"
@@ -163,6 +164,8 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	struct jens_skb_cb *cb = get_jens_cb(skb);
 	unsigned char *hdrp;
 	unsigned char *endoflineardata = skb->data + skb_headlen(skb);
+	/* normally: the nexthdr for IPv6’s no payload marker */
+	__u8 noportinfo = 59;
 
 	r.type = TC_JENS_RELAY_SOJOURN;
 	r.d32 = ldelay;
@@ -171,98 +174,116 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 
 	/* addresses */
 	switch (skb->protocol) {
-	case htons(ETH_P_IP):
-		hdrp = (void *)ip_hdr(skb);
+	case htons(ETH_P_IP): {
+		struct iphdr *ih4 = ip_hdr(skb);
+
+		hdrp = (void *)ih4;
 		if ((hdrp + sizeof(struct iphdr)) > endoflineardata)
 			goto done_addresses;
-		ipv6_addr_set_v4mapped(ip_hdr(skb)->saddr, &r.xip);
-		ipv6_addr_set_v4mapped(ip_hdr(skb)->daddr, &r.yip);
+		ipv6_addr_set_v4mapped(ih4->saddr, &r.xip);
+		ipv6_addr_set_v4mapped(ih4->daddr, &r.yip);
 		r.z.zSOJOURN.ipver = 4;
-		r.z.zSOJOURN.nexthdr = ip_hdr(skb)->protocol;
-		hdrp += /*… dynamic, NOT sizeof(struct iphdr) */;
-/*XXX note fragmentation info */
+		r.z.zSOJOURN.nexthdr = ih4->protocol;
+		hdrp += ih4->ihl * 4;
+		/* Legacy IP fragmentation */
+		if (ip_is_fragment(ih4)) {
+			/* use nexthdr from IPv6 frag header as indicator */
+			noportinfo = 44;
+			if ((ih4->frag_off & htons(IP_OFFSET)) != 0) {
+				/* higher fragment */
+				/*XXX cached frag info tbd */
+				/* no cached frag info exists */
+				goto no_ports;
+			}
+			/* first fragment */
+			/*XXX note info for other packets */
+			/* fall through to unfragmented packet handler */
+		}
 		break;
-	case htons(ETH_P_IPV6):
-		hdrp = (void *)ipv6_hdr(skb);
+	    }
+	case htons(ETH_P_IPV6): {
+		struct ipv6hdr *ih6 = ipv6_hdr(skb);
+
+		hdrp = (void *)ih6;
 		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata)
 			goto done_addresses;
-		memcpy(r.x8, ipv6_hdr(skb)->saddr.s6_addr, 16);
-		memcpy(r.y8, ipv6_hdr(skb)->daddr.s6_addr, 16);
+		memcpy(r.x8, ih6->saddr.s6_addr, 16);
+		memcpy(r.y8, ih6->daddr.s6_addr, 16);
 		r.z.zSOJOURN.ipver = 6;
-		r.z.zSOJOURN.nexthdr = ipv6_hdr(skb)->nexthdr;
+		r.z.zSOJOURN.nexthdr = ih6->nexthdr;
 		hdrp += 40;
 		break;
+	    }
 	default:
 		goto done_addresses;
 	}
+	/* we end here only if the packet is IPv4 or IPv6 */
+
  try_nexthdr:
 	switch (r.z.zSOJOURN.nexthdr) {
-	case 6:
-
-
-
- no_nexthdr:
-	r.z.zSOJOURN.nexthdr = 59;
-	goto done_addresses;
-
-
-
-
-	switch (skb->protocol) {
-	case cpu_to_be16(ETH_P_IP):
-		if (skb_network_header(skb) + sizeof(struct iphdr) >
-		    skb_tail_pointer(skb))
-			goto noaddress;
-		ipv6_addr_set_v4mapped(ip_hdr(skb)->saddr, &r.xip);
-		ipv6_addr_set_v4mapped(ip_hdr(skb)->daddr, &r.yip);
-		r.z.zSOJOURN.ipver = 4;
-		r.z.zSOJOURN.nexthdr = ip_hdr(skb)->protocol;
-		goto have_nexthdr;
-		/* NOTREACHED */
-	case cpu_to_be16(ETH_P_IPV6):
-		if (skb_network_header(skb) + sizeof(struct ipv6hdr) >
-		    skb_tail_pointer(skb))
-			goto noaddress;
-		memcpy(r.x8, ipv6_hdr(skb)->saddr.s6_addr, 16);
-		memcpy(r.y8, ipv6_hdr(skb)->daddr.s6_addr, 16);
-		r.z.zSOJOURN.ipver = 6;
-		r.z.zSOJOURN.nexthdr = ipv6_hdr(skb)->nexthdr;
- have_nexthdr:
-		switch (r.z.zSOJOURN.nexthdr) {
-		case /* TCP */ 6:
-			if (skb_transport_header(skb) + sizeof(struct tcphdr) >
-			    skb_tail_pointer(skb))
-				goto no_nexthdr;
-			r.z.zSOJOURN.sport = ntohs(tcp_hdr(skb)->source);
-			r.z.zSOJOURN.dport = ntohs(tcp_hdr(skb)->dest);
-			break;
-		case /* UDP */ 17:
-			if (skb_transport_header(skb) + sizeof(struct udphdr) >
-			    skb_tail_pointer(skb))
-				goto no_nexthdr;
-			r.z.zSOJOURN.sport = ntohs(udp_hdr(skb)->source);
-			r.z.zSOJOURN.dport = ntohs(udp_hdr(skb)->dest);
-			break;
-		default:
-			if (0) {
- no_nexthdr:
-				r.z.zSOJOURN.nexthdr = 59;
-			}
-			r.z.zSOJOURN.sport = 0;
-			r.z.zSOJOURN.dport = 0;
-			break;
-		}
+	case 6:		/* TCP */
+	case 17:	/* UDP */
+		/* both begin with src and dst ports in this order */
+		if ((hdrp + 4) > endoflineardata)
+			goto no_ports;
+		r.z.zSOJOURN.sport = ((unsigned int)hdrp[0] << 8) | hdrp[1];
+		r.z.zSOJOURN.dport = ((unsigned int)hdrp[2] << 8) | hdrp[3];
 		break;
-	default:
- noaddress:
-		r.z.zSOJOURN.ipver = 0;
-		r.z.zSOJOURN.nexthdr = 0;
-		r.z.zSOJOURN.sport = 0;
-		r.z.zSOJOURN.dport = 0;
+	case 0:		/* IPv6 hop-by-hop options */
+	case 43:	/* IPv6 routing */
+	case 60:	/* IPv6 destination options */
+		if ((hdrp + 4) > endoflineardata)
+			goto no_ports;
+		r.z.zSOJOURN.nexthdr = hdrp[0];
+		hdrp += ((unsigned int)hdrp[1] + 1) * 8;
+		goto try_nexthdr;
+	case 44: {	/* IPv6 fragment */
+		__u16 fo;
+
+		if ((hdrp + 8) > endoflineardata)
+			goto no_ports;
+		/* update failure cause */
+		noportinfo = 44;
+		/* first fragment? */
+		fo = (((unsigned int)hdrp[2] << 8) | hdrp[3]) & 0xFFF8U;
+		if (fo) {
+			/* nope */
+			/*XXX cached frag info tbd (60s lifetime) */
+			/* no cached frag info exists */
+			goto no_ports;
+		}
+		/*XXX note info for other packets */
+		r.z.zSOJOURN.nexthdr = hdrp[0];
+		hdrp += 8;
+		goto try_nexthdr;
+	    }
+	case 51:	/* IPsec AH */
+		if ((hdrp + 4) > endoflineardata)
+			goto no_ports;
+		r.z.zSOJOURN.nexthdr = hdrp[0];
+		hdrp += ((unsigned int)hdrp[1] + 2) * 4;
+		goto try_nexthdr;
+	case 135:	/* Mobile IP */
+	case 139:	/* Host Identity Protocol v2 */
+	case 140:	/* SHIM6: Site Multihoming by IPv6 Intermediation */
+		if ((hdrp + 4) > endoflineardata || hdrp[0] == 59)
+			goto done_addresses;
+		r.z.zSOJOURN.nexthdr = hdrp[0];
+		hdrp += ((unsigned int)hdrp[1] + 1) * 8;
+		goto try_nexthdr;
+	default:	/* any other L4 protocol, unknown extension headers */
 		break;
 	}
+	/* we end here if either nexthdr is TCP/UDP and ports are filled in */
+	/* or if nexthdr is anything else valid, ports are normally 0 then */
+	goto done_addresses;
 
+ no_ports:
+	/* we end here if the packet buffer does not contain enough info */
+	r.z.zSOJOURN.nexthdr = noportinfo;
  done_addresses:
+	/*XXX record frag info if present */
+
 	/* subtracting skb->mac_len doesn’t make much sense (trailer) */
 	r.z.zSOJOURN.psize = skb->len;
 	jens_record_write(&r, q);

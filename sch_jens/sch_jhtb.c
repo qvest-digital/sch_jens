@@ -1277,7 +1277,8 @@ static void htb_destroy_class(struct Qdisc *sch, struct htb_class *cl)
     (!defined(JENS_LINUX_4_19_SL) || (JENS_LINUX_4_19_SL < 221))
 		qdisc_destroy(cl->leaf.q);
 #else
-		qdisc_put(cl->leaf.q);
+		if (cl->leaf.q)
+			qdisc_put(cl->leaf.q);
 #endif
 	}
 	gen_kill_estimator(&cl->rate_est);
@@ -1593,7 +1594,8 @@ static int htb_change_class(struct Qdisc *sch, u32 classid,
     (!defined(JENS_LINUX_4_19_SL) || (JENS_LINUX_4_19_SL < 221))
 	qdisc_destroy(parent_qdisc);
 #else
-	qdisc_put(parent_qdisc);
+	if (parent_qdisc)
+		qdisc_put(parent_qdisc);
 #endif
 
 	if (warn)

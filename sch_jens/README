@@ -3,7 +3,8 @@ JENS Linux kernel modules
 
 These modules are intended to be used with Debian 10 “buster”,
 either stock Linux kernel 4.19 or backports kernel 5.10, or
-with Debian 11 “bullseye”, stock Linux kernel 5.10.
+with Debian 11 “bullseye”, stock Linux kernel 5.10. Newer Linux
+kernels up to about 5.18 should also work.
 
 
 sch_jens Linux kernel module

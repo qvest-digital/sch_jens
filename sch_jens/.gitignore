@@ -1,5 +1,6 @@
 *.i
 *.ko
+*.mod
 *.mod.c
 *.o
 *.s

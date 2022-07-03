@@ -8,8 +8,15 @@ iproute2 (5.10.0-4~jens+10) tarent; urgency=medium
   * check for strerrordesc_np to allow building with latest glibc
   * fix warnings from newer GCC
   * revert reporting flow ID
+  * sch_jens reporting: for IPv4/IPv6 packets also report the nextheader
+    (protocol) and if it’s TCP or UDP, their port numbers; this bumps the
+    TC_JENS_RELAY_SOJOURN revision number (together with flow ID removal)
+    ‣ fragmented packets are not yet supported
+  * fix small issues in the LKM wrapper Makefile
+  * work around *another* “stable” kernel bug (cf. #1013299)
+  * add kernel < 5.1 bug wrt. locally originated packets documentation
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Sat, 04 Jun 2022 20:37:50 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Sun, 03 Jul 2022 20:19:02 +0200
 
 iproute2 (5.10.0-4~jens+9) tarent; urgency=medium
 

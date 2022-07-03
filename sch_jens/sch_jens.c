@@ -13,7 +13,7 @@
  */
 
 #undef JENS_IP_DECODER_DEBUG
-#if 0
+#if 1
 #define JENS_IP_DECODER_DEBUG(...)	/* nothing */
 #else
 #define JENS_IP_DECODER_DEBUG(...)	printk(__VA_ARGS__)

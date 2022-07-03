@@ -1,5 +1,5 @@
 # GNUmakefile for the sch_jens/sch_jhtb Linux kernel modules
-# © 2021 mirabilos <t.glaser@tarent.de>, for Deutsche Telekom
+# © 2021, 2022 mirabilos <t.glaser@tarent.de>, for Deutsche Telekom
 # Licence: GPLv2, same as the Linux kernel
 
 # from jupp packaging in Debian
@@ -22,13 +22,13 @@ all:
 
 versions:
 	@b='[1m'; n='[0m'; ov=$(call shellescape,${gmf_kernelversion}); \
-	 cd /lib/modules && for v in [4-9].*/; do \
-		if test x"$${v%/}" = x"$$ov"; then \
+	 cd /lib/modules && for v in [4-9].*/build/; do \
+		if test x"$${v%/build/}" = x"$$ov"; then \
 			i=$$n$$b; \
 		else \
 			i=$$n; \
 		fi; \
-		echo "$${i}make gmf_kernelversion=$${v%/}$${n}"; \
+		echo "$${i}make gmf_kernelversion=$${v%/build/}$${n}"; \
 	done
 
 clean:

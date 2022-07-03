@@ -1077,6 +1077,10 @@ static int __init fq_codel_module_init(void)
 {
 	int rv;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 1, 0)
+	printk(KERN_WARNING "sch_jens: kernel too old: will misfunction for locally originating packets, see README\n");
+#endif
+
 	if (!(jens_debugfs_main = debugfs_create_dir("sch_jens", NULL)))
 		rv = -ENOSYS;
 	else

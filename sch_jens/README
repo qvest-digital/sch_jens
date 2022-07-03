@@ -7,6 +7,16 @@ with Debian 11 “bullseye”, stock Linux kernel 5.10. Newer Linux
 kernels up to about 5.18 should also work.
 
 
+Linux kernel version-specific notes
+───────────────────────────────────
+
+Kernel versions before 5.1 have a bug in which packets that
+originate on the JENS system itself (as opposed to incoming
+from the network) show up not as IPv4/IPv6 but as ETH_P_ALL
+packets which both makes categorisation into flows and port
+reporting impossible (they will just report as “not IP”).
+
+
 sch_jens Linux kernel module
 ────────────────────────────
 

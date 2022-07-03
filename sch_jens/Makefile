@@ -33,7 +33,7 @@ versions:
 
 clean:
 	${gmf_mk} clean
-	-rm -f .show-hz
+	-rm -rf .show-hz .tmp_versions
 
 install:
 	${gmf_mk} modules_install

@@ -11,12 +11,12 @@ iproute2 (5.10.0-4~jens+10) tarent; urgency=medium
   * sch_jens reporting: for IPv4/IPv6 packets also report the nextheader
     (protocol) and if it’s TCP or UDP, their port numbers; this bumps the
     TC_JENS_RELAY_SOJOURN revision number (together with flow ID removal)
-    ‣ fragmented packets are not yet supported
+    ‣ fragmented packets are not yet supported except the first fragment
   * fix small issues in the LKM wrapper Makefile
   * work around *another* “stable” kernel bug (cf. #1013299)
   * add kernel < 5.1 bug wrt. locally originated packets documentation
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 04 Jul 2022 16:36:51 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 04 Jul 2022 17:10:24 +0200
 
 iproute2 (5.10.0-4~jens+9) tarent; urgency=medium
 

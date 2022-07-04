@@ -238,7 +238,7 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		break;
 	    }
 	default:
-		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: unknown proto %X\n", (unsigned)skb->protocol);
+		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: unknown proto htons(0x%04X)\n", (unsigned)ntohs(skb->protocol));
 		goto done_addresses;
 	}
 	/* we end here only if the packet is IPv4 or IPv6 */

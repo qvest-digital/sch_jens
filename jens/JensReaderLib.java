@@ -451,7 +451,9 @@ public final class JensReaderLib {
              * header; additionally, it can be either 44 if the protocol
              * could not be determined due to packet fragmentation, or 59
              * when other reasons prevent determining it (note 59 is also
-             * valid for some IPv6 packets).</p>
+             * valid for some IPv6 packets). See also: <a
+             * href="https://en.wikipedia.org/wiki/List_of_IP_protocol_numbers">List
+             * of IP protocol numbers</a></p>
              *
              * <p>Only valid if {@link #ipVer} is 4 or 6.</p>
              *

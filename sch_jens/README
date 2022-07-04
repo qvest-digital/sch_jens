@@ -152,6 +152,14 @@ IP addresses are formatted as 16 byte IPv6 address straight from the IP
 header; Legacy IP addresses are formatted as v4-mapped IPv6, i.e. the
 last four octets contain a raw in_addr.
 
+For TC_JENS_RELAY_SOJOURN the nexthdr field can be 44 if the packet is
+fragmented and therefore the port info cannot be obtained, 59 if the info
+cannot be obtained for another reason (these numbers correspond to the
+respective IPv6 extension header for these purposes and we use them for
+IPv4 as well, to signal this). Note 59 is also valid for IPv6 packets that
+do not have any payload. 6 is TCP, 17 is UDP, 58/1 are ICMP; for more, see:
+https://en.wikipedia.org/wiki/List_of_IP_protocol_numbers
+
 
 sch_jhtb Linux kernel module
 ────────────────────────────

@@ -16,7 +16,7 @@ iproute2 (5.10.0-4~jens+10) tarent; urgency=medium
   * work around *another* “stable” kernel bug (cf. #1013299)
   * add kernel < 5.1 bug wrt. locally originated packets documentation
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Sun, 03 Jul 2022 20:19:02 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 04 Jul 2022 16:36:51 +0200
 
 iproute2 (5.10.0-4~jens+9) tarent; urgency=medium
 

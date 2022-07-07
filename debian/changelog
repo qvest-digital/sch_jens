@@ -1,3 +1,9 @@
+iproute2 (5.10.0-4jens10) tarent; urgency=medium
+
+  * Rebuild in bullseye
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 07 Jul 2022 20:34:58 +0200
+
 iproute2 (5.10.0-4~jens+10) tarent; urgency=medium
 
   * jhtb: drop option “Hysteresis mode, less CPU load, less accurate”

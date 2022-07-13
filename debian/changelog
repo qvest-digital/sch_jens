@@ -1,3 +1,9 @@
+iproute2 (5.10.0-4jens11) tarent; urgency=medium
+
+  * Cache fragment information for IP packets
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 13 Jul 2022 23:15:40 +0200
+
 iproute2 (5.10.0-4jens10) tarent; urgency=medium
 
   * Rebuild in bullseye

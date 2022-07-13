@@ -44,6 +44,33 @@
 #include "jens_codel_qdisc.h"
 #include "jens_codel_impl.h"
 
+struct jens_fragcomp {
+	__u8 sip[16];
+	__u8 dip[16];
+	__u32 idp;
+	__u8 v;
+} __attribute__((__packed__));
+
+struct jens_fragcache {
+	struct jens_fragcomp c;
+	__u8 nexthdr;
+	__u8 _pad[2];
+	codel_time_t ts;
+	__u16 sport;
+	__u16 dport;
+	struct jens_fragcache *next;
+};
+
+/* compile-time assertion */
+struct jens_fragcache_check {
+	int cmp[sizeof(struct jens_fragcomp) == 37 ? 1 : -1];
+	int cac[sizeof(struct jens_fragcache) == (48 + sizeof(void *)) ? 1 : -1];
+	int tot[sizeof(struct jens_fragcache) <= 64 ? 1 : -1];
+	int xip[sizeof_field(struct tc_jens_relay, xip) == 16 ? 1 : -1];
+	int x_y[offsetof(struct tc_jens_relay, yip) ==
+	    (offsetof(struct tc_jens_relay, xip) + 16) ? 1 : -1];
+};
+
 /*	Fair Queue CoDel.
  *
  * Principles :
@@ -86,6 +113,13 @@ struct jens_sched_data {
 
 	struct list_head new_flows;	/* list of new flows */
 	struct list_head old_flows;	/* list of old flows */
+
+	struct jens_fragcache *fragcache_used;
+	struct jens_fragcache *fragcache_last; /* last used element */
+	struct jens_fragcache *fragcache_free;
+	struct jens_fragcache *fragcache_base;
+	u32 fragcache_num;
+	codel_time_t fragcache_aged;
 
 	spinlock_t	record_lock;	/* for record_chan */
 #define QSZ_INTERVAL ((u64)5000000)	/* 5 ms in ns */
@@ -163,6 +197,45 @@ static inline void maybe_record_queuesz(struct Qdisc *sch, struct jens_sched_dat
 	jens_record_queuesz(sch, q);
 }
 
+static void jens_fragcache_maint(struct jens_sched_data *q)
+{
+	codel_time_t old;
+	struct jens_fragcache *lastnew;
+	struct jens_fragcache *firstold;
+	struct jens_fragcache *lastold;
+
+	if (!q->fragcache_used)
+		return;
+
+	old = codel_get_time() - MS2TIME(60000);
+
+	if (!codel_time_before(q->fragcache_aged, old))
+		return;
+
+	if (codel_time_before(q->fragcache_used->ts, old)) {
+		q->fragcache_last->next = q->fragcache_free;
+		q->fragcache_free = q->fragcache_used;
+		q->fragcache_used = NULL;
+		q->fragcache_last = NULL;
+		return;
+	}
+
+	lastnew = q->fragcache_used;
+	while (lastnew->next && !codel_time_before(lastnew->next->ts, old))
+		lastnew = lastnew->next;
+	q->fragcache_aged = lastnew->ts;
+	if (!lastnew->next) {
+		/* shouldn’t happen, but… */
+		return;
+	}
+	firstold = lastnew->next;
+	lastold = q->fragcache_last;
+	lastnew->next = NULL;
+	q->fragcache_last = lastnew;
+	lastold->next = q->fragcache_free;
+	q->fragcache_free = firstold;
+}
+
 static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
     struct jens_sched_data *q, codel_time_t ldelay, __u8 flags)
 {
@@ -173,6 +246,8 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	unsigned char *endoflineardata = skb->data + skb_headlen(skb);
 	/* normally: the nexthdr for IPv6’s no payload marker */
 	__u8 noportinfo = 59;
+	int fragoff = -1;
+	struct jens_fragcomp fc;
 
 	r.type = TC_JENS_RELAY_SOJOURN;
 	r.d32 = ldelay;
@@ -200,14 +275,16 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		if (ip_is_fragment(ih4)) {
 			/* use nexthdr from IPv6 frag header as indicator */
 			noportinfo = 44;
-			if ((ih4->frag_off & htons(IP_OFFSET)) != 0) {
+			/* fragment information */
+			memcpy(fc.sip, &r.xip, 32);
+			fc.idp = ((__u32)ih4->protocol << 24) | ih4->id;
+			fc.v = 4;
+			if ((fragoff = ntohs(ih4->frag_off) & IP_OFFSET) != 0) {
 				/* higher fragment */
 				/*XXX cached frag info tbd */
-				/* no cached frag info exists */
-				goto no_ports;
+				goto higher_fragment;
 			}
 			/* first fragment */
-			/*XXX note info for other packets */
 			/* fall through to unfragmented packet handler */
 		}
 		break;
@@ -265,29 +342,27 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		r.z.zSOJOURN.nexthdr = hdrp[0];
 		hdrp += ((unsigned int)hdrp[1] + 1) * 8;
 		goto try_nexthdr;
-	case 44: {	/* IPv6 fragment */
-		__u16 fo;
-
+	case 44:	/* IPv6 fragment */
 		if ((hdrp + 8) > endoflineardata) {
 			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: %u too short\n", r.z.zSOJOURN.nexthdr);
 			goto no_ports;
 		}
+		memcpy(fc.sip, &r.xip, 32);
+		memcpy(&fc.idp, hdrp + 4, 4);
+		fc.v = 6;
 		/* update failure cause */
 		noportinfo = 44;
 		/* first fragment? */
-		fo = (((unsigned int)hdrp[2] << 8) | hdrp[3]) & 0xFFF8U;
-		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: frag, ofs %u, nexthdr %u\n", fo, hdrp[0]);
-		if (fo) {
+		fragoff = (((unsigned int)hdrp[2] << 8) | hdrp[3]) & 0xFFF8U;
+		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: frag, ofs %u, nexthdr %u\n", fragoff, hdrp[0]);
+		if (fragoff) {
 			/* nope */
 			/*XXX cached frag info tbd (60s lifetime) */
-			/* no cached frag info exists */
-			goto no_ports;
+			goto higher_fragment;
 		}
-		/*XXX note info for other packets */
 		r.z.zSOJOURN.nexthdr = hdrp[0];
 		hdrp += 8;
 		goto try_nexthdr;
-	    }
 	case 51:	/* IPsec AH */
 		if ((hdrp + 4) > endoflineardata) {
 			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: %u too short\n", r.z.zSOJOURN.nexthdr);
@@ -317,12 +392,46 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	/* or if nexthdr is anything else valid, ports are normally 0 then */
 	goto done_addresses;
 
+ higher_fragment:
+
  no_ports:
 	/* we end here if the packet buffer does not contain enough info */
 	r.z.zSOJOURN.nexthdr = noportinfo;
+	goto no_fragrecord;
  done_addresses:
-	/*XXX record frag info if present */
+	if (fragoff != -1) {
+		struct jens_fragcache *fe;
 
+		jens_fragcache_maint(q);
+		/* record for later packets */
+
+		if (unlikely(q->fragcache_free == NULL)) {
+			net_warn_ratelimited("sch_jens: no free fragment cache, please raise count\n");
+			/* reuse last one */
+			fe = q->fragcache_used;
+			while (fe->next->next != NULL)
+				fe = fe->next;
+			q->fragcache_last = fe;
+			q->fragcache_aged = fe->ts;
+			fe = fe->next;
+			q->fragcache_last->next = NULL;
+		} else {
+			fe = q->fragcache_free;
+			q->fragcache_free = fe->next;
+		}
+		memcpy(&(fe->c), &fc, sizeof(struct jens_fragcomp));
+		fe->nexthdr = r.z.zSOJOURN.nexthdr;
+		fe->ts = cb->enqueue_time;
+		fe->sport = r.z.zSOJOURN.sport;
+		fe->dport = r.z.zSOJOURN.dport;
+		fe->next = q->fragcache_used;
+		if (unlikely(!fe->next)) {
+			q->fragcache_last = fe;
+			q->fragcache_aged = fe->ts;
+		}
+		q->fragcache_used = fe;
+	}
+ no_fragrecord:
 	/* subtracting skb->mac_len doesn’t make much sense (trailer) */
 	r.z.zSOJOURN.psize = skb->len;
 	jens_record_write(&r, q);
@@ -665,6 +774,7 @@ static const struct nla_policy fq_codel_policy[TCA_JENS_MAX + 1] = {
 	[TCA_JENS_MEMORY_LIMIT] = { .type = NLA_U32 },
 	[TCA_JENS_SUBBUFS]	= { .type = NLA_U32 },
 	[TCA_JENS_NOUSEPORT]	= { .type = NLA_FLAG },
+	[TCA_JENS_FRAGCACHE]	= { .type = NLA_U32 },
 };
 
 static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
@@ -696,6 +806,15 @@ static int fq_codel_change(struct Qdisc *sch, struct nlattr *opt,
 		if (q->cparams.subbufs == 1)
 			/* use suitable default value */
 			q->cparams.subbufs = 1024;
+	}
+
+	if (tb[TCA_JENS_FRAGCACHE]) {
+		/* only at load time */
+		if (q->flows)
+			return (-EINVAL);
+		q->fragcache_num = nla_get_u32(tb[TCA_JENS_FRAGCACHE]);
+		if (q->fragcache_num < 16 || q->fragcache_num > 0x00FFFFFF)
+			q->fragcache_num = 1024;
 	}
 
 	if (tb[TCA_JENS_FLOWS]) {
@@ -779,6 +898,7 @@ static void fq_codel_destroy(struct Qdisc *sch)
 	if (q->record_chan)
 		relay_close(q->record_chan);
 	tcf_block_put(q->block);
+	kvfree(q->fragcache_base);
 	kvfree(q->backlogs);
 	kvfree(q->flows);
 }
@@ -791,6 +911,7 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	int err;
 
 	sch->limit = 10*1024;
+	q->fragcache_num = 1024;
 	q->flows_cnt = 1024;
 	q->memory_limit = 32 << 20; /* 32 MBytes */
 	q->drop_batch_size = 64;
@@ -843,12 +964,25 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 			err = -ENOMEM;
 			goto alloc_failure;
 		}
+		q->fragcache_base = kvcalloc(q->fragcache_num,
+		    sizeof(struct jens_fragcache), GFP_KERNEL);
+		if (!q->fragcache_base) {
+			err = -ENOMEM;
+			goto alloc_failure;
+		}
 		for (i = 0; i < q->flows_cnt; i++) {
 			struct fq_codel_flow *flow = q->flows + i;
 
 			INIT_LIST_HEAD(&flow->flowchain);
 			codel_vars_init(&flow->cvars);
 		}
+		q->fragcache_used = NULL;
+		q->fragcache_last = NULL;
+		q->fragcache_free = &(q->fragcache_base[0]);
+		for (i = 1; i < q->fragcache_num; ++i)
+			q->fragcache_base[i - 1].next = &(q->fragcache_base[i]);
+		q->fragcache_base[q->fragcache_num - 1].next = NULL;
+		q->fragcache_aged = 0;
 	}
 	if (sch->limit >= 1)
 		sch->flags |= TCQ_F_CAN_BYPASS;
@@ -859,6 +993,8 @@ static int fq_codel_init(struct Qdisc *sch, struct nlattr *opt,
 	return 0;
 
 alloc_failure:
+	kvfree(q->backlogs);
+	q->backlogs = NULL;
 	kvfree(q->flows);
 	q->flows = NULL;
 init_failure:
@@ -901,6 +1037,8 @@ static int fq_codel_dump(struct Qdisc *sch, struct sk_buff *skb)
 			q->drop_batch_size) ||
 	    nla_put_u32(skb, TCA_JENS_SUBBUFS,
 			q->cparams.subbufs) ||
+	    nla_put_u32(skb, TCA_JENS_FRAGCACHE,
+			q->fragcache_num) ||
 	    nla_put_u32(skb, TCA_JENS_MEMORY_LIMIT,
 			q->memory_limit) ||
 	    nla_put_u32(skb, TCA_JENS_FLOWS,

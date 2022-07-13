@@ -56,7 +56,7 @@ static void explain(void)
 		"	[ limit PACKETS ] [ memory_limit BYTES ] [ drop_batch SIZE ]"
 		"\n\t	[ flows NUMBER ] [ quantum BYTES ] [ interval TIME ]"
 		"\n\t	[ target TIME ] [ markfree TIME ] [ markfull TIME ]"
-		"\n\t	[ subbufs NUMBER ] [ nouseport ]"
+		"\n\t	[ subbufs NUMBER ] [ nouseport ] [ fragcache NUMBER ]"
 		"\n");
 }
 
@@ -70,6 +70,7 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	unsigned int markfree = ~0U;
 	unsigned int markfull = ~0U;
 	unsigned int subbufs = ~0U;
+	unsigned int fragcache = ~0U;
 	unsigned int interval = 0;
 	unsigned int quantum = 0;
 	unsigned int memory = ~0U;
@@ -125,6 +126,12 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 				fprintf(stderr, "Illegal \"subbufs\"\n");
 				return -1;
 			}
+		} else if (strcmp(*argv, "fragcache") == 0) {
+			NEXT_ARG();
+			if (get_unsigned(&fragcache, *argv, 0)) {
+				fprintf(stderr, "Illegal \"fragcache\"\n");
+				return -1;
+			}
 		} else if (strcmp(*argv, "memory_limit") == 0) {
 			NEXT_ARG();
 			if (get_size(&memory, *argv)) {
@@ -169,6 +176,8 @@ static int jens_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		addattr_l(n, 1024, TCA_JENS_MARKFULL, &markfull, sizeof(markfull));
 	if (subbufs != ~0U)
 		addattr_l(n, 1024, TCA_JENS_SUBBUFS, &subbufs, sizeof(subbufs));
+	if (fragcache != ~0U)
+		addattr_l(n, 1024, TCA_JENS_FRAGCACHE, &fragcache, sizeof(fragcache));
 	if (memory != ~0U)
 		addattr_l(n, 1024, TCA_JENS_MEMORY_LIMIT,
 			  &memory, sizeof(memory));
@@ -189,6 +198,7 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	unsigned int markfree;
 	unsigned int markfull;
 	unsigned int subbufs;
+	unsigned int fragcache;
 	unsigned int quantum;
 	unsigned int memory_limit;
 	unsigned int drop_batch;
@@ -260,6 +270,11 @@ static int jens_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	    RTA_PAYLOAD(tb[TCA_JENS_SUBBUFS]) >= sizeof(__u32)) {
 		subbufs = rta_getattr_u32(tb[TCA_JENS_SUBBUFS]);
 		print_uint(PRINT_ANY, "subbufs", "subbufs %u ", subbufs);
+	}
+	if (tb[TCA_JENS_FRAGCACHE] &&
+	    RTA_PAYLOAD(tb[TCA_JENS_FRAGCACHE]) >= sizeof(__u32)) {
+		fragcache = rta_getattr_u32(tb[TCA_JENS_FRAGCACHE]);
+		print_uint(PRINT_ANY, "fragcache", "fragcache %u ", fragcache);
 	}
 	if (tb[TCA_JENS_NOUSEPORT]) {
 		print_bool(PRINT_ANY, "nouseport", "nouseport ", true);

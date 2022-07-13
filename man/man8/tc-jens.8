@@ -1,7 +1,7 @@
 .\" part of sch_jens (fork of sch_fq_codel), Deutsche Telekom LLCTO
 .\"-
 .if \n(.g .hlm 0
-.Dd February 9, 2022
+.Dd July 13, 2022
 .Dt TC\-JENS 8
 .Os Linux
 .Sh NAME
@@ -21,6 +21,7 @@
 .Op Ic markfull Ar TIME
 .Op Ic subbufs Ar NUMBER
 .Op Ic nouseport
+.Op Ic fragcache Ar NUMBER
 .Sh DESCRIPTION
 JENS is a network limitation simulator used in an Adaptive Managed Latency
 scenario to aid in developing aware applications.
@@ -196,6 +197,9 @@ Omit both source and destination port number from the hash for
 queue classification.
 This can be used to simulate a single, multiplexed, RAN connection
 for all connections between each same pair of hosts.
+.It Ic fragcache
+sets the size of the IP packet fragment cache, in 64-byte structs.
+Default: 1024
 .El
 .Sh STATISTICS
 Currently the same as in

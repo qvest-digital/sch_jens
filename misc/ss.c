@@ -865,6 +865,7 @@ struct tcpstat {
 	bool		    app_limited;
 	struct dctcpstat    *dctcp;
 	struct tcp_bbr_info *bbr_info;
+	unsigned int	    bbr_info_len;
 };
 
 /* SCTP assocs share the same inode number with their parent endpoint. So if we
@@ -2496,6 +2497,29 @@ static void sctp_stats_print(struct sctp_info *s)
 		out(" fraginl:%d", s->sctpi_s_frag_interleave);
 }
 
+static const char* bbr_phase_to_str(enum tcp_bbr_phase phase)
+{
+	switch (phase) {
+	case BBR_PHASE_STARTUP:
+		return "STARTUP";
+	case BBR_PHASE_DRAIN:
+		return "DRAIN";
+	case BBR_PHASE_PROBE_RTT:
+		return "PROBE_RTT";
+	case BBR_PHASE_PROBE_BW_UP:
+		return "PROBE_BW_UP";
+	case BBR_PHASE_PROBE_BW_DOWN:
+		return "PROBE_BW_DOWN";
+	case BBR_PHASE_PROBE_BW_CRUISE:
+		return "PROBE_BW_CRUISE";
+	case BBR_PHASE_PROBE_BW_REFILL:
+		return "PROBE_BW_REFILL";
+	case BBR_PHASE_INVALID:
+	default:
+		return "INVALID";
+	}
+}
+
 static void tcp_stats_print(struct tcpstat *s)
 {
 	char b1[64];
@@ -2569,7 +2593,14 @@ static void tcp_stats_print(struct tcpstat *s)
 	}
 
 	if (s->bbr_info) {
-		__u64 bw;
+		/* All versions of the BBR algorithm use the INET_DIAG_BBRINFO
+		 * enum value. Later versions of the tcp_bbr_info struct are
+		 * backward-compatible with earlier versions, to allow older ss
+		 * binaries to print basic information for newer versions of
+		 * the algorithm. We use the size of the returned tcp_bbr_info
+		 * struct to decide how much to print.
+		 */
+		__u64 bw, bw_hi, bw_lo;
 
 		bw = s->bbr_info->bbr_bw_hi;
 		bw <<= 32;
@@ -2584,6 +2615,38 @@ static void tcp_stats_print(struct tcpstat *s)
 		if (s->bbr_info->bbr_cwnd_gain)
 			out(",cwnd_gain:%g",
 			    (double)s->bbr_info->bbr_cwnd_gain / 256.0);
+
+		if (s->bbr_info_len >=
+		    (offsetof(struct tcp_bbr_info, bbr_extra_acked) +
+		     sizeof(__u32))) {
+
+			bw_hi = s->bbr_info->bbr_bw_hi_msb;
+			bw_hi <<= 32;
+			bw_hi |= s->bbr_info->bbr_bw_hi_lsb;
+
+			bw_lo = s->bbr_info->bbr_bw_lo_msb;
+			bw_lo <<= 32;
+			bw_lo |= s->bbr_info->bbr_bw_lo_lsb;
+
+			out(",version:%u", s->bbr_info->bbr_version);
+			if (bw_hi != ~0UL)
+				out(",bw_hi:%sbps", sprint_bw(b1, bw_hi * 8.0));
+			if (bw_lo != ~0UL)
+				out(",bw_lo:%sbps", sprint_bw(b1, bw_lo * 8.0));
+			if (s->bbr_info->bbr_inflight_hi != ~0U)
+				out(",inflight_hi:%u",
+				    s->bbr_info->bbr_inflight_hi);
+			if (s->bbr_info->bbr_inflight_lo != ~0U)
+				out(",inflight_lo:%u",
+				    s->bbr_info->bbr_inflight_lo);
+			out(",extra_acked:%u", s->bbr_info->bbr_extra_acked);
+			out(",mode:%d", (int)s->bbr_info->bbr_mode);
+			out(",phase:%s",
+			    bbr_phase_to_str(
+				    (enum tcp_bbr_phase)
+				    s->bbr_info->bbr_phase));
+		}
+
 		out(")");
 	}
 
@@ -3048,6 +3111,7 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
 			s.bbr_info = calloc(1, sizeof(*s.bbr_info));
 			if (s.bbr_info && bbr_info)
 				memcpy(s.bbr_info, bbr_info, len);
+			s.bbr_info_len = len;
 		}
 
 		if (rtt > 0 && info->tcpi_snd_mss && info->tcpi_snd_cwnd) {

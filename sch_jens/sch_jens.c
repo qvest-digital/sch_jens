@@ -262,7 +262,7 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		hdrp = (void *)ih4;
 		if ((hdrp + sizeof(struct iphdr)) > endoflineardata) {
 			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: IPv4 too short\n");
-			goto done_addresses;
+			goto no_fragrecord;
 		}
 		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: IPv4 %08X->%08X proto %u frag %d\n",
 		    htonl(ih4->saddr), htonl(ih4->daddr), ih4->protocol, ip_is_fragment(ih4) ? 1 : 0);
@@ -277,11 +277,11 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 			noportinfo = 44;
 			/* fragment information */
 			memcpy(fc.sip, &r.xip, 32);
-			fc.idp = ((__u32)ih4->protocol << 24) | ih4->id;
+			fc.idp = ((__u32)ih4->protocol << 24) | ((__u32)ih4->id & 0xFFFFU);
 			fc.v = 4;
 			if ((fragoff = ntohs(ih4->frag_off) & IP_OFFSET) != 0) {
 				/* higher fragment */
-				/*XXX cached frag info tbd */
+				/* use cached fragments info */
 				goto higher_fragment;
 			}
 			/* first fragment */
@@ -295,7 +295,7 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		hdrp = (void *)ih6;
 		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata) {
 			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: IPv6 too short\n");
-			goto done_addresses;
+			goto no_fragrecord;
 		}
 		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: IPv6 %02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X->%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X nexthdr %u\n",
 		    ih6->saddr.s6_addr[0], ih6->saddr.s6_addr[1], ih6->saddr.s6_addr[2], ih6->saddr.s6_addr[3],
@@ -316,7 +316,7 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	    }
 	default:
 		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: unknown proto htons(0x%04X)\n", (unsigned)ntohs(skb->protocol));
-		goto done_addresses;
+		goto no_fragrecord;
 	}
 	/* we end here only if the packet is IPv4 or IPv6 */
 
@@ -347,6 +347,10 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: %u too short\n", r.z.zSOJOURN.nexthdr);
 			goto no_ports;
 		}
+		if (fragoff != -1) {
+			JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: two fragment headers\n");
+			goto no_ports;
+		}
 		memcpy(fc.sip, &r.xip, 32);
 		memcpy(&fc.idp, hdrp + 4, 4);
 		fc.v = 6;
@@ -357,7 +361,6 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 		JENS_IP_DECODER_DEBUG(KERN_DEBUG "sch_jens: frag, ofs %u, nexthdr %u\n", fragoff, hdrp[0]);
 		if (fragoff) {
 			/* nope */
-			/*XXX cached frag info tbd (60s lifetime) */
 			goto higher_fragment;
 		}
 		r.z.zSOJOURN.nexthdr = hdrp[0];
@@ -392,7 +395,24 @@ static void jens_record_packet(struct sk_buff *skb, struct Qdisc *sch,
 	/* or if nexthdr is anything else valid, ports are normally 0 then */
 	goto done_addresses;
 
- higher_fragment:
+ higher_fragment: {
+	struct jens_fragcache *fe;
+
+	jens_fragcache_maint(q);
+	fe = q->fragcache_used;
+	while (fe) {
+		if (!memcmp(&fc, &(fe->c), sizeof(struct jens_fragcomp)))
+			goto fragment_found;
+		fe = fe->next;
+	}
+	goto no_ports;
+
+ fragment_found:
+	r.z.zSOJOURN.nexthdr = fe->nexthdr;
+	r.z.zSOJOURN.sport = fe->sport;
+	r.z.zSOJOURN.dport = fe->dport;
+	goto no_fragrecord;
+    }
 
  no_ports:
 	/* we end here if the packet buffer does not contain enough info */

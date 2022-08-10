@@ -73,3 +73,8 @@ Description: E/// PoC-imitating scheduler for JENS
  sch_jhtb is a fork of sch_htb, with extra functionality. It allows
  simulating a RAN handover, i.e. stopping network traffic for a time.
  This is still up to later changes and extensions.
+ .
+ sch_janz is an experimental bespoke qdisc combining the functionality
+ of jhtb (bandwidth limiting, handover) and jens (ECN marking) in one
+ qdisc without the FQ_CoDel algorithm. It uses an algorithm very close
+ to the default pfifo_fast qdisc as backing.

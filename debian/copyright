@@ -37,6 +37,7 @@ Copyright: 1996-2001 Alexey Kuznetsov <kuznet@ms2.inr.ac.ru>
 License: GPL-2
 
 Files: jens/*
+       man/man8/tc-janz.8
 Copyright: 2021, 2022 mirabilos <t.glaser@tarent.de>
            2021, 2022 Deutsche Telekom LLCTO
 License: MirBSD
@@ -48,6 +49,12 @@ Copyright: 2021 mirabilos <t.glaser@tarent.de>
            bert hubert <ahu@ds9a.nl>
 License: GPL-2
 Comment: (for sch_jhtb.c) v2 or later
+
+Files: sch_jens/sch_janz.c
+       tc/q_janz.c
+Copyright: 2022 mirabilos <t.glaser@tarent.de>
+           2022 Deutsche Telekom LLCTO
+License: GPL-2
 
 Files: sch_jens/*
        man/man8/tc-jens.8

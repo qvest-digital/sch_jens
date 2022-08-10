@@ -1,0 +1,104 @@
+.\" Copyright © 2022 mirabilos <t.glaser@tarent.de>
+.\" Licensor: Deutsche Telekom LLCTO
+.\"
+.\" Provided that these terms and disclaimer and all copyright notices
+.\" are retained or reproduced in an accompanying document, permission
+.\" is granted to deal in this work without restriction, including un‐
+.\" limited rights to use, publicly perform, distribute, sell, modify,
+.\" merge, give away, or sublicence.
+.\"
+.\" This work is provided “AS IS” and WITHOUT WARRANTY of any kind, to
+.\" the utmost extent permitted by applicable law, neither express nor
+.\" implied; without malicious intent or gross negligence. In no event
+.\" may a licensor, author or contributor be held liable for indirect,
+.\" direct, other damage, loss, or other issues arising in any way out
+.\" of dealing in the work, even if advised of the possibility of such
+.\" damage or existence of a defect, except proven that it results out
+.\" of said person’s immediate fault when using the work as intended.
+.\"-
+.if \n(.g .hlm 0
+.Dd August 10, 2022
+.Dt TC\-JANZ 8
+.Os Linux
+.Sh NAME
+.Nm tc\-janz
+.Nd bespoke E/// PoC-like traffic scheduler
+.Sh SYNOPSIS
+.Nm tc
+.Ic qdisc ...\& Nm janz
+.Op Ic limit Ar PACKETS
+.Op Ic rate Ar RATE
+.Op Ic handover Ar TIME
+.Op Ic markfree Ar TIME
+.Op Ic markfull Ar TIME
+.Op Ic subbufs Ar NUMBER
+.Op Ic fragcache Ar NUMBER
+.Sh DESCRIPTION
+JENS is a network limitation simulator used in an
+.Pq L4S or similar
+.No AML Pq Adaptive Managed Latency
+scenario to aid in developing latency- and bandwidth-aware applications.
+The
+.Nm janz
+scheduler is a bespoke Linux kernel module developed as part of JENS
+.Pq by Deutsche Telekom LLCTO
+that provides ECN CE
+.Pq Dq congestion experienced
+marking on ECN-enabled traffic flows using marking algorithms resembling
+the real-life PoC scenario as closely as possible as well as takes care
+of traffic shaping (limitation of bandwidth) by packet pacing.
+.Pp
+.Pq further documentation tbd
+.Sh PARAMETERS
+.Bl -tag -width XX
+.It Ic limit
+is a hard limit on the real queue size.
+When this limit is reached, packets are dropped.
+Default: 10240\ packets
+.It Ic rate
+is the bandwidth outgoing packets are limited to.
+Default: 10\ Mbit/s
+.It Ic handover
+stops traffic for the specified amount of time.
+.It Ic markfree
+is the maximum queue delay packets are allowed to sojourn in the queue
+without the extra ECN CE marking done for JENS.
+Default: 4\ ms
+.It Ic markfull
+is the minimum queue delay at which packets will be marked (see above)
+with 100% probability.
+Default: 14\ ms
+.It Ic subbufs
+enables debugfs functionality, for use with
+.Nm jensdmp
+or its Java\(rg wrapper.
+Set this to 0 to disable the functionality, any other value to enable it;
+1 will use a suitable default amount of subbuffers (currently 1024),
+any other value is used as number of subbuffers (containing 256 records,
+each sized 64 bytes, that is, 16\ KiB per subbuffer).
+This parameter can only be set at load time because memory has to be allocated.
+Default: 0
+.It Ic fragcache
+sets the size of the IP packet fragment cache, in 64-byte structs.
+Default: 1024
+.El
+.Sh STATISTICS
+This qdisc reports extensively via relayfs over debugfs; therefore, regular
+.Xr tc 8
+statistics are not provided beyond the bare minimum.
+.Sh EXAMPLES
+tbd
+.Sh SEE ALSO
+.Xr tc 8 ,
+.Xr tc-jens 8 ,
+.Xr tc-jhtb 8
+.Pp
+.Pa /usr/share/doc/sch\-jens\-dkms/README.gz
+.Pp
+.Pa /usr/share/doc/iproute2/examples/JensReaderDemo.java
+.Sh AUTHORS
+.An mirabilos Aq t.glaser@tarent.de
+for Deutsche Telekom LLCTO
+.Sh CAVEATS
+This qdisc is only supported as the root egress qdisc on a device.
+It is highly experimental.

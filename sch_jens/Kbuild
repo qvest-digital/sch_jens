@@ -3,7 +3,7 @@ ifeq (1,$(strip ${SHOW_HZ_HACK}))
 obj-m := SHOW_HZ.o
 ccflags-y += -save-temps=obj
 else
-obj-m := sch_jens.o sch_jhtb.o
+obj-m := sch_janz.o sch_jens.o sch_jhtb.o
 #ccflags-y += -fverbose-asm -save-temps=obj
 endif
 

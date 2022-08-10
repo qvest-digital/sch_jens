@@ -12,6 +12,7 @@ Upgrading
 
 After upgrading the packages, the old kernel modules must be unloaded:
 
+$ sudo rmmod sch_janz
 $ sudo rmmod sch_jens
 $ sudo rmmod sch_jhtb
 

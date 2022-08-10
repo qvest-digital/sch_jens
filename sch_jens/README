@@ -17,6 +17,12 @@ packets which both makes categorisation into flows and port
 reporting impossible (they will just report as “not IP”).
 
 
+sch_janz Linux kernel module
+────────────────────────────
+
+This is an experimental new qdisc, JENS bespoke. Docs tbd…
+
+
 sch_jens Linux kernel module
 ────────────────────────────
 

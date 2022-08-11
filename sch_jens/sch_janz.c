@@ -106,6 +106,7 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 		return (skb);
 	if (!(q->q[qid].first = skb->next))
 		q->q[qid].last = NULL;
+	--sch->q.qlen;
 	skb->next = NULL;
 
 	q->notbefore = (q->crediting ? q->notbefore : now) +

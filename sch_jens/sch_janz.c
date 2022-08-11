@@ -108,6 +108,8 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 		q->q[qid].last = NULL;
 	--sch->q.qlen;
 	skb->next = NULL;
+	qdisc_qstats_backlog_dec(sch, skb);
+	qdisc_bstats_update(sch, skb);
 
 	q->notbefore = (q->crediting ? q->notbefore : now) +
 	    (q->ns_pro_byte * (u64)skb->len);

@@ -182,6 +182,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	struct janz_skb *cb = get_janz_skb(skb);
 	u8 qid;
 	u32 prev_backlog = sch->qstats.backlog;
+	bool overlimit;
 
 	cb->enq_ts = codel_get_time();
 	cb->tosbyte = janz_get_iptos(skb);
@@ -196,6 +197,8 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?"))
 		skb->next = NULL;
 
+	if (unlikely(overlimit = (++sch->q.qlen >= sch->limit)))
+		janz_drop_headroom(sch, q);
 	if (!q->q[qid].first) {
 		q->q[qid].first = skb;
 		q->q[qid].last = skb;
@@ -203,16 +206,15 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		q->q[qid].last->next = skb;
 		q->q[qid].last = skb;
 	}
-	++sch->q.qlen;
 	qdisc_qstats_backlog_inc(sch, skb);
 
-	if (likely(sch->q.qlen < sch->limit))
-		return (NET_XMIT_SUCCESS);
-
-	/* overlimit */
-	janz_drop_headroom(sch, q);
-	qdisc_tree_reduce_backlog(sch, 0, prev_backlog - sch->qstats.backlog);
-	return (NET_XMIT_CN);
+	if (unlikely(overlimit)) {
+		qdisc_qstats_overlimit(sch);
+		qdisc_tree_reduce_backlog(sch, 0,
+		    prev_backlog - sch->qstats.backlog);
+		return (NET_XMIT_CN);
+	}
+	return (NET_XMIT_SUCCESS);
 }
 
 static struct sk_buff *
@@ -251,6 +253,7 @@ janz_reset(struct Qdisc *sch)
 	q->q[1].first = NULL; q->q[1].last = NULL;
 	q->q[2].first = NULL; q->q[2].last = NULL;
 	sch->qstats.backlog = 0;
+	sch->qstats.overlimits = 0;
 	q->notbefore = 0;
 	q->crediting = 0;
 	//XXX qsz_next

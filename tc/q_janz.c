@@ -137,7 +137,7 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	if (tb[TCA_JANZ_RATE64] &&
 	    RTA_PAYLOAD(tb[TCA_JANZ_RATE64]) >= sizeof(rate64)) {
 		rate64 = rta_getattr_u64(tb[TCA_JANZ_RATE64]);
-		print_string(PRINT_FP, NULL, " rate %s",
+		print_string(PRINT_FP, NULL, "rate %s ",
 		    sprint_rate(rate64, b1));
 		print_lluint(PRINT_JSON, "rate", NULL, rate64);
 	}

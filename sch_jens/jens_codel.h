@@ -63,11 +63,14 @@ typedef s32 codel_tdiff_t;
 #define CODEL_SHIFT TC_JENS_TIMESHIFT
 #define MS2TIME(a) ((a * NSEC_PER_MSEC) >> CODEL_SHIFT)
 
+static inline codel_time_t codel_mktime(u64 ns)
+{
+	return ns >> CODEL_SHIFT;
+}
+
 static inline codel_time_t codel_get_time(void)
 {
-	u64 ns = ktime_get_ns();
-
-	return ns >> CODEL_SHIFT;
+	return codel_mktime(ktime_get_ns());
 }
 
 /* Dealing with timer wrapping, according to RFC 1982, as desc in wikipedia:

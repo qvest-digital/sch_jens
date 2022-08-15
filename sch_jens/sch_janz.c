@@ -284,13 +284,8 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (!opt)
 		return (-EINVAL);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0)
-	err = nla_parse_nested(tb, TCA_JANZ_MAX, opt, janz_nla_policy, extack);
-#else
-	err = nla_parse_nested_deprecated(tb, TCA_JANZ_MAX, opt,
-	    janz_nla_policy, extack);
-#endif
-	if (err < 0)
+	if ((err = nla_parse_nested_deprecated(tb, TCA_JANZ_MAX, opt,
+	    janz_nla_policy, extack)) < 0)
 		return (err);
 
 	/* anything that can throw first */

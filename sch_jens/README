@@ -138,7 +138,7 @@ Record types define the following data members:
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 • TC_JENS_RELAY_QUEUESZ:
-  – d32 memory usage (bytes)
+  – d32 memory usage (bytes), sch_jens-only
   – e16 queue length (packets), capped at 0xFFFF
 
 • TC_JENS_RELAY_PADDING: none; shouldn’t occur but ignore silently

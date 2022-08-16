@@ -188,7 +188,7 @@ enum {
 	TC_JENS_RELAY_OLDVER4,
 
 	/* report length of queue periodically */
-	/* d32 = memory usage in bytes (sch_jens-only) */
+	/* d32 = memory usage in bytes */
 	/* e16 = amount of packets in FIFO, 0xFFFF if more */
 	TC_JENS_RELAY_QUEUESZ,
 

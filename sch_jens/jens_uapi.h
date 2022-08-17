@@ -22,6 +22,13 @@ enum {
 
 #define TCA_JANZ_MAX	(__TCA_JANZ_MAX - 1)
 
+/*
+ * sch_janz also uses from below:
+ * - TC_JENS_TIMESHIFT
+ * - struct tc_jens_relay
+ *   and related enum/constants, TC_JENS_RELAY_*
+ */
+
 /* JHTB */
 #define TC_JHTB_NUMPRIO		8
 #define TC_JHTB_MAXDEPTH	8

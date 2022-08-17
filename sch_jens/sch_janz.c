@@ -31,10 +31,11 @@
 #include <net/ipv6.h>
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
-#include "jens_uapi.h"
 #include <net/ip.h>
 #include <net/inet_ecn.h>
 #include <net/pkt_cls.h>
+
+#include "jens_uapi.h"
 
 typedef u32 jens1024_time;
 

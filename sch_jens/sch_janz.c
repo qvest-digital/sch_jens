@@ -322,9 +322,8 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 		c *= 65535;
 		/* for rounding */
 		c += (tmax / 2);
-		do_div(c, tmax);
-		/* c is in [0; 65535] now */
-		cb->chance = c;
+		/* result [0; 65535] */
+		cb->chance = div_u64(c, tmax);
 
 		/*
 		 * we want to mark with (t' / tmax' * 100)% probability

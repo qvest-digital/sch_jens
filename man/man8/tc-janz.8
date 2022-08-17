@@ -17,7 +17,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd August 10, 2022
+.Dd August 17, 2022
 .Dt TC\-JANZ 8
 .Os Linux
 .Sh NAME
@@ -72,14 +72,15 @@ Default: 14\ ms
 enables debugfs functionality, for use with
 .Nm jensdmp
 or its Java\(rg wrapper.
-Set this to 0 to disable the functionality, any other value to enable it;
-1 will use a suitable default amount of subbuffers (currently 1024),
+Setting this to 1 will use a suitable default amount of subbuffers
+.Pq currently 1024 ;
 any other value is used as number of subbuffers (containing 256 records,
 each sized 64 bytes, that is, 16\ KiB per subbuffer).
 This parameter can only be set at load time because memory has to be allocated.
-Default: 0
+Default: 1
 .It Ic fragcache
 sets the size of the IP packet fragment cache, in 64-byte structs.
+This parameter can only be set at load time because memory has to be allocated.
 Default: 1024
 .El
 .Sh STATISTICS

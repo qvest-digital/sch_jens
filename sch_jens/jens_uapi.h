@@ -178,14 +178,14 @@ enum {
 	/* invalid (0), not initialised */
 	TC_JENS_RELAY_INVALID = 0,
 
-	TC_JENS_RELAY_OLDVER1,
-	TC_JENS_RELAY_OLDVER2,
-	TC_JENS_RELAY_OLDVER3,
+	__TC_JENS_RELAY_OLDVER1,
+	__TC_JENS_RELAY_OLDVER2,
+	__TC_JENS_RELAY_OLDVER3,
 
 	/* initialised but skip as subbuffer padding */
 	TC_JENS_RELAY_PADDING,
 
-	TC_JENS_RELAY_OLDVER4,
+	__TC_JENS_RELAY_OLDVER4,
 
 	/* report length of queue periodically */
 	/* d32 = memory usage in bytes */
@@ -216,7 +216,7 @@ enum {
 #define TC_JENS_RELAY_SOJOURN_PCTDIV ((double)65535)
 
 /* flags in f8 */
-#define TC_JENS_RELAY_SOJOURN_SLOW (1U << 5)	/* target not reached */
+#define TC_JENS_RELAY_SOJOURN_SLOW (1U << 5)	/* target not reached (sch_jens only) */
 #define TC_JENS_RELAY_SOJOURN_MARK (1U << 6)	/* markfree..markfull */
 #define TC_JENS_RELAY_SOJOURN_DROP (1U << 7)	/* packet was dropped */
 

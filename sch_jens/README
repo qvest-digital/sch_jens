@@ -118,7 +118,7 @@ Record types define the following data members:
     ‣ 0:1 ECN bits on enqueue
     ‣   2 ECN bits are valid (0 if they could not be determined)
     ‣ 3:4 ECN bits on dequeue
-    ‣   5 if ECN marked from not reaching target within interval
+    ‣   5 if ECN marked from not reaching target within interval (sch_jens)
           (TC_JENS_RELAY_SOJOURN_SLOW), even set if not ECN packet
     ‣   6 if ECN marked from markfree/markfull range
           (TC_JENS_RELAY_SOJOURN_MARK), even set if not ECN packet
@@ -126,8 +126,8 @@ Record types define the following data members:
   – x8 source IP, if any
   – y8 destination IP, if any
   – z struct
-    ‣ __u32 psize (raw packet size, including Layer 2 framing,
-	e.g. 802.11 WLAN, or Ethernet header and trailer)
+    ‣ __u32 psize (raw packet size, including partial Layer 2 framing,
+	e.g. 802.11 WLAN, or Ethernet header (though not trailer))
     ‣ __u8 ipver (4 = IPv4; 6 = IPv6; 0 = other and x8/y8 are invalid)
     ‣ __u8 nexthdr (iff ipver; 6 = TCP / 17 = UDP, else {s,d}port invalid)
     ‣ __u16 sport (source port, for TCP or UDP)

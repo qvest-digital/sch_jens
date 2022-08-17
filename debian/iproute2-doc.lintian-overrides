@@ -1,5 +1,5 @@
 # right but actually correct for a private package
 iproute2-doc: bugs-field-does-not-refer-to-debian-infrastructure
 
-# inherited issues from the Debian buster-backports package
+# inherited issues from the Debian bullseye package
 iproute2-doc: conflicts-with-version

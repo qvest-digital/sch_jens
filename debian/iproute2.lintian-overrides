@@ -12,7 +12,7 @@ iproute2: typo-in-manual-page usr/share/man/man8/tc-flow.8.gz iif if
 # right but actually correct for a private package
 iproute2: bugs-field-does-not-refer-to-debian-infrastructure
 
-# inherited issues from the Debian buster-backports package
+# inherited issues from the Debian bullseye package
 iproute2: acute-accent-in-manual-page
 iproute2: conflicts-with-version
 iproute2: spelling-error-in-binary sbin/tc correllation correlation

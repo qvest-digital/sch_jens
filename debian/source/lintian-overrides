@@ -8,6 +8,6 @@ iproute2 source: no-homepage-field
 # DEP 5 is not suitable for this package
 iproute2 source: no-dep5-copyright
 
-# inherited issues from the Debian buster-backports package
+# inherited issues from the Debian bullseye package
 iproute2 source: orig-tarball-missing-upstream-signature
 iproute2 source: upstream-metadata-missing-bug-tracking

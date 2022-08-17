@@ -100,7 +100,7 @@ version:
 		> include/version.h
 
 clean:
-	@for i in $(SUBDIRS) testsuite sch_jens; \
+	@for i in $(SUBDIRS) testsuite; \
 	do $(MAKE) -C $$i clean; done
 
 clobber:

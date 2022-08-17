@@ -1,10 +1,9 @@
 JENS Linux kernel modules
 ═════════════════════════
 
-These modules are intended to be used with Debian 10 “buster”,
-either stock Linux kernel 4.19 or backports kernel 5.10, or
-with Debian 11 “bullseye”, stock Linux kernel 5.10. Newer Linux
-kernels up to about 5.18 should also work.
+These modules are intended to be used with Debian 11 “bullseye”,
+with the stock Linux kernel 5.10. Newer Linux kernels up to
+about 5.18 should also work.
 
 
 Linux kernel version-specific notes
@@ -20,7 +19,21 @@ reporting impossible (they will just report as “not IP”).
 sch_janz Linux kernel module
 ────────────────────────────
 
-This is an experimental new qdisc, JENS bespoke. Docs tbd…
+This is a new qdisc, JENS bespoke. It sorts traffic into one
+out of three FIFOs dependeing on their iptos (like the default
+Linux qdisc does) and lets them leave paced on the configured
+rate (bandwidth limit); ECN marking according to markfree and
+markfull is applied as in the sch_jens qdisc described below.
+
+See the tc-janz(8) manpage for details.
+
+“Live measurement”, as described below, applies as well, with
+the following differences:
+• TC_JENS_RELAY_SOJOURN_SLOW is currently not produced and
+  considered reserved, a later reassignment is possible
+• relayfs use cannot be disabled
+
+This module will obsolete the other two once production ready.
 
 
 sch_jens Linux kernel module
@@ -138,7 +151,7 @@ Record types define the following data members:
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 • TC_JENS_RELAY_QUEUESZ:
-  – d32 memory usage (bytes)
+  – d32 memory usage (bytes), including Linux structural overhead
   – e16 queue length (packets), capped at 0xFFFF
 
 • TC_JENS_RELAY_PADDING: none; shouldn’t occur but ignore silently

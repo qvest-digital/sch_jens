@@ -40,15 +40,44 @@ JENS is a network limitation simulator used in an
 scenario to aid in developing latency- and bandwidth-aware applications.
 The
 .Nm janz
-scheduler is a bespoke Linux kernel module developed as part of JENS
+queueing discipline is a bespoke Linux kernel module developed as part of JENS
 .Pq by Deutsche Telekom LLCTO
 that provides ECN CE
 .Pq Dq congestion experienced
-marking on ECN-enabled traffic flows using marking algorithms resembling
+marking on ECN-enabled traffic using marking algorithms resembling
 the real-life PoC scenario as closely as possible as well as takes care
 of traffic shaping (limitation of bandwidth) by packet pacing.
 .Pp
-.Pq further documentation tbd
+The
+.Nm sch_janz
+qdisc is comprised of three FIFOs incoming packets sort into
+based on their IP QoS field, in which the TOS reading is used to
+separate interactive (lodelay), regular and bulk traffic; packets
+to send are then selected from the first FIFO that has any.
+The standard Linux qdisc operates the same;
+.Nm sch_janz
+moves ARP, RARP, and PPPoE discovery traffic into the lodelay class though.
+.Pp
+Outgoing packets are paced based on the configured
+.Ar rate
+and
+.Ar handover
+delay; that is, the next packet is withheld until the time necessary
+to achieve the requested throughput
+.Pq and handover interruption .
+All packets that take longer than
+.Ar markfull
+to pass the queue
+.Pq Dq sojourn time
+as well as a percentage of those taking more than
+.Ar markfree
+.Pq longer queue delay rising the chance
+are marked as ECN CE
+.Pq Dq congestion experienced .
+.Pp
+.Nm sch_janz
+supports an extensive relayfs-based reporting interface exposed
+via debugfs; refer to the README and the provided sample applications.
 .Sh PARAMETERS
 .Bl -tag -width XX
 .It Ic limit
@@ -88,7 +117,15 @@ This qdisc reports extensively via relayfs over debugfs; therefore, regular
 .Xr tc 8
 statistics are not provided beyond the bare minimum.
 .Sh EXAMPLES
-tbd
+Set up a queue with standard parameters and display its statistics:
+.Bd -literal
+$ sudo tc qdisc add dev eth0 root handle 1: janz
+$ sudo tc \-s qdisc show dev eth0
+qdisc janz 1: root refcnt 2 limit 10240 rate 10000kbit \e
+    markfree 4ms markfull 14ms subbufs 1024 fragcache 1024
+ Sent 158 bytes 1 pkt (dropped 0, overlimits 0, requeues 0)
+ backlog 0b 0p
+.Ed
 .Sh SEE ALSO
 .Xr tc 8 ,
 .Xr tc-jens 8 ,
@@ -103,3 +140,8 @@ for Deutsche Telekom LLCTO
 .Sh CAVEATS
 This qdisc is only supported as the root egress qdisc on a device.
 It is highly experimental.
+.Pp
+The traffic rate is internally converted to nanoseconds per byte
+needed to transfer, limiting it to about 8 Gbit/s; the closer the
+rate gets to the extremes, the less usable it will be.
+Experiments with 128 kbit/s as a lower bound show mixed results.

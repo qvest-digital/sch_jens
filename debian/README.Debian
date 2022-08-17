@@ -27,5 +27,7 @@ Build and run with:
 
 $ javac JensReaderDemo.java JensReaderLib.java
 $ sudo java JensReaderDemo eth0 /sys/kernel/debug/sch_jens/0002:0
+$ sudo java JensReaderDemo eth0 /sys/kernel/debug/sch_janz/0001:0
 
 This assumes tc-jens(8) with handle 2: and debugfs support running on eth0.
+The second example assumes tc-janz(8) on 1: and eth0.

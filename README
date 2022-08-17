@@ -1,7 +1,7 @@
 This is a patched version of iproute2 with support for sch_jens,
 by Deutsche Telekom LLCTO.
 
-Example:
+Example (old sch_jhtb+sch_jens combination):
 
 dev=eth0
 rate=1000
@@ -28,6 +28,17 @@ make run
 # -or- (without Java™ example)
 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_jens/0002:0
 
+Example (new sch_janz qdisc):
+
+dev=eth0
+rate=1000
+sudo tc qdisc add dev $dev root handle 1: janz rate ${rate}kbit
+
+sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_janz/0001:0
+sudo tc -s qdisc show dev $dev
+
+sudo tc qdisc del dev $dev root
+
 The debugging filesystem must be mounted for jensdmp:
 
 	$ sudo mount -t debugfs debugfs /sys/kernel/debug
@@ -41,6 +52,8 @@ Trigger a handover simulation:
 dev=eth0
 rate=1000
 sudo tc class change dev $dev classid 1:1 jhtb rate ${rate}kbit ceil ${rate}kbit prio 1 handover 2000ms
+# - or -
+sudo tc qdisc change dev $dev handle 1: janz rate ${rate}kbit handover 2000ms
 
 It will return to the given bandwidth once the handover period is over.
 

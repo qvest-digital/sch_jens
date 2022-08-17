@@ -1,5 +1,5 @@
 /*
- * Dǟ janz zesammene Kuh-Disk
+ * Dǟ janz zesammene Kwejü-Disk
  *
  * Copyright © 2022 mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom LLCTO

@@ -1,4 +1,4 @@
-# GNUmakefile for the sch_janz/sch_jens/sch_jhtb Linux kernel modules
+# GNUmakefile for the JENS Linux kernel modules
 # © 2021, 2022 mirabilos <t.glaser@tarent.de>, for Deutsche Telekom
 # Licence: GPLv2, same as the Linux kernel
 

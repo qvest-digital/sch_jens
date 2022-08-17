@@ -841,7 +841,7 @@ void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtat
 		print_uint(PRINT_ANY, "drops", " (dropped %u", q.drops);
 		print_uint(PRINT_ANY, "overlimits", ", overlimits %u",
 			   q.overlimits);
-		print_uint(PRINT_ANY, "requeues", " requeues %u) ", q.requeues);
+		print_uint(PRINT_ANY, "requeues", ", requeues %u) ", q.requeues);
 	}
 
 	if (tbs[TCA_STATS_BASIC_HW])
@@ -882,7 +882,6 @@ void print_tcstats2_attr(FILE *fp, struct rtattr *rta, char *prefix, struct rtat
 		print_string(PRINT_FP, NULL, "backlog %s",
 			     sprint_size(q.backlog, b1));
 		print_uint(PRINT_ANY, "qlen", " %up", q.qlen);
-		print_uint(PRINT_FP, NULL, " requeues %u", q.requeues);
 	}
 
 	if (xstats)

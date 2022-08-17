@@ -35,7 +35,44 @@
 #include <net/ip.h>
 #include <net/inet_ecn.h>
 #include <net/pkt_cls.h>
-#include "jens_codel.h"
+
+typedef u32 jens1024_time;
+
+static inline jens1024_time
+ns_to_t1024(u64 ns)
+{
+	return ((jens1024_time)(ns >> TC_JENS_TIMESHIFT));
+}
+
+static inline jens1024_time
+us_to_t1024(u32 us)
+{
+	u64 tmp = us;
+
+	tmp *= NSEC_PER_USEC;		/* * 1000 */
+	tmp >>= TC_JENS_TIMESHIFT;	/* / 2¹⁰ */
+	/* guaranteed to fit, see above */
+	return ((jens1024_time)tmp);
+}
+
+static inline u32
+t1024_to_us(jens1024_time ts)
+{
+	u64 tmp = ts;
+
+	tmp <<= TC_JENS_TIMESHIFT;
+	tmp = div_u64(tmp, NSEC_PER_USEC);
+	return ((u32)tmp);
+}
+
+/*
+ * With apologies to RFC 1982 or CoDel however mind that this
+ * is IB but should be safe enough in Linux.
+ */
+#define wrap_t1024_before(a, b) (		\
+	    typecheck(jens1024_time, a) &&	\
+	    typecheck(jens1024_time, b) &&	\
+	    ((s32)((b) - (a)) > 0))
 
 struct janz_fragcomp {
 	struct in6_addr sip;			//@0    :16
@@ -48,7 +85,7 @@ struct janz_fragcache {
 	struct janz_fragcomp c;			//@0
 	u8 nexthdr;				//@ +37 :1
 	u8 _pad[2];				//@ +38 :2
-	codel_time_t ts;			//@ +40 :4
+	jens1024_time ts;			//@ +40 :4
 	u16 sport;				//@ +44 :2
 	u16 dport;				//@ +46 :2
 	struct janz_fragcache *next;		//@16
@@ -81,12 +118,12 @@ struct janz_priv {
 	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@16
 	u64 ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@  +8
 	u64 handover;			/* time past next handover (or 0) */		//@16
-	codel_time_t markfree;								//@  +8
-	codel_time_t markfull;								//@  +12
+	jens1024_time markfree;								//@  +8
+	jens1024_time markfull;								//@  +12
 	u32 memusage;			/* enqueued packet truesize */			//@16
 	u32 nsubbufs;									//@  +4
 	u32 fragcache_num;								//@  +8
-	codel_time_t fragcache_aged;							//@  +12
+	jens1024_time fragcache_aged;							//@  +12
 	struct janz_fragcache *fragcache_used;						//@16
 	struct janz_fragcache *fragcache_last; /* last used element */			//@  +8
 	struct janz_fragcache *fragcache_free;						//@16
@@ -99,7 +136,7 @@ struct janz_priv {
 /* struct janz_skb *cb = get_janz_skb(skb); */
 struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
-	codel_time_t enq_ts;		/* enqueue timestamp */			//@8   :4
+	jens1024_time enq_ts;		/* enqueue timestamp */			//@8   :4
 	unsigned int truesz;		/* memory usage */			//@ +4 :4
 
 	u16 chance;			/* chance on ECN CE marking */		//@8   :2
@@ -147,7 +184,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now)
 static inline void
 janz_record_packet(struct janz_priv *q,
     struct sk_buff *skb, struct janz_skb *cb, u64 now,
-    codel_time_t queuedelay, bool isdrop)
+    jens1024_time queuedelay, bool isdrop)
 {
 	struct tc_jens_relay r = {0};
 
@@ -188,7 +225,7 @@ janz_record_packet(struct janz_priv *q,
 static inline void
 janz_fragcache_maint(struct janz_priv *q, u64 now)
 {
-	codel_time_t old;
+	jens1024_time old;
 	struct janz_fragcache *lastnew;
 	struct janz_fragcache *firstold;
 	struct janz_fragcache *lastold;
@@ -196,12 +233,12 @@ janz_fragcache_maint(struct janz_priv *q, u64 now)
 	if (!q->fragcache_used)
 		return;
 
-	old = codel_mktime(now) - MS2TIME(60000);
+	old = ns_to_t1024(now - (60UL * NSEC_PER_SEC));
 
-	if (!codel_time_before(q->fragcache_aged, old))
+	if (!wrap_t1024_before(q->fragcache_aged, old))
 		return;
 
-	if (codel_time_before(q->fragcache_used->ts, old)) {
+	if (wrap_t1024_before(q->fragcache_used->ts, old)) {
 		q->fragcache_last->next = q->fragcache_free;
 		q->fragcache_free = q->fragcache_used;
 		q->fragcache_used = NULL;
@@ -210,7 +247,7 @@ janz_fragcache_maint(struct janz_priv *q, u64 now)
 	}
 
 	lastnew = q->fragcache_used;
-	while (lastnew->next && !codel_time_before(lastnew->next->ts, old))
+	while (lastnew->next && !wrap_t1024_before(lastnew->next->ts, old))
 		lastnew = lastnew->next;
 	q->fragcache_aged = lastnew->ts;
 	if (!lastnew->next) {
@@ -278,11 +315,11 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 static inline void
 janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 {
-	codel_time_t qdelay;
+	jens1024_time qdelay;
 	u64 now = ktime_get_ns();
 	struct janz_skb *cb = get_janz_skb(skb);
 
-	qdelay = codel_mktime(now) - cb->enq_ts;
+	qdelay = ns_to_t1024(now) - cb->enq_ts;
 
 	/**
 	 * maths proof, by example:
@@ -361,7 +398,7 @@ janz_drop_headroom(struct Qdisc *sch, struct janz_priv *q, u64 now)
 		cb = get_janz_skb(skb);
 		q->memusage -= cb->truesz;
 		qdisc_qstats_backlog_dec(sch, skb);
-		janz_record_packet(q, skb, cb, now, (codel_time_t)-1, true);
+		janz_record_packet(q, skb, cb, now, (jens1024_time)-1, true);
 		/* inefficient for large reduction in sch->limit */
 		/* but we assume this doesn’t happen often, if at all */
 		rtnl_kfree_skbs(skb, skb);
@@ -394,7 +431,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	struct ipv6hdr *ih6;
 	struct iphdr *ih4;
 
-	cb->enq_ts = codel_mktime(now);
+	cb->enq_ts = ns_to_t1024(now);
 	cb->truesz = skb->truesize;
 	/* computed later */
 	cb->chance = 0;
@@ -798,23 +835,11 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		q->crediting = 0;
 	}
 
-	if (tb[TCA_JANZ_MARKFREE]) {
-		u64 tmp = nla_get_u32(tb[TCA_JANZ_MARKFREE]);
+	if (tb[TCA_JANZ_MARKFREE])
+		q->markfree = us_to_t1024(nla_get_u32(tb[TCA_JANZ_MARKFREE]));
 
-		tmp *= NSEC_PER_USEC;
-		tmp >>= CODEL_SHIFT;
-		/* guaranteed to fit: * 1000 / 2¹⁰ */
-		q->markfree = (u32)tmp;
-	}
-
-	if (tb[TCA_JANZ_MARKFULL]) {
-		u64 tmp = nla_get_u32(tb[TCA_JANZ_MARKFULL]);
-
-		tmp *= NSEC_PER_USEC;
-		tmp >>= CODEL_SHIFT;
-		/* guaranteed to fit: * 1000 / 2¹⁰ */
-		q->markfull = (u32)tmp;
-	}
+	if (tb[TCA_JANZ_MARKFULL])
+		q->markfull = us_to_t1024(nla_get_u32(tb[TCA_JANZ_MARKFULL]));
 
 	if (tb[TCA_JANZ_SUBBUFS])
 		/* only at load time */
@@ -850,8 +875,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	sch->limit = 10240;
 	q->ns_pro_byte = 800; /* 10 Mbit/s */
 	q->handover = 0;
-	q->markfree = MS2TIME(4);
-	q->markfull = MS2TIME(14);
+	q->markfree = ns_to_t1024(4UL * NSEC_PER_MSEC);
+	q->markfull = ns_to_t1024(14UL * NSEC_PER_MSEC);
 	q->nsubbufs = 0;
 	q->fragcache_num = 0;
 
@@ -934,8 +959,8 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
 	      ((u64)NSEC_PER_SEC) / q->ns_pro_byte, TCA_JANZ_PAD64) ||
-	    nla_put_u32(skb, TCA_JANZ_MARKFREE, codel_time_to_us(q->markfree)) ||
-	    nla_put_u32(skb, TCA_JANZ_MARKFULL, codel_time_to_us(q->markfull)) ||
+	    nla_put_u32(skb, TCA_JANZ_MARKFREE, t1024_to_us(q->markfree)) ||
+	    nla_put_u32(skb, TCA_JANZ_MARKFULL, t1024_to_us(q->markfull)) ||
 	    nla_put_u32(skb, TCA_JANZ_SUBBUFS, q->nsubbufs) ||
 	    nla_put_u32(skb, TCA_JANZ_FRAGCACHE, q->fragcache_num) ||
 	    nla_put_u32(skb, TCA_JANZ_LIMIT, sch->limit))

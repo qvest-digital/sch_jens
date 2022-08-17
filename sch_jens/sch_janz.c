@@ -305,10 +305,10 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 	 *
 	 * even the cases that can’t happen would work correctly
 	 */
-	if (codel_time_after_eq(qdelay, q->markfull)) {
+	if (qdelay >= q->markfull) {
 		cb->chance = 0xFFFFU;
 		goto domark;
-	} else if (!codel_time_after(qdelay, q->markfree))
+	} else if (qdelay <= q->markfree)
 		cb->chance = 0;
 	else {
 		/* we know: tmin < t < tmax */

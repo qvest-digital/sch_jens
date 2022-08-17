@@ -37,6 +37,8 @@
 
 #include "jens_uapi.h"
 
+#define nsmul(val, fac) ((u64)((u64)(val) * (u64)(fac)))
+
 typedef u32 jens1024_time;
 
 static inline jens1024_time
@@ -48,22 +50,20 @@ ns_to_t1024(u64 ns)
 static inline jens1024_time
 us_to_t1024(u32 us)
 {
-	u64 tmp = us;
+	/* us * 1000 / 2¹⁰ will fit u32 again */
+	return (ns_to_t1024(nsmul(us, NSEC_PER_USEC)));
+}
 
-	tmp *= NSEC_PER_USEC;		/* * 1000 */
-	tmp >>= TC_JENS_TIMESHIFT;	/* / 2¹⁰ */
-	/* guaranteed to fit, see above */
-	return ((jens1024_time)tmp);
+static inline u64
+t1024_to_ns(jens1024_time ts)
+{
+	return ((u64)ts << TC_JENS_TIMESHIFT);
 }
 
 static inline u32
 t1024_to_us(jens1024_time ts)
 {
-	u64 tmp = ts;
-
-	tmp <<= TC_JENS_TIMESHIFT;
-	tmp = div_u64(tmp, NSEC_PER_USEC);
-	return ((u32)tmp);
+	return ((u32)div_u64(t1024_to_ns(ts), NSEC_PER_USEC));
 }
 
 /*
@@ -114,7 +114,7 @@ struct janz_skbfifo {
 struct janz_priv {
 	struct janz_skbfifo q[3];	/* TOS FIFOs */					//@cacheline
 	struct rchan *record_chan;	/* relay to userspace */			//@16
-#define QSZ_INTERVAL ((u64)(5UL * NSEC_PER_MSEC))
+#define QSZ_INTERVAL nsmul(5, NSEC_PER_MSEC)
 	u64 qsz_next;			/* next time to emit queue-size */		//@  +8
 	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@16
 	u64 ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@  +8
@@ -185,12 +185,9 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now)
 static inline void
 janz_record_packet(struct janz_priv *q,
     struct sk_buff *skb, struct janz_skb *cb, u64 now,
-    jens1024_time queuedelay, bool isdrop)
+    jens1024_time queuedelay)
 {
 	struct tc_jens_relay r = {0};
-
-	if (isdrop)
-		cb->record_flag |= TC_JENS_RELAY_SOJOURN_DROP;
 
 	r.ts = now;
 	r.type = TC_JENS_RELAY_SOJOURN;
@@ -234,7 +231,7 @@ janz_fragcache_maint(struct janz_priv *q, u64 now)
 	if (!q->fragcache_used)
 		return;
 
-	old = ns_to_t1024(now - (60UL * NSEC_PER_SEC));
+	old = ns_to_t1024(now - nsmul(60, NSEC_PER_SEC));
 
 	if (!wrap_t1024_before(q->fragcache_aged, old))
 		return;
@@ -376,7 +373,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 		}
 	}
 
-	janz_record_packet(q, skb, cb, now, qdelay, false);
+	janz_record_packet(q, skb, cb, now, qdelay);
 }
 
 static inline void
@@ -399,7 +396,8 @@ janz_drop_headroom(struct Qdisc *sch, struct janz_priv *q, u64 now)
 		cb = get_janz_skb(skb);
 		q->memusage -= cb->truesz;
 		qdisc_qstats_backlog_dec(sch, skb);
-		janz_record_packet(q, skb, cb, now, (jens1024_time)-1, true);
+		cb->record_flag |= TC_JENS_RELAY_SOJOURN_DROP;
+		janz_record_packet(q, skb, cb, now, (jens1024_time)-1);
 		/* inefficient for large reduction in sch->limit */
 		/* but we assume this doesn’t happen often, if at all */
 		rtnl_kfree_skbs(skb, skb);
@@ -821,7 +819,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (tb[TCA_JANZ_RATE64]) {
 		u64 tmp = nla_get_u64(tb[TCA_JANZ_RATE64]);
 
-		tmp = ((u64)NSEC_PER_SEC) / tmp;
+		tmp = div64_u64(NSEC_PER_SEC, tmp);
 		q->ns_pro_byte = tmp > 0 ? tmp : 1;
 	}
 
@@ -876,8 +874,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	sch->limit = 10240;
 	q->ns_pro_byte = 800; /* 10 Mbit/s */
 	q->handover = 0;
-	q->markfree = ns_to_t1024(4UL * NSEC_PER_MSEC);
-	q->markfull = ns_to_t1024(14UL * NSEC_PER_MSEC);
+	q->markfree = ns_to_t1024(nsmul(4, NSEC_PER_MSEC));
+	q->markfull = ns_to_t1024(nsmul(14, NSEC_PER_MSEC));
 	q->nsubbufs = 0;
 	q->fragcache_num = 0;
 
@@ -955,11 +953,11 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 		goto nla_put_failure;
 
 	if (q->handover && nla_put_u32(skb, TCA_JANZ_HANDOVER,
-	    (q->handover - ktime_get_ns()) / NSEC_PER_USEC))
+	    div_u64(q->handover - ktime_get_ns(), NSEC_PER_USEC)))
 		goto nla_put_failure;
 
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
-	      ((u64)NSEC_PER_SEC) / q->ns_pro_byte, TCA_JANZ_PAD64) ||
+	      div64_u64(NSEC_PER_SEC, q->ns_pro_byte), TCA_JANZ_PAD64) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFREE, t1024_to_us(q->markfree)) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFULL, t1024_to_us(q->markfull)) ||
 	    nla_put_u32(skb, TCA_JANZ_SUBBUFS, q->nsubbufs) ||

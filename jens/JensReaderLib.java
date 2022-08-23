@@ -39,12 +39,7 @@ import java.text.NumberFormat;
 import java.util.stream.Stream;
 
 /**
- * <p>Example parser component for the output of the “jensdmp” C program.</p>
- *
- * <p>The XML parser averages 1 ms for each record on my laptop once warmed up,
- * which is well below the intervals of 5 ms for periodic reports. Data rates
- * nearing 10 Mbit/s will saturate it, however (at ~1000 byte-sized packets).
- * Do ensure to reduce the bandwidth below that when using statistics.</p>
+ * <p>Java™ part of the JNI JENS relayfs library.</p>
  *
  * @author mirabilos (t.glaser@tarent.de)
  */

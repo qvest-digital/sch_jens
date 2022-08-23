@@ -6,58 +6,18 @@ with the stock Linux kernel 5.10. Newer Linux kernels up to
 about 5.18 should also work.
 
 
-Linux kernel version-specific notes
-───────────────────────────────────
-
-Kernel versions before 5.1 have a bug in which packets that
-originate on the JENS system itself (as opposed to incoming
-from the network) show up not as IPv4/IPv6 but as ETH_P_ALL
-packets which both makes categorisation into flows and port
-reporting impossible (they will just report as “not IP”).
-
-
 sch_janz Linux kernel module
 ────────────────────────────
 
 This is a new qdisc, JENS bespoke. It sorts traffic into one
 out of three FIFOs dependeing on their iptos (like the default
 Linux qdisc does) and lets them leave paced on the configured
-rate (bandwidth limit); ECN marking according to markfree and
-markfull is applied as in the sch_jens qdisc described below.
+rate (bandwidth limit), possibly after a handover is passed.
+ECN CE marking is applied to packets slower than markfree with
+a percentage chance rising to 100% if the sojourn time (queue
+delay) reaches markfull.
 
 See the tc-janz(8) manpage for details.
-
-“Live measurement”, as described below, applies as well, with
-the following differences:
-• TC_JENS_RELAY_SOJOURN_SLOW is currently not produced and
-  considered reserved, a later reassignment is possible
-• relayfs use cannot be disabled
-
-This module will obsolete the other two once production ready.
-
-
-sch_jens Linux kernel module
-────────────────────────────
-
-Documentation on purpose, etc. tbd.
-
-Differences to fq_codel
-───────────────────────
-
-• The “ecn” parameter is always enabled and does not exist.
-• The new parameter “markfull” loosely corresponds to the old
-  parameter “ce_threshold”: all packets taking at least this
-  long to sojourn are ECN CE-marked
-• The parameter “markfree” is a fully new concept as packets
-  taking more than this time will be ECN CE-marked based on
-  a, currently linear, scale, depending on where in between
-  the “markfree” and “markfull” times the sojourn time falls;
-  e.g. markfree=5, markfull=15, sojourn=10 → 50% are marked
-  (note that the CoDel algorithm of marking packets when the
-  “target” time isn’t reached within “interval” still applies)
-• The option “subbufs” enables live measurement, see below
-• With the option “nouseport” given, neither source nor
-  destination port are used in the hash for queue classify
 
 Live measurement
 ────────────────
@@ -79,13 +39,13 @@ This data is passed from kernel to userspace in records structured
 as follows via relayfs:
 
 ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-│ ts (timestamp)                │typ│fNN│ eNN   │ dNN (data)    │
+│ <-ts (timestamp)------------> │typ│fNN│ <eNN> │ <-dNN (data)> │
 ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-│ x8[16] (data)                                                 │
+│ <-x8[16] (data)---------------------------------------------> │
 ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-│ y8[16] (data)                                                 │
+│ <-y8[16] (data)---------------------------------------------> │
 ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-│ z (union, substructured as necessary)                         │
+│ <-z (union, substructured as necessary)---------------------> │
 └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 The .ts (timestamp) member is a 64-bit unsigned integer,
@@ -99,10 +59,10 @@ The .type member, an 8-bit unsigned integer, indicates
 which record it is, i.e. which meaning it has and how
 the data members are filled. This is one of:
 
-• TC_JENS_RELAY_INVALID (= 0), record was not filled in, do warn
-• TC_JENS_RELAY_PADDING (quietly skip/ignore this record)
-• TC_JENS_RELAY_SOJOURN (an IP packet’s sojourn time)
-• TC_JENS_RELAY_QUEUESZ (amount of packets in the FIFO)
+• TC_JANZ_RELAY_INVALID (= 0), record was not filled in, do warn
+• TC_JANZ_RELAY_PADDING (quietly skip/ignore this record)
+• TC_JANZ_RELAY_SOJOURN (an IP packet’s sojourn time)
+• TC_JANZ_RELAY_QUEUESZ (amount of packets in the FIFO)
 
 The remaining members are per-record-type data. They are:
 • f8 (8-bit unsigned integer)
@@ -117,7 +77,7 @@ Any data members not specified by the record type must not be accessed.
 
 Record types define the following data members:
 
-• TC_JENS_RELAY_SOJOURN:
+• TC_JANZ_RELAY_SOJOURN:
   – d32 packet sojourn time in 1024 ns units
   – e16 ECN marking range/percentage
     ‣ 0xFFFF = above or equal to markfull
@@ -131,13 +91,13 @@ Record types define the following data members:
     ‣ 0:1 ECN bits on enqueue
     ‣   2 ECN bits are valid (0 if they could not be determined)
     ‣ 3:4 ECN bits on dequeue
-    ‣   5 if ECN marked from not reaching target within interval (sch_jens)
-          (TC_JENS_RELAY_SOJOURN_SLOW), even set if not ECN packet
-    ‣   6 if ECN marked from markfree/markfull range
-          (TC_JENS_RELAY_SOJOURN_MARK), even set if not ECN packet
-    ‣   7 (TC_JENS_RELAY_SOJOURN_DROP) the packet was dropped not sent
-  – x8 source IP, if any
-  – y8 destination IP, if any
+    ‣   5 currently unused
+          (TC_JANZ_RELAY_SOJOURN_xxxx)
+    ‣   6 if ECN CE marked from queue delay via markfree/markfull
+          (TC_JANZ_RELAY_SOJOURN_MARK), even set if not ECN packet
+    ‣   7 (TC_JANZ_RELAY_SOJOURN_DROP) the packet was dropped not sent
+  – x8 source IP, if any (if ipver below is 4 or 6)
+  – y8 destination IP, if any (ipver…)
   – z struct
     ‣ __u32 psize (raw packet size, including partial Layer 2 framing,
 	e.g. 802.11 WLAN, or Ethernet header (though not trailer))
@@ -150,42 +110,29 @@ Record types define the following data members:
       │ <-psize-----> │ i │ n │ <-s-> │ <-d-> │ - │ - │ - │ - │ - │ - │
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
-• TC_JENS_RELAY_QUEUESZ:
+• TC_JANZ_RELAY_QUEUESZ:
   – d32 memory usage (bytes), including Linux structural overhead
   – e16 queue length (packets), capped at 0xFFFF
 
-• TC_JENS_RELAY_PADDING: none; shouldn’t occur but ignore silently
+• TC_JANZ_RELAY_PADDING: none; shouldn’t occur but ignore silently
 
-• TC_JENS_RELAY_INVALID: none; must not occur (do warn)
+• TC_JANZ_RELAY_INVALID: none; must not occur (do warn)
 
-• TC_JENS_RELAY_MAX or higher are undefined/reserved for future changes
+• TC_JANZ_RELAY_MAX or higher are undefined/reserved for future changes
 
-Subbuffers are TC_JENS_RELAY_NRECORDS (256) records = 16 KiB each.
+Subbuffers are TC_JANZ_RELAY_NRECORDS (256) records = 16 KiB each.
 The configuration parameter subbufs (can only be set when creating, as
 memory must be allocated for the subbuffers) determines the amount of
-subbuffers created; use 1 for a suitable default (1024 currently) or
-0 to disable the measurement functionality. It is disabled as well when
-debugfs is not available.
+subbuffers created; use 1 for a suitable default (1024 currently).
 
 IP addresses are formatted as 16 byte IPv6 address straight from the IP
 header; Legacy IP addresses are formatted as v4-mapped IPv6, i.e. the
 last four octets contain a raw in_addr.
 
-For TC_JENS_RELAY_SOJOURN the nexthdr field can be 44 if the packet is
+For TC_JANZ_RELAY_SOJOURN the nexthdr field can be 44 if the packet is
 fragmented and therefore the port info cannot be obtained, 59 if the info
 cannot be obtained for another reason (these numbers correspond to the
 respective IPv6 extension header for these purposes and we use them for
 IPv4 as well, to signal this). Note 59 is also valid for IPv6 packets that
 do not have any payload. 6 is TCP, 17 is UDP, 58/1 are ICMP; for more, see:
 https://en.wikipedia.org/wiki/List_of_IP_protocol_numbers
-
-
-sch_jhtb Linux kernel module
-────────────────────────────
-
-Documentation on purpose, etc. tbd.
-
-For now, this is the same as htb.
-
-It can additionally stop network traffic for a period of time, if, in
-a tc class change command, a “handover” value is given.

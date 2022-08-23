@@ -1,3 +1,10 @@
+iproute2 (5.10.0-4jens14) tarent; urgency=medium
+
+  * Replace sch_jens/sch_jhtb with sch_janz entirely (testing indicates
+    this works and is a good idea after all) and clean up accordingly
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Tue, 23 Aug 2022 22:33:29 +0200
+
 iproute2 (5.10.0-4jens12) tarent; urgency=medium
 
   * Add bespoke sch_janz qdisc (experimental for feature parity testing)
@@ -29,7 +36,7 @@ iproute2 (5.10.0-4~jens+10) tarent; urgency=medium
   * revert reporting flow ID
   * sch_jens reporting: for IPv4/IPv6 packets also report the nextheader
     (protocol) and if it’s TCP or UDP, their port numbers; this bumps the
-    TC_JENS_RELAY_SOJOURN revision number (together with flow ID removal)
+    TC_JANZ_RELAY_SOJOURN revision number (together with flow ID removal)
     ‣ fragmented packets are not yet supported except the first fragment
   * fix small issues in the LKM wrapper Makefile
   * work around *another* “stable” kernel bug (cf. #1013299)
@@ -46,7 +53,7 @@ iproute2 (5.10.0-4~jens+9) tarent; urgency=medium
 iproute2 (5.10.0-4~jens+8) tarent; urgency=medium
 
   * Change subbufs record size from 16 to 64, bump enum values
-  * Amend TC_JENS_RELAY_SOJOURN with IP address (and version) if present
+  * Amend TC_JANZ_RELAY_SOJOURN with IP address (and version) if present
     and (full) skb data size
   * /usr/share/doc/iproute2/README.Debian: LKM unloading on upgrades note
 

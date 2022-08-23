@@ -17,7 +17,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd August 17, 2022
+.Dd August 22, 2022
 .Dt TC\-JANZ 8
 .Os Linux
 .Sh NAME
@@ -91,7 +91,7 @@ Default: 10\ Mbit/s
 stops traffic for the specified amount of time.
 .It Ic markfree
 is the maximum queue delay packets are allowed to sojourn in the queue
-without the extra ECN CE marking done for JENS.
+without being ECN CE-marked.
 Default: 4\ ms
 .It Ic markfull
 is the minimum queue delay at which packets will be marked (see above)
@@ -127,9 +127,7 @@ qdisc janz 1: root refcnt 2 limit 10240 rate 10000kbit \e
  backlog 0b 0p
 .Ed
 .Sh SEE ALSO
-.Xr tc 8 ,
-.Xr tc-jens 8 ,
-.Xr tc-jhtb 8
+.Xr tc 8
 .Pp
 .Pa /usr/share/doc/sch\-jens\-dkms/README.gz
 .Pp

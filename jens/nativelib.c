@@ -37,16 +37,16 @@
 /* prerequisite kernel headers */
 #include <linux/types.h>
 #include <linux/pkt_sched.h>
-#include "../sch_jens/jens_uapi.h"
+#include "../janz/janz_uapi.h"
 
 #ifndef INFTIM
 #define INFTIM		(-1)
 #endif
 
 #define RBUF_TARGETSIZE (65536U)
-#define RBUF_SUBBUFSIZE (RBUF_TARGETSIZE / (TC_JENS_RELAY_NRECORDS * sizeof(struct tc_jens_relay)))
-#define RBUF_ELEMENTLEN (RBUF_SUBBUFSIZE * TC_JENS_RELAY_NRECORDS)
-#define RBUF_BYTELENGTH (RBUF_ELEMENTLEN * sizeof(struct tc_jens_relay))
+#define RBUF_SUBBUFSIZE (RBUF_TARGETSIZE / (TC_JANZ_RELAY_NRECORDS * sizeof(struct tc_janz_relay)))
+#define RBUF_ELEMENTLEN (RBUF_SUBBUFSIZE * TC_JANZ_RELAY_NRECORDS)
+#define RBUF_BYTELENGTH (RBUF_ELEMENTLEN * sizeof(struct tc_janz_relay))
 
 #define BIT(n)		(1U << (n))
 #define NELEM(a)	(sizeof(a) / sizeof((a)[0]))
@@ -105,7 +105,7 @@ static jfieldID o_REC_chance;		// double
 static jfieldID o_REC_ecnIn;		// int
 static jfieldID o_REC_ecnOut;		// int
 static jfieldID o_REC_ecnValid;		// bool
-static jfieldID o_REC_markCoDel;	// bool
+//static jfieldID o_REC_markCoDel;	// bool
 static jfieldID o_REC_markJENS;		// bool
 static jfieldID o_REC_dropped;		// bool
 static jfieldID o_REC_pktSize;		// long (u32)
@@ -246,7 +246,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getfield(REC, ecnIn, "I");
 	getfield(REC, ecnOut, "I");
 	getfield(REC, ecnValid, "Z");
-	getfield(REC, markCoDel, "Z");
+	//getfield(REC, markCoDel, "Z");
 	getfield(REC, markJENS, "Z");
 	getfield(REC, dropped, "Z");
 	getfield(REC, pktSize, "J");
@@ -373,7 +373,7 @@ nativeRead(JNIEnv *env, jobject obj)
 {
 	size_t n;
 	int fd, eno, i;
-	struct tc_jens_relay *buf, *hadPadding = NULL;
+	struct tc_janz_relay *buf, *hadPadding = NULL;
 	jint nP = 0, nQ = 0, nU = 0;
 	jobjectArray aP, aQ, aU;
 	jobject to, toip;
@@ -420,16 +420,16 @@ nativeRead(JNIEnv *env, jobject obj)
 	}
 	if (n == 0)
 		goto eof;
-	if ((n % sizeof(struct tc_jens_relay)) != 0)
+	if ((n % sizeof(struct tc_janz_relay)) != 0)
 		return (e_UnalignedRead);
-	n /= sizeof(struct tc_jens_relay);
+	n /= sizeof(struct tc_janz_relay);
 
 	while (n--) {
 		switch (buf->type) {
-		case TC_JENS_RELAY_PADDING:
+		case TC_JANZ_RELAY_PADDING:
 			hadPadding = buf;
 			break;
-		case TC_JENS_RELAY_INVALID:
+		case TC_JANZ_RELAY_INVALID:
 		default:
 			if (!(to = (*env)->GetObjectArrayElement(env, aU, nU)))
 				return (e_RecordFail);
@@ -440,7 +440,7 @@ nativeRead(JNIEnv *env, jobject obj)
 			(*env)->DeleteLocalRef(env, to);
 			++nU;
 			break;
-		case TC_JENS_RELAY_QUEUESZ:
+		case TC_JANZ_RELAY_QUEUESZ:
 			if (!(to = (*env)->GetObjectArrayElement(env, aQ, nQ)))
 				return (e_RecordFail);
 			U64.u = buf->ts;
@@ -452,7 +452,7 @@ nativeRead(JNIEnv *env, jobject obj)
 			(*env)->DeleteLocalRef(env, to);
 			++nQ;
 			break;
-		case TC_JENS_RELAY_SOJOURN:
+		case TC_JANZ_RELAY_SOJOURN:
 			if (!(to = (*env)->GetObjectArrayElement(env, aP, nP)))
 				return (e_RecordFail);
 			U64.u = buf->ts;
@@ -460,19 +460,19 @@ nativeRead(JNIEnv *env, jobject obj)
 			(*env)->SetLongField(env, to, o_REC_sojournTime,
 			    (jlong)(1024ULL * (unsigned long long)buf->d32));
 			(*env)->SetDoubleField(env, to, o_REC_chance,
-			    (jdouble)((double)buf->e16 / TC_JENS_RELAY_SOJOURN_PCTDIV));
+			    (jdouble)((double)buf->e16 / TC_JANZ_RELAY_SOJOURN_PCTDIV));
 			(*env)->SetIntField(env, to, o_REC_ecnIn,
 			    (jint)((0U + buf->f8) & 0x03U));
 			(*env)->SetIntField(env, to, o_REC_ecnOut,
 			    (jint)(((0U + buf->f8) >> 3) & 0x03U));
 			(*env)->SetBooleanField(env, to, o_REC_ecnValid,
 			    buf->f8 & BIT(2) ? JNI_TRUE : JNI_FALSE);
-			(*env)->SetBooleanField(env, to, o_REC_markCoDel,
-			    buf->f8 & TC_JENS_RELAY_SOJOURN_SLOW ? JNI_TRUE : JNI_FALSE);
+			//(*env)->SetBooleanField(env, to, o_REC_markCoDel,
+			//    buf->f8 & TC_JANZ_RELAY_SOJOURN_SLOW ? JNI_TRUE : JNI_FALSE);
 			(*env)->SetBooleanField(env, to, o_REC_markJENS,
-			    buf->f8 & TC_JENS_RELAY_SOJOURN_MARK ? JNI_TRUE : JNI_FALSE);
+			    buf->f8 & TC_JANZ_RELAY_SOJOURN_MARK ? JNI_TRUE : JNI_FALSE);
 			(*env)->SetBooleanField(env, to, o_REC_dropped,
-			    buf->f8 & TC_JENS_RELAY_SOJOURN_DROP ? JNI_TRUE : JNI_FALSE);
+			    buf->f8 & TC_JANZ_RELAY_SOJOURN_DROP ? JNI_TRUE : JNI_FALSE);
 			(*env)->SetIntField(env, to, o_REC_ipVer,
 			    (jint)(unsigned int)buf->z.zSOJOURN.ipver);
 			(*env)->SetIntField(env, to, o_REC_nextHeader,

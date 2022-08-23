@@ -1,40 +1,22 @@
-This is a patched version of iproute2 with support for sch_jens,
+This is a patched version of iproute2 with support for sch_janz,
 by Deutsche Telekom LLCTO.
 
-Example (old sch_jhtb+sch_jens combination):
-
-dev=eth0
-rate=1000
-sudo tc qdisc add dev $dev root handle 1: jhtb default 1
-sudo tc class add dev $dev parent 1: classid 1:1 jhtb rate ${rate}kbit ceil ${rate}kbit prio 1
-sudo tc qdisc add dev $dev parent 1:1 handle 2: jens nouseport
-# -or- (for jensdmp)
-sudo tc qdisc add dev $dev parent 1:1 handle 2: jens nouseport subbufs 1
-
-sudo tc -s qdisc show dev $dev
-sudo tc -s class show dev $dev
-
-sudo tc qdisc del dev $dev parent 1:1
-sudo tc class del dev $dev parent 1: classid 1:1
-sudo tc qdisc del dev $dev root
-
-# Invoke jensdmp in its directory:
-cd /usr/share/doc/iproute2/examples
-javac -d obj JensReaderDemo.java JensReaderLib.java
-sudo java -cp obj de.telekom.llcto.jens.reader.JensReaderDemo \
-    eth0 /sys/kernel/debug/sch_jens/0002:0
-# -or- just
-make run
-# -or- (without Java™ example)
-sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_jens/0002:0
-
-Example (new sch_janz qdisc):
+Example:
 
 dev=eth0
 rate=1000
 sudo tc qdisc add dev $dev root handle 1: janz rate ${rate}kbit
 
+# Invoke jensdmp in its directory:
+cd /usr/share/doc/iproute2/examples
+javac -d obj JensReaderDemo.java JensReaderLib.java
+sudo java -cp obj de.telekom.llcto.jens.reader.JensReaderDemo \
+    eth0 /sys/kernel/debug/sch_janz/0001:0
+# -or- just
+cd /usr/share/doc/iproute2/examples && make run
+# -or- (without Java™ example)
 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_janz/0001:0
+
 sudo tc -s qdisc show dev $dev
 
 sudo tc qdisc del dev $dev root
@@ -51,8 +33,6 @@ Trigger a handover simulation:
 
 dev=eth0
 rate=1000
-sudo tc class change dev $dev classid 1:1 jhtb rate ${rate}kbit ceil ${rate}kbit prio 1 handover 2000ms
-# - or -
 sudo tc qdisc change dev $dev handle 1: janz rate ${rate}kbit handover 2000ms
 
 It will return to the given bandwidth once the handover period is over.

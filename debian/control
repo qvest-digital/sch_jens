@@ -62,19 +62,11 @@ Architecture: all
 Section: kernel
 Depends: ${misc:Depends}, iproute2 (= ${binary:Version})
 Provides: sch-jens
-Description: E/// PoC-imitating scheduler for JENS
+Description: JENS network packet scheduler, kernel module source
  This is a bundle of kernel modules needed for JENS by DTAG LLCTO.
  .
- sch_jens is a fork of sch_fq_codel, for tc(8), with changed behaviour
- as regards CE marking of packets, as well as relayfs-based live
- reporting of various KPIs. This is still up to later changes and
- extensions.
- .
- sch_jhtb is a fork of sch_htb, with extra functionality. It allows
- simulating a RAN handover, i.e. stopping network traffic for a time.
- This is still up to later changes and extensions.
- .
- sch_janz is an experimental bespoke qdisc combining the functionality
- of jhtb (bandwidth limiting, handover) and jens (ECN marking) in one
- qdisc without the FQ_CoDel algorithm. It uses an algorithm very close
- to the default pfifo_fast qdisc as backing.
+ sch_janz is a bespoke qdisc using an algorithm very close to the Linux
+ default pfifo_fast qdisc backing a bandwidth limiting (packet pacing,
+ handover) and ECN CE-marking packet scheduler, with relayfs-based live
+ reporting of various KPIs. It allows simulating a RAN handover, that
+ is stopping network traffic for a given time.

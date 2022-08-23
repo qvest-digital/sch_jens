@@ -35,7 +35,6 @@ TCMODULES += f_tcindex.o
 TCMODULES += q_ingress.o
 TCMODULES += q_hfsc.o
 TCMODULES += q_htb.o
-TCMODULES += q_jhtb.o
 TCMODULES += q_drr.o
 TCMODULES += q_qfq.o
 TCMODULES += m_gact.o
@@ -70,8 +69,6 @@ TCMODULES += em_meta.o
 TCMODULES += q_mqprio.o
 TCMODULES += q_codel.o
 TCMODULES += q_fq_codel.o
-TCMODULES += q_janz.o
-TCMODULES += q_jens.o
 TCMODULES += q_fq.o
 TCMODULES += q_pie.o
 TCMODULES += q_fq_pie.o
@@ -85,6 +82,7 @@ TCMODULES += q_etf.o
 TCMODULES += q_taprio.o
 TCMODULES += q_plug.o
 TCMODULES += q_ets.o
+TCMODULES += q_janz.o
 
 TCSO :=
 ifeq ($(TC_CONFIG_ATM),y)

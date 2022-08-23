@@ -1,3 +1,3 @@
-sch_jens/Kbuild usr/src/sch-jens-DEB_VERSION_UPSTREAM/
-sch_jens/jens*.h usr/src/sch-jens-DEB_VERSION_UPSTREAM/
-sch_jens/sch_*.c usr/src/sch-jens-DEB_VERSION_UPSTREAM/
+janz/Kbuild usr/src/sch-jens-DEB_VERSION_UPSTREAM/
+janz/janz*.h usr/src/sch-jens-DEB_VERSION_UPSTREAM/
+janz/sch_*.c usr/src/sch-jens-DEB_VERSION_UPSTREAM/

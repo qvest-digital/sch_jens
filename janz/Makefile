@@ -43,13 +43,9 @@ uninstall:
 
 unload:
 	-rmmod sch_janz
-	-rmmod sch_jens
-	-rmmod sch_jhtb
 
 load: unload
 	insmod sch_janz.ko
-	insmod sch_jens.ko
-	insmod sch_jhtb.ko
 
 show-hz:
 	@-rm -f .show-hz

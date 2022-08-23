@@ -37,7 +37,7 @@
 /* prerequisite kernel headers */
 #include <linux/types.h>
 #include <linux/pkt_sched.h>
-#include "../sch_jens/jens_uapi.h"
+#include "../janz/janz_uapi.h"
 
 #ifndef INFTIM
 #define INFTIM (-1)
@@ -46,10 +46,10 @@
 #define BIT(n) (1U << (n))
 
 #define RBUF_TARGETSIZE (65536U)
-#define RBUF_SUBBUFSIZE (RBUF_TARGETSIZE / (TC_JENS_RELAY_NRECORDS * sizeof(struct tc_jens_relay)))
-#define RBUF_ELEMENTLEN (RBUF_SUBBUFSIZE * TC_JENS_RELAY_NRECORDS)
+#define RBUF_SUBBUFSIZE (RBUF_TARGETSIZE / (TC_JANZ_RELAY_NRECORDS * sizeof(struct tc_janz_relay)))
+#define RBUF_ELEMENTLEN (RBUF_SUBBUFSIZE * TC_JANZ_RELAY_NRECORDS)
 
-struct tc_jens_relay rbuf[RBUF_SUBBUFSIZE < 1 ? -1 : (long)RBUF_ELEMENTLEN];
+struct tc_janz_relay rbuf[RBUF_SUBBUFSIZE < 1 ? -1 : (long)RBUF_ELEMENTLEN];
 #define cbuf ((char *)rbuf)
 /* compile-time assertion */
 struct cta_rbufsize { char ok[sizeof(rbuf) == RBUF_TARGETSIZE ? 1 : -1]; };
@@ -101,7 +101,7 @@ main(int argc, char *argv[])
 	int pres;
 
 	if (argc != 2)
-		errx(255, "Usage: %s /path/to/debugfs/sch_jens/nnnn:0",
+		errx(255, "Usage: %s /path/to/debugfs/sch_janz/nnnn:0",
 		    argc > 0 ? argv[0] : "jensdmp");
 
 #define setup_signal(sig) \
@@ -146,14 +146,14 @@ main(int argc, char *argv[])
 		goto eof;
 	off += n;
 	//printf(" read(%04zX)", n);
-	if (off < sizeof(struct tc_jens_relay))
+	if (off < sizeof(struct tc_janz_relay))
 		goto loop;
 	//printf(" consume(%04zX)\n", off);
 
 	n = 0;
-	while ((n + sizeof(struct tc_jens_relay)) <= off) {
-		consume(n / sizeof(struct tc_jens_relay));
-		n += sizeof(struct tc_jens_relay);
+	while ((n + sizeof(struct tc_janz_relay)) <= off) {
+		consume(n / sizeof(struct tc_janz_relay));
+		n += sizeof(struct tc_janz_relay);
 		if (do_exit)
 			goto do_exit;
 	}
@@ -204,7 +204,7 @@ consume(size_t idx)
 	//    (unsigned long long)(rbuf[idx].ts / 1000000000),
 	//    (unsigned int)(rbuf[idx].ts % 1000000000));
 	switch (rbuf[idx].type) {
-	case TC_JENS_RELAY_INVALID:
+	case TC_JANZ_RELAY_INVALID:
 	default:
 #ifdef show_invalid_records
 		printf("<invalid type=\"%02X\"", rbuf[idx].type);
@@ -215,24 +215,24 @@ consume(size_t idx)
 #endif
 		break;
 
-	case TC_JENS_RELAY_PADDING:
+	case TC_JANZ_RELAY_PADDING:
 #ifdef show_invalid_records
 		printf("<padding");
 		goto dump;
 #endif
 
-	case TC_JENS_RELAY_SOJOURN:
+	case TC_JANZ_RELAY_SOJOURN:
 		printf("<pkt ts=\"%llX\" time=\"%X\" chance=\"%.7f\""
 		    " ecn-in=\"%d%d\" ecn-out=\"%d%d\"",
 		    (unsigned long long)rbuf[idx].ts, rbuf[idx].d32,
-		    (double)rbuf[idx].e16 / TC_JENS_RELAY_SOJOURN_PCTDIV,
+		    (double)rbuf[idx].e16 / TC_JANZ_RELAY_SOJOURN_PCTDIV,
 		    !!(rbuf[idx].f8 & BIT(1)), !!(rbuf[idx].f8 & BIT(0)),
 		    !!(rbuf[idx].f8 & BIT(4)), !!(rbuf[idx].f8 & BIT(3)));
-		if (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_SLOW)
-			fputs(" slow=\"y\"", stdout);
-		if (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_MARK)
+		//if (rbuf[idx].f8 & TC_JANZ_RELAY_SOJOURN_SLOW)
+		//	fputs(" slow=\"y\"", stdout);
+		if (rbuf[idx].f8 & TC_JANZ_RELAY_SOJOURN_MARK)
 			fputs(" mark=\"y\"", stdout);
-		if (rbuf[idx].f8 & TC_JENS_RELAY_SOJOURN_DROP)
+		if (rbuf[idx].f8 & TC_JANZ_RELAY_SOJOURN_DROP)
 			fputs(" drop=\"y\"", stdout);
 		if (rbuf[idx].f8 & BIT(2))
 			fputs(" ecn-valid=\"y\"", stdout);
@@ -252,7 +252,7 @@ consume(size_t idx)
 		printf(" size=\"%u\"/>\n", rbuf[idx].z.zSOJOURN.psize);
 		break;
 
-	case TC_JENS_RELAY_QUEUESZ:
+	case TC_JANZ_RELAY_QUEUESZ:
 		printf("<Qsz ts=\"%llX\" len=\"%X\" mem=\"%X\"/>\n",
 		    (unsigned long long)rbuf[idx].ts,
 		    (unsigned int)rbuf[idx].e16, rbuf[idx].d32);

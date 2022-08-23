@@ -245,7 +245,7 @@ public final class JensReaderLib {
      * default methods will just not do anything) with the code that should
      * be executed on each record type in small batches.</p>
      *
-     * <p>This class needs to know the network interface the sch_jens queue is
+     * <p>This class needs to know the network interface the sch_janz queue is
      * running on, so it can properly construct IP addresses when asked to.</p>
      *
      * <p>Each method is passed a {@link Record} array and the amount of
@@ -290,7 +290,6 @@ public final class JensReaderLib {
          * <li>{@link #ecnIn}</li>
          * <li>{@link #ecnOut}</li>
          * <li>{@link #ecnValid}</li>
-         * <li>{@link #markCoDel}</li>
          * <li>{@link #markJENS}</li>
          * <li>{@link #dropped}</li>
          * <li>{@link #pktSize}</li>
@@ -395,17 +394,6 @@ public final class JensReaderLib {
              */
             @UsedByJNI
             public boolean ecnValid;
-            /**
-             * <p>Whether the packet was ECN CE marked because {@code target} was not
-             * reached within {@code interval} (CoDel algorithm).</p>
-             *
-             * <p>Note that this flag can be set even if the packet was not ECN-capable.
-             * The packet is dropped by the CoDel algorithm in those cases.</p>
-             *
-             * <p>{@link #handlePacket(Record[], int)} only.</p>
-             */
-            @UsedByJNI
-            public boolean markCoDel;
             /**
              * <p>Whether the packet was ECN CE marked due to the JENS algorithm,
              * based on {@code markfull} and {@code markfree} as well as the

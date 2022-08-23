@@ -25,7 +25,7 @@ import java.net.NetworkInterface;
 import java.util.Arrays;
 
 /**
- * <p>Example main() for the sch_jens relayfs channel reader.</p>
+ * <p>Example main() for the sch_janz relayfs channel reader.</p>
  *
  * <p>This is not an example of good error handling… namely, it does not have
  * any at all. This merely serves to instruct how to parse the statistics.</p>
@@ -71,13 +71,13 @@ public final class JensReaderDemo {
                     System.out.print("no traffic class");
                 }
                 // note both of the following can indicate marking even for nōn-ECN packets
-                // in that case, they aren’t marked (obviously); CoDel drops them, JENS doesn’t
-                // (but JENS is defined to operate only with ECN-capable traffic) */
+                // in that case, they aren’t marked (obviously)
+                // but JENS is designed to operate only with ECN-capable AML/L4S traffic */
                 System.out.printf("; JENS %7.3f%% (%s)", r[i].chance * 100.0,
                   r[i].markJENS ? "marked: CE" : "not marked");
-                if (r[i].markCoDel) {
-                    System.out.print("; CoDel marked");
-                }
+                //if (r[i].markCoDel) {
+                //    System.out.print("; CoDel marked");
+                //}
                 if (r[i].dropped) {
                     System.out.print("; dropped");
                 }
@@ -118,10 +118,10 @@ public final class JensReaderDemo {
     }
 
     /**
-     * <p>Retrieves {@code sch_jens} relayfs channel statistics and prints them.</p>
+     * <p>Retrieves {@code sch_janz} relayfs channel statistics and prints them.</p>
      *
      * <p>The {@code args[]} passed to the main function is stripped its first
-     * element, which is expected to be the network interface name the sch_jens
+     * element, which is expected to be the network interface name the sch_janz
      * queue runs on; all subsequent elements are handed on to the reader library,
      * which currently only expects one argument (the debugfs path), unchanged.</p>
      *

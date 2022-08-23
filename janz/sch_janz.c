@@ -826,6 +826,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (tb[TCA_JANZ_HANDOVER]) {
 		u64 tmp = nla_get_u32(tb[TCA_JANZ_HANDOVER]);
 
+printk(KERN_WARNING "sch_janz: <handover=%u>\n", (unsigned)tmp);
 		tmp *= NSEC_PER_USEC;
 		q->handover = ktime_get_ns() + tmp;
 		/* implementation of handover */
@@ -833,6 +834,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		    q->notbefore : q->handover;
 		q->crediting = 0;
 	}
+else printk(KERN_WARNING "sch_janz: no handover\n");
 
 	if (tb[TCA_JANZ_MARKFREE])
 		q->markfree = us_to_t1024(nla_get_u32(tb[TCA_JANZ_MARKFREE]));

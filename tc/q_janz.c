@@ -91,6 +91,10 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		--argv;
 	}
 
+fprintf(stderr, "D<handover=%u>\n",handover);
+fprintf(stderr, "D<markfree=%u>\n",markfree);
+fprintf(stderr, "D<markfull=%u>\n",markfull);
+
 	tail = addattr_nest(n, 1024, TCA_OPTIONS);
 	if (limit)
 		addattr_l(n, 1024, TCA_JANZ_LIMIT, &limit, sizeof(limit));
@@ -144,6 +148,7 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	if (tb[TCA_JANZ_HANDOVER] &&
 	    RTA_PAYLOAD(tb[TCA_JANZ_HANDOVER]) >= sizeof(handover)) {
 		handover = rta_getattr_u32(tb[TCA_JANZ_HANDOVER]);
+fprintf(stderr, "D<handover=%u>\n",handover);
 		print_string(PRINT_FP, NULL, "handover %s ",
 		    sprint_time(handover, b1));
 		print_uint(PRINT_JSON, "handover", NULL, handover);
@@ -151,6 +156,7 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	if (tb[TCA_JANZ_MARKFREE] &&
 	    RTA_PAYLOAD(tb[TCA_JANZ_MARKFREE]) >= sizeof(markfree)) {
 		markfree = rta_getattr_u32(tb[TCA_JANZ_MARKFREE]);
+fprintf(stderr, "D<markfree=%u>\n",markfree);
 		print_string(PRINT_FP, NULL, "markfree %s ",
 		    sprint_time(markfree, b1));
 		print_uint(PRINT_JSON, "markfree", NULL, markfree);
@@ -158,6 +164,7 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	if (tb[TCA_JANZ_MARKFULL] &&
 	    RTA_PAYLOAD(tb[TCA_JANZ_MARKFULL]) >= sizeof(markfull)) {
 		markfull = rta_getattr_u32(tb[TCA_JANZ_MARKFULL]);
+fprintf(stderr, "D<markfull=%u>\n",markfull);
 		print_string(PRINT_FP, NULL, "markfull %s ",
 		    sprint_time(markfull, b1));
 		print_uint(PRINT_JSON, "markfull", NULL, markfull);

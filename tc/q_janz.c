@@ -88,7 +88,7 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 			return (-1);
 		}
 		--argc;
-		--argv;
+		++argv;
 	}
 
 fprintf(stderr, "D<handover=%u>\n",handover);

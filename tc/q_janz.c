@@ -68,11 +68,11 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 				janz_ejal(handover);
 		} else if (!strcmp(*argv, "markfree")) {
 			NEXT_ARG();
-			if (get_unsigned(&markfree, *argv, 0))
+			if (get_time(&markfree, *argv))
 				janz_ejal(markfree);
 		} else if (!strcmp(*argv, "markfull")) {
 			NEXT_ARG();
-			if (get_unsigned(&markfull, *argv, 0))
+			if (get_time(&markfull, *argv))
 				janz_ejal(markfull);
 		} else if (!strcmp(*argv, "subbufs")) {
 			NEXT_ARG();

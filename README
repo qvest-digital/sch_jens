@@ -12,8 +12,8 @@ cd /usr/share/doc/iproute2/examples
 javac -d obj JensReaderDemo.java JensReaderLib.java
 sudo java -cp obj de.telekom.llcto.jens.reader.JensReaderDemo \
     eth0 /sys/kernel/debug/sch_janz/0001:0
-# -or- just
-cd /usr/share/doc/iproute2/examples && make run
+# -or- just this, in the source tree
+cd jens && make run
 # -or- (without Java™ example)
 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_janz/0001:0
 

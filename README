@@ -18,6 +18,7 @@ cd jens && make run
 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_janz/0001:0
 
 sudo tc -s qdisc show dev $dev
+sudo tc -s -j qdisc show dev $dev | jq .
 
 sudo tc qdisc del dev $dev root
 

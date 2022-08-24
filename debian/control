@@ -66,7 +66,6 @@ Description: JENS network packet scheduler, kernel module source
  This is a bundle of kernel modules needed for JENS by DTAG LLCTO.
  .
  sch_janz is a bespoke qdisc using an algorithm very close to the Linux
- default pfifo_fast qdisc backing a bandwidth limiting (packet pacing,
- handover) and ECN CE-marking packet scheduler, with relayfs-based live
- reporting of various KPIs. It allows simulating a RAN handover, that
- is stopping network traffic for a given time.
+ default pfifo_fast qdisc backing a bandwidth limiting (packet pacing)
+ packet scheduler with ECN CE marking, handover simulation, introduction
+ of extra latencies, etc. modelled after the E/// PoC RAN.

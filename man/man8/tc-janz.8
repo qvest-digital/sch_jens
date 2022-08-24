@@ -137,7 +137,6 @@ qdisc janz 1: root refcnt 2 limit 10240 rate 10000kbit \e
 for Deutsche Telekom LLCTO
 .Sh CAVEATS
 This qdisc is only supported as the root egress qdisc on a device.
-It is highly experimental.
 .Pp
 The traffic rate is internally converted to nanoseconds per byte
 needed to transfer, limiting it to about 8 Gbit/s; the closer the

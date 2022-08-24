@@ -118,7 +118,7 @@ struct janz_priv {
 	u64 qsz_next;			/* next time to emit queue-size */		//@  +8
 	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@16
 	u64 ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@  +8
-	u64 handover;			/* time past next handover (or 0) */		//@16
+	u64 DYMMYval;			/* xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx */		//@16
 	janz1024_time markfree;								//@  +8
 	janz1024_time markfull;								//@  +12
 	u32 memusage;			/* enqueued packet truesize */			//@16
@@ -827,10 +827,9 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		u64 tmp = nla_get_u32(tb[TCA_JANZ_HANDOVER]);
 
 		tmp *= NSEC_PER_USEC;
-		q->handover = ktime_get_ns() + tmp;
+		tmp += ktime_get_ns();
 		/* implementation of handover */
-		q->notbefore = q->handover < q->notbefore ?
-		    q->notbefore : q->handover;
+		q->notbefore = tmp < q->notbefore ? q->notbefore : tmp;
 		q->crediting = 0;
 	}
 
@@ -873,7 +872,6 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	/* config values’ defaults */
 	sch->limit = 10240;
 	q->ns_pro_byte = 800; /* 10 Mbit/s */
-	q->handover = 0;
 	q->markfree = ns_to_t1024(nsmul(4, NSEC_PER_MSEC));
 	q->markfull = ns_to_t1024(nsmul(14, NSEC_PER_MSEC));
 	q->nsubbufs = 0;

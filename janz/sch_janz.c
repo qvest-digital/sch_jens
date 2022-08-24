@@ -872,8 +872,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	/* config values’ defaults */
 	sch->limit = 10240;
 	q->ns_pro_byte = 800; /* 10 Mbit/s */
-	q->markfree = ns_to_t1024(nsmul(4, NSEC_PER_MSEC));
-	q->markfull = ns_to_t1024(nsmul(14, NSEC_PER_MSEC));
+	q->markfree = ns_to_t1024(nsmul(4, NSEC_PER_MSEC)) + /* round fix */ 1;
+	q->markfull = ns_to_t1024(nsmul(14, NSEC_PER_MSEC)) + /* fix */ 1;
 	q->nsubbufs = 0;
 	q->fragcache_num = 0;
 

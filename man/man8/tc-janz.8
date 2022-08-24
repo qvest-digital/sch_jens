@@ -17,7 +17,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd August 22, 2022
+.Dd August 23, 2022
 .Dt TC\-JANZ 8
 .Os Linux
 .Sh NAME
@@ -142,3 +142,9 @@ The traffic rate is internally converted to nanoseconds per byte
 needed to transfer, limiting it to about 8 Gbit/s; the closer the
 rate gets to the extremes, the less usable it will be.
 Experiments with 128 kbit/s as a lower bound show mixed results.
+To obtain the exact bandwidth in use, either run
+.Ic tc Fl j Ic qdisc show
+or do two 64-bit integer divisions: first divide 1000000000
+by the amount of bytes (not bits!) per second, then divide
+1000000000 by the result of the first division, resulting,
+again, in bytes per second.

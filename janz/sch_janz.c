@@ -952,10 +952,6 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 	if (opts == NULL)
 		goto nla_put_failure;
 
-	if (q->handover && nla_put_u32(skb, TCA_JANZ_HANDOVER,
-	    div_u64(q->handover - ktime_get_ns(), NSEC_PER_USEC)))
-		goto nla_put_failure;
-
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
 	      div64_u64(NSEC_PER_SEC, q->ns_pro_byte), TCA_JANZ_PAD64) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFREE, t1024_to_us(q->markfree)) ||

@@ -116,7 +116,6 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	struct rtattr *tb[TCA_JANZ_MAX + 1];
 	unsigned int limit;
 	__u64 rate64;
-	unsigned int handover;
 	unsigned int markfree;
 	unsigned int markfull;
 	unsigned int subbufs;
@@ -140,13 +139,6 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 		print_string(PRINT_FP, NULL, "rate %s ",
 		    sprint_rate(rate64, b1));
 		print_lluint(PRINT_JSON, "rate", NULL, rate64);
-	}
-	if (tb[TCA_JANZ_HANDOVER] &&
-	    RTA_PAYLOAD(tb[TCA_JANZ_HANDOVER]) >= sizeof(handover)) {
-		handover = rta_getattr_u32(tb[TCA_JANZ_HANDOVER]);
-		print_string(PRINT_FP, NULL, "handover %s ",
-		    sprint_time(handover, b1));
-		print_uint(PRINT_JSON, "handover", NULL, handover);
 	}
 	if (tb[TCA_JANZ_MARKFREE] &&
 	    RTA_PAYLOAD(tb[TCA_JANZ_MARKFREE]) >= sizeof(markfree)) {

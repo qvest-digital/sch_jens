@@ -116,9 +116,9 @@ struct janz_priv {
 	struct rchan *record_chan;	/* relay to userspace */			//@16
 #define QSZ_INTERVAL nsmul(5, NSEC_PER_MSEC)
 	u64 qsz_next;			/* next time to emit queue-size */		//@  +8
-	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@16
-	u64 ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@  +8
-	u64 DYMMYval;			/* xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx */		//@16
+	u64 drop_next;			/* next time to check drops */			//@16
+	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@  +8
+	u64 ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@16
 	janz1024_time markfree;								//@  +8
 	janz1024_time markfull;								//@  +12
 	u32 memusage;			/* enqueued packet truesize */			//@16
@@ -917,6 +917,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	q->fragcache_aged = 0;
 
 	q->qsz_next = ktime_get_ns() + QSZ_INTERVAL;
+	q->drop_next = /*XXX*/ 0;
 
 	sch->flags &= ~TCQ_F_CAN_BYPASS;
 	return (0);

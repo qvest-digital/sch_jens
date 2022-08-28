@@ -834,7 +834,8 @@ janz_reset(struct Qdisc *sch)
 	sch->qstats.overlimits = 0;
 	q->notbefore = 0;
 	q->crediting = 0;
-	//XXX flush subbufs?
+	if (q->record_chan)
+		relay_flush(q->record_chan);
 }
 
 static const struct nla_policy janz_nla_policy[TCA_JANZ_MAX + 1] = {
@@ -907,6 +908,8 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		/* only at load time */
 		q->fragcache_num = nla_get_u32(tb[TCA_JANZ_FRAGCACHE]);
 
+	/* assert: sch->q.qlen == 0 || q->record_chan != nil */
+	/* assert: sch->limit > 0 */
 	if (unlikely(sch->q.qlen > sch->limit))
 		janz_drop_overlen(sch, q, ktime_get_ns(), false);
 
@@ -940,6 +943,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	/* qdisc state */
 	sch->q.qlen = 0;
+	/* needed so janz_reset DTRT */
+	q->record_chan = NULL;
 	janz_reset(sch);
 	qdisc_watchdog_init_clockid(&q->watchdog, sch, CLOCK_MONOTONIC);
 

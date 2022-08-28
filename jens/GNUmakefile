@@ -17,6 +17,11 @@ have_sednp: have_sednp.o
 endif
 CLEANFILES+=	have_sednp.o have_sednp
 
+show_invalid_records?=no
+ifeq (yes,${show_invalid_records})
+CPPFLAGS+=	-Dshow_invalid_records
+endif
+
 JNIDIR?=	/usr/lib/jvm/default-java
 JNICFLAGS+=	${CFLAGS} -fPIC -fvisibility=hidden
 JNICPPFLAGS+=	${CPPFLAGS} -I${JNIDIR}/include -I${JNIDIR}/include/linux

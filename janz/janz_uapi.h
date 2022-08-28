@@ -38,6 +38,7 @@ struct tc_janz_relay {
 	};			/* 32 bits of user data */
 	union {
 		__u8 x8[16];	/* 128 bits of extra data */
+		__u64 x64[2];
 		struct in6_addr xip;
 	};
 	union {
@@ -78,6 +79,7 @@ enum {
 	/* d32 = memory usage in bytes */
 	/* e16 = amount of packets in FIFO, 0xFFFF if more */
 	/* f8 = bitfield: 0=handover started */
+	/* x64[0] = current rate in bits/s */
 	TC_JANZ_RELAY_QUEUESZ,
 
 	/* report a single packet leaving our queue */

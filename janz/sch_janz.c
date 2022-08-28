@@ -177,6 +177,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 	r.d32 = q->memusage;
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
 	r.f8 = f;
+	r.x8[0] = div64_u64(NSEC_PER_SEC, q->ns_pro_byte) * 8ULL;
 	janz_record_write(&r, q);
 
 	/* use of ktime_get_ns() is deliberate */

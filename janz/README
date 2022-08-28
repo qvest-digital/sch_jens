@@ -71,7 +71,7 @@ The remaining members are per-record-type data. They are:
 • d32 (32-bit unsigned integer)
   aliased as d16[2] (16-bit unsigned integer)
   aliased as d8[4] (8-bit unsigned integer)
-• x8, y8 (16-byte arrays e.g. for IP addresses)
+• x8, y8 (16-byte arrays e.g. for IP addresses) or subdivided, see below
 • z (sub-structured 16-byte union)
 Any data members not specified by the record type must not be accessed.
 
@@ -115,6 +115,8 @@ Record types define the following data members:
   – e16 queue length (packets), capped at 0xFFFF
   – f8 bitfield
     ‣   0 handover started
+  – x8 subdivided
+    ‣ first 64 bit: current bandwidth limit (bits/s)
 
 • TC_JANZ_RELAY_PADDING: none; shouldn’t occur but ignore silently
 

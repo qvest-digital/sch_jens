@@ -162,6 +162,7 @@ janz_record_write(struct tc_janz_relay *record, struct janz_priv *q)
 {
 	unsigned long flags;	/* used by spinlock macros */
 
+	printk(KERN_WARNING "sch_janz: relay: record write\n");
 	spin_lock_irqsave(&q->record_lock, flags);
 	__relay_write(q->record_chan, record, sizeof(struct tc_janz_relay));
 	spin_unlock_irqrestore(&q->record_lock, flags);
@@ -722,6 +723,7 @@ janz_debugfs_create(const char *filename, struct dentry *parent,
     umode_t mode, struct rchan_buf *buf, int *is_global)
 {
 	*is_global = 1;
+printk(KERN_WARNING "sch_janz: relay: janz_debugfs_create\n");
 	return (debugfs_create_file(filename, mode, parent, buf,
 	    &relay_file_operations));
 }
@@ -730,6 +732,7 @@ static int
 janz_debugfs_destroy(struct dentry *dentry)
 {
 	debugfs_remove(dentry);
+printk(KERN_WARNING "sch_janz: relay: janz_debugfs_destroy\n");
 	return (0);
 }
 
@@ -741,6 +744,7 @@ janz_subbuf_init(struct rchan_buf *buf, void *subbuf_,
 	struct tc_janz_relay *subbuf = (struct tc_janz_relay *)subbuf_;
 	struct tc_janz_relay bufinit = { 0, TC_JANZ_RELAY_PADDING };
 
+printk(KERN_WARNING "sch_janz: relay: janz_subbuf_init(…, …, …, %zu)\n", prev_padding);
 	for (n = 0; n < TC_JANZ_RELAY_NRECORDS; ++n)
 		subbuf[n] = bufinit;
 
@@ -961,6 +965,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		err = -ENOENT;
 		goto init_fail;
 	}
+printk(KERN_WARNING "sch_janz: relay: relay_open\n");
 	spin_lock_init(&q->record_lock);
 
 	q->fragcache_base = kvcalloc(q->fragcache_num,
@@ -987,6 +992,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
  init_fail:
 	if (q->record_chan) {
 		relay_close(q->record_chan);
+printk(KERN_WARNING "sch_janz: relay: relay_close\n");
 		q->record_chan = NULL;
 	}
 	return (err);
@@ -1006,6 +1012,7 @@ janz_gwq_fn(struct work_struct *work)
 	    struct janz_gwq_ovl, dwork);
 
 	relay_close(ovl->record_chan);
+printk(KERN_WARNING "sch_janz: relay: relay_close\n");
 	kvfree(ovl);
 }
 
@@ -1025,6 +1032,7 @@ janz_done(struct Qdisc *sch)
 
 	if (!q->fragcache_base) {
 		/* all bets off… */
+printk(KERN_WARNING "sch_janz: relay: relay_close\n");
 		relay_close(q->record_chan);
 		return;
 	}
@@ -1037,6 +1045,7 @@ janz_done(struct Qdisc *sch)
 	 * inside the worker function (this is explicitly permitted) ;)
 	 */
 
+printk(KERN_WARNING "sch_janz: relay: relay_flush\n");
 	relay_flush(q->record_chan);
 
 	ovl = (void *)q->fragcache_base;

@@ -998,8 +998,10 @@ janz_done(struct Qdisc *sch)
 	struct janz_priv *q = qdisc_priv(sch);
 
 	qdisc_watchdog_cancel(&q->watchdog);
-	if (q->record_chan)
+	if (q->record_chan) {
+		relay_flush(q->record_chan);
 		relay_close(q->record_chan);
+	}
 	kvfree(q->fragcache_base);
 }
 

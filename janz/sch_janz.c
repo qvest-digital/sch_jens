@@ -992,17 +992,58 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	return (err);
 }
 
+/* workaround to relay_close late using the global workqueue */
+
+struct janz_gwq_ovl {
+	struct delayed_work dwork;
+	struct rchan *record_chan;
+};
+
+static void
+janz_gwq_fn(struct work_struct *work)
+{
+	struct janz_gwq_ovl *ovl = container_of(to_delayed_work(work),
+	    struct janz_gwq_ovl, dwork);
+
+	relay_close(ovl->record_chan);
+	kvfree(ovl);
+}
+
 static void
 janz_done(struct Qdisc *sch)
 {
 	struct janz_priv *q = qdisc_priv(sch);
+	struct janz_gwq_ovl *ovl;
 
 	qdisc_watchdog_cancel(&q->watchdog);
-	if (q->record_chan) {
-		relay_flush(q->record_chan);
-		relay_close(q->record_chan);
+
+	if (!q->record_chan) {
+		/* the fast/easy path out, do everything now */
+		kvfree(q->fragcache_base);
+		return;
 	}
-	kvfree(q->fragcache_base);
+
+	if (!q->fragcache_base) {
+		/* all bets off… */
+		relay_close(q->record_chan);
+		return;
+	}
+
+	/*
+	 * we need to relay_flush() now but relay_close() later so that
+	 * userspace has a chance to actually read the information; for
+	 * that, deferred work can be used, but where to put the struct
+	 * for that? easy, reuse q->fragcache_base memory, free it last
+	 * inside the worker function (this is explicitly permitted) ;)
+	 */
+
+	relay_flush(q->record_chan);
+
+	ovl = (void *)q->fragcache_base;
+	ovl->record_chan = q->record_chan;
+	INIT_DELAYED_WORK(&ovl->dwork, janz_gwq_fn);
+
+	schedule_delayed_work(&ovl->dwork, msecs_to_jiffies(1000));
 }
 
 static int

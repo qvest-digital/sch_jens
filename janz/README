@@ -113,6 +113,8 @@ Record types define the following data members:
 • TC_JANZ_RELAY_QUEUESZ:
   – d32 memory usage (bytes), including Linux structural overhead
   – e16 queue length (packets), capped at 0xFFFF
+  – f8 bitfield
+    ‣   0 handover started
 
 • TC_JANZ_RELAY_PADDING: none; shouldn’t occur but ignore silently
 
@@ -136,3 +138,6 @@ respective IPv6 extension header for these purposes and we use them for
 IPv4 as well, to signal this). Note 59 is also valid for IPv6 packets that
 do not have any payload. 6 is TCP, 17 is UDP, 58/1 are ICMP; for more, see:
 https://en.wikipedia.org/wiki/List_of_IP_protocol_numbers
+
+Subbuffers are flushed on queue deconfiguration and when starting a
+handover (after the TC_JANZ_RELAY_QUEUESZ indicating so was emitted).

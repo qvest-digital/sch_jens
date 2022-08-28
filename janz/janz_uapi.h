@@ -77,6 +77,7 @@ enum {
 	/* report length of queue periodically */
 	/* d32 = memory usage in bytes */
 	/* e16 = amount of packets in FIFO, 0xFFFF if more */
+	/* f8 = bitfield: 0=handover started */
 	TC_JANZ_RELAY_QUEUESZ,
 
 	/* report a single packet leaving our queue */

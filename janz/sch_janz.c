@@ -168,7 +168,7 @@ janz_record_write(struct tc_janz_relay *record, struct janz_priv *q)
 }
 
 static inline void
-janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now)
+janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 {
 	struct tc_janz_relay r = {0};
 
@@ -176,7 +176,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now)
 	r.type = TC_JANZ_RELAY_QUEUESZ;
 	r.d32 = q->memusage;
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
-	r.f8 = 0;
+	r.f8 = f;
 	janz_record_write(&r, q);
 
 	/* use of ktime_get_ns() is deliberate */
@@ -393,7 +393,7 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 
  out:
 	if (!is_peek && (now >= q->qsz_next))
-		janz_record_queuesz(sch, q, now);
+		janz_record_queuesz(sch, q, now, 0);
 	return (skb);
 }
 
@@ -784,7 +784,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	qdisc_qstats_backlog_inc(sch, skb);
 
 	if (now >= q->qsz_next)
-		janz_record_queuesz(sch, q, now);
+		janz_record_queuesz(sch, q, now, 0);
 
 	if (unlikely(overlimit)) {
 		qdisc_qstats_overlimit(sch);
@@ -912,6 +912,12 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	/* assert: sch->limit > 0 */
 	if (unlikely(sch->q.qlen > sch->limit))
 		janz_drop_overlen(sch, q, ktime_get_ns(), false);
+
+	/* flush subbufs before handover */
+	if (tb[TCA_JANZ_HANDOVER] && q->record_chan) {
+		janz_record_queuesz(sch, q, ktime_get_ns(), 1);
+		relay_flush(q->record_chan);
+	}
 
 	sch_tree_unlock(sch);
 	return (0);

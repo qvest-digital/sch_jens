@@ -914,10 +914,13 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (unlikely(sch->q.qlen > sch->limit))
 		janz_drop_overlen(sch, q, ktime_get_ns(), false);
 
-	/* flush subbufs before handover */
-	if (tb[TCA_JANZ_HANDOVER] && q->record_chan) {
-		janz_record_queuesz(sch, q, ktime_get_ns(), 1);
-		relay_flush(q->record_chan);
+	if (q->record_chan) {
+		/* report if rate changes or handover starts */
+		if (tb[TCA_JANZ_RATE64] || tb[TCA_JANZ_HANDOVER])
+			janz_record_queuesz(sch, q, ktime_get_ns(), 1);
+		/* flush subbufs before handover */
+		if (tb[TCA_JANZ_HANDOVER])
+			relay_flush(q->record_chan);
 	}
 
 	sch_tree_unlock(sch);

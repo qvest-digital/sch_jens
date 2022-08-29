@@ -2,8 +2,18 @@ iproute2 (5.10.0-4jens14) tarent; urgency=medium
 
   * Replace sch_jens/sch_jhtb with sch_janz entirely (testing indicates
     this works and is a good idea after all) and clean up accordingly
+  * Implement dropping of old packets after gNB spec per LLCTECHOPX-34
+  * Flush relayfs subbufs:
+    - before closing (defer closing by one second)
+    - on tc qdisc reset
+    - when starting a handover
+  * In TC_JANZ_RELAY_QUEUESZ now also indicate:
+    - starting a handover (f8 bit#0)
+    - current bandwidth limit, in bits/s (x8[0‥7] as u64)
+  * Emit TC_JANZ_RELAY_QUEUESZ, even if early, when changing the rate
+    and/or initiating a handover
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Tue, 23 Aug 2022 22:33:29 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 29 Aug 2022 23:18:40 +0200
 
 iproute2 (5.10.0-4jens12) tarent; urgency=medium
 

@@ -117,6 +117,13 @@ Record types define the following data members:
     ‣   0 handover started
   – x8 subdivided
     ‣ first 64 bit: current bandwidth limit (bits/s)
+    ‣ second 64 bit: current timestamp offset (ns)
+  – z struct:
+    ‣ __u32 extra latency (in 1024 ns units)
+
+      ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+      │ <-extralat.-> │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │
+      └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 • TC_JANZ_RELAY_PADDING: none; shouldn’t occur but ignore silently
 

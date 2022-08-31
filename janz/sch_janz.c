@@ -178,6 +178,8 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
 	r.f8 = f;
 	r.x64[0] = div64_u64(NSEC_PER_SEC, q->ns_pro_byte) * 8ULL;
+	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
+	r.z.zQUEUESZ.extralatency = 0; //XXX tbd
 	janz_record_write(&r, q);
 
 	/* use of ktime_get_ns() is deliberate */

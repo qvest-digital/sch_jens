@@ -36,6 +36,11 @@ import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
+import java.text.SimpleDateFormat;
+import java.time.ZoneOffset;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
 import java.util.stream.Stream;
 
 /**
@@ -45,6 +50,12 @@ import java.util.stream.Stream;
  */
 public final class JensReaderLib {
     private static char decimal;
+    private static final SimpleDateFormat sdfHalf;
+
+    static {
+        sdfHalf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT);
+        sdfHalf.setTimeZone(TimeZone.getTimeZone(ZoneOffset.UTC));
+    };
 
     /**
      * <p>Signed integer type.</p>
@@ -134,6 +145,23 @@ public final class JensReaderLib {
     }
 
     /**
+     * Formats timestamps as ISO 8601 with nanoseconds.
+     *
+     * @param ns  unsigned timestamp in nanoseconds
+     * @param ofs unsigned timestamp offset in nanoseconds
+     * @return String "yyyy-mm-ddThh:mm:ss.sssssssssZ", empty ("") if ofs is 0
+     */
+    public static String formatTimestamp(final @Unsigned long ns, final @Unsigned long ofs) {
+        if (ofs == 0)
+            return "";
+
+        final @Unsigned long ts = ns + ofs;
+        final @Positive(max = 18446744073709L) long ms = Long.divideUnsigned(ts, 1000000L);
+        final @Positive(max = 999999999) long frac = Long.remainderUnsigned(ts, 1000000000L);
+        return String.format("%s.%09dZ", sdfHalf.format(new Date(ms)), frac);
+    }
+
+    /**
      * Formats ECN bits as string.
      *
      * @param bits integer representation of ECN bits (0‥3)
@@ -154,6 +182,8 @@ public final class JensReaderLib {
     private static class JNI {
         @UsedByJNI
         private int fd;
+        @UsedByJNI
+        private @Unsigned long lastOffset;
         @UsedByJNI
         private final AbstractJensActor.Record[] rQueueSize;
         @UsedByJNI
@@ -279,12 +309,17 @@ public final class JensReaderLib {
          *
          * <p>QueueSize:</p><ul>
          * <li>{@link #timestamp}</li>
+         * <li>{@link #tsOffset}</li>
          * <li>{@link #len}</li>
          * <li>{@link #mem}</li>
+         * <li>{@link #bwLimit}</li>
+         * <li>{@link #extraLatency}</li>
+         * <li>{@link #handoverStarting}</li>
          * </ul>
          *
          * <p>Packet:</p><ul>
          * <li>{@link #timestamp}</li>
+         * <li>{@link #tsOffset}</li>
          * <li>{@link #sojournTime}</li>
          * <li>{@link #chance}</li>
          * <li>{@link #ecnIn}</li>
@@ -303,6 +338,7 @@ public final class JensReaderLib {
          *
          * <p>Unknown:</p><ul>
          * <li>{@link #timestamp}</li>
+         * <li>{@link #tsOffset}</li>
          * <li>{@link #type}</li>
          * </ul>
          *
@@ -320,6 +356,17 @@ public final class JensReaderLib {
              */
             @UsedByJNI
             public @Unsigned long timestamp;
+
+            /**
+             * <p>Current timestamp offset in nanoseconds.</p>
+             *
+             * <p>This is so {@link #timestamp} + tsOffset is epoch-based.</p>
+             *
+             * <p>Used in all record types. Valid only after the first
+             * QueueSize record was read (otherwise 0 which means invalid).</p>
+             */
+            @UsedByJNI
+            public @Unsigned long tsOffset;
 
             /* only valid for QueueSize */
 
@@ -341,6 +388,30 @@ public final class JensReaderLib {
              */
             @UsedByJNI
             public @Positive(max = 0xFFFFFFFFL) long mem;
+            /**
+             * <p>Current bandwidth limit in bits per second.</p>
+             *
+             * <p>Maximum 8 Gbit/s using SI præficēs; this is always a
+             * multiple of 8 bits because bytes are used internally.</p>
+             *
+             * <p>{@link #handleQueueSize(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 8000000000L) long bwLimit;
+            /**
+             * <p>Currently enacted extra latency, in nanoseconds.</p>
+             *
+             * <p>{@link #handleQueueSize(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 0x3FFFFFFFC00L) long extraLatency;
+            /**
+             * <p>Whether a handover is just starting.</p>
+             *
+             * <p>{@link #handleQueueSize(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public boolean handoverStarting;
 
             /* only valid for Packet */
 

@@ -253,9 +253,16 @@ consume(size_t idx)
 		break;
 
 	case TC_JANZ_RELAY_QUEUESZ:
-		printf("<Qsz ts=\"%llX\" len=\"%X\" mem=\"%X\"/>\n",
+		printf("<Qsz ts=\"%llX\" len=\"%X\" mem=\"%X\""
+		    " tsofs=\"%llX\" bw=\"%llu\" extra-latency=\"%X\"",
 		    (unsigned long long)rbuf[idx].ts,
-		    (unsigned int)rbuf[idx].e16, rbuf[idx].d32);
+		    (unsigned int)rbuf[idx].e16, (unsigned int)rbuf[idx].d32,
+		    (unsigned long long)rbuf[idx].x64[1],
+		    (unsigned long long)rbuf[idx].x64[0],
+		    (unsigned int)rbuf[idx].z.zQUEUESZ.extralatency);
+		if (rbuf[idx].f8 & TC_JANZ_RELAY_QUEUESZ_HOVER)
+			fputs(" handover=\"starting\"", stdout);
+		printf("/>\n");
 		break;
 	}
 }

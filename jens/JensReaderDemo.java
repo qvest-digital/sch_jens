@@ -51,9 +51,17 @@ public final class JensReaderDemo {
         public void handleQueueSize(final JensReaderLib.AbstractJensActor.Record[] r, final int n) {
             for (int i = 0; i < n; ++i) {
                 System.out.printf("%03d/%03d ", i + 1, n);
-                System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r[i].timestamp));
-                System.out.printf("queue-size: %d packet%s, %.2f KiB\n", r[i].len,
-                  r[i].len == 1 ? "" : "s", (double) r[i].mem / 1024.0);
+                System.out.printf("%s [%17s] ",
+                  JensReaderLib.formatTimestamp(r[i].timestamp, r[i].tsOffset),
+                  JensReaderLib.formatTimestamp(r[i].timestamp));
+                System.out.printf("queue-size: extra latency %9s ms; ",
+                  JensReaderLib.formatTimestamp(r[i].extraLatency));
+                if (r[i].handoverStarting)
+                    System.out.print("handover starting; ");
+                System.out.printf("bwlimit %.3f Mbit/s; %7.2f KiB in %d packet%s\n",
+                  (double) r[i].bwLimit / 1000000.0,
+                  (double) r[i].mem / 1024.0,
+                  r[i].len, r[i].len == 1 ? "" : "s");
             }
         }
 
@@ -61,7 +69,9 @@ public final class JensReaderDemo {
         public void handlePacket(final JensReaderLib.AbstractJensActor.Record[] r, final int n) {
             for (int i = 0; i < n; ++i) {
                 System.out.printf("%03d/%03d ", i + 1, n);
-                System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r[i].timestamp));
+                System.out.printf("%s [%17s] ",
+                  JensReaderLib.formatTimestamp(r[i].timestamp, r[i].tsOffset),
+                  JensReaderLib.formatTimestamp(r[i].timestamp));
                 System.out.printf("sojourn-time: %9s ms; ", JensReaderLib.formatTimestamp(r[i].sojournTime));
                 if (r[i].ecnValid) {
                     System.out.printf("ECN bits %s → %s",
@@ -111,7 +121,9 @@ public final class JensReaderDemo {
             for (int i = 0; i < n; ++i) {
                 // we could extract the first two lines into a new method if needed
                 System.out.printf("%03d/%03d ", i + 1, n);
-                System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(r[i].timestamp));
+                System.out.printf("%s [%17s] ",
+                  JensReaderLib.formatTimestamp(r[i].timestamp, r[i].tsOffset),
+                  JensReaderLib.formatTimestamp(r[i].timestamp));
                 System.out.printf("unknown: %X\n", r[i].type);
             }
         }
@@ -150,7 +162,9 @@ public final class JensReaderDemo {
             try (JensReaderLib.JensReader reader = JensReaderLib.init(subargs,
               new DemoActor(nif))) {
                 System.out.printf("%03d/%03d ", 0, 0);
-                System.out.printf("[%17s] ", JensReaderLib.formatTimestamp(0));
+                System.out.printf("%s [%17s] ",
+                  JensReaderLib.formatTimestamp(0, 1000000 * System.currentTimeMillis()),
+                  JensReaderLib.formatTimestamp(0));
                 System.out.println("JensReaderDemo ready to run!");
                 reader.run();
             }

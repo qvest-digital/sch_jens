@@ -87,6 +87,7 @@ static jclass cls_THR;
 static jmethodID M_THR_interrupted;	// bool()
 
 static jfieldID o_JNI_fd;		// int
+static jfieldID o_JNI_lastOffset;	// long (u64)
 static jfieldID o_JNI_rQueueSize;	// AbstractJensActor.Record[1024]
 static jfieldID o_JNI_rPacket;		// AbstractJensActor.Record[1024]
 static jfieldID o_JNI_rUnknown;		// AbstractJensActor.Record[1024]
@@ -96,9 +97,13 @@ static jfieldID o_JNI_nUnknown;		// int
 static jfieldID o_JNI_buf;		// ByteBuffer
 
 static jfieldID o_REC_timestamp;	// @Unsigned long
+static jfieldID o_REC_tsOffset;		// @Unsigned long
 // queue-size
 static jfieldID o_REC_len;		// int (u16)
 static jfieldID o_REC_mem;		// long (u32)
+static jfieldID o_REC_bwLimit;		// long (s64)
+static jfieldID o_REC_extraLatency;	// long (s64)
+static jfieldID o_REC_handoverStarting;	// bool
 // packet
 static jfieldID o_REC_sojournTime;	// long (s64)
 static jfieldID o_REC_chance;		// double
@@ -231,6 +236,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getsmeth(THR, interrupted, "()Z");
 
 	getfield(JNI, fd, "I");
+	getfield(JNI, lastOffset, "J");
 	getfield(JNI, rQueueSize, "[Lde/telekom/llcto/jens/reader/JensReaderLib$AbstractJensActor$Record;");
 	getfield(JNI, rPacket, "[Lde/telekom/llcto/jens/reader/JensReaderLib$AbstractJensActor$Record;");
 	getfield(JNI, rUnknown, "[Lde/telekom/llcto/jens/reader/JensReaderLib$AbstractJensActor$Record;");
@@ -239,8 +245,12 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getfield(JNI, nUnknown, "I");
 	getfield(JNI, buf, "Ljava/nio/ByteBuffer;");
 	getfield(REC, timestamp, "J");
+	getfield(REC, tsOffset, "J");
 	getfield(REC, len, "I");
 	getfield(REC, mem, "J");
+	getfield(REC, bwLimit, "J");
+	getfield(REC, extraLatency, "J");
+	getfield(REC, handoverStarting, "Z");
 	getfield(REC, sojournTime, "J");
 	getfield(REC, chance, "D");
 	getfield(REC, ecnIn, "I");
@@ -335,6 +345,7 @@ nativeOpen(JNIEnv *env, jobject obj, jstring name)
 	eno = errno;
 	(*env)->ReleaseStringUTFChars(env, name, fn);
 	(*env)->SetIntField(env, obj, o_JNI_fd, (jint)fd);
+	(*env)->SetLongField(env, obj, o_JNI_lastOffset, (jlong)0);
 	if (fd != -1)
 		return (/* success */ NULL);
  err_out:
@@ -373,6 +384,7 @@ nativeRead(JNIEnv *env, jobject obj)
 {
 	size_t n;
 	int fd, eno, i;
+	__u64 curofs;
 	struct tc_janz_relay *buf, *hadPadding = NULL;
 	jint nP = 0, nQ = 0, nU = 0;
 	jobjectArray aP, aQ, aU;
@@ -395,6 +407,7 @@ nativeRead(JNIEnv *env, jobject obj)
 	} U8;
 
 	fd = (int)((*env)->GetIntField(env, obj, o_JNI_fd));
+	curofs = (unsigned long)((*env)->GetLongField(env, obj, o_JNI_lastOffset));
 	aP = (jobjectArray)((*env)->GetObjectField(env, obj, o_JNI_rPacket));
 	aQ = (jobjectArray)((*env)->GetObjectField(env, obj, o_JNI_rQueueSize));
 	aU = (jobjectArray)((*env)->GetObjectField(env, obj, o_JNI_rUnknown));
@@ -433,6 +446,8 @@ nativeRead(JNIEnv *env, jobject obj)
 		default:
 			if (!(to = (*env)->GetObjectArrayElement(env, aU, nU)))
 				return (e_RecordFail);
+			U64.u = curofs;
+			(*env)->SetLongField(env, to, o_REC_tsOffset, U64.s);
 			U64.u = buf->ts;
 			(*env)->SetLongField(env, to, o_REC_timestamp, U64.s);
 			U8.u = buf->type;
@@ -443,18 +458,29 @@ nativeRead(JNIEnv *env, jobject obj)
 		case TC_JANZ_RELAY_QUEUESZ:
 			if (!(to = (*env)->GetObjectArrayElement(env, aQ, nQ)))
 				return (e_RecordFail);
+			curofs = buf->x64[1];
+			U64.u = curofs;
+			(*env)->SetLongField(env, to, o_REC_tsOffset, U64.s);
 			U64.u = buf->ts;
 			(*env)->SetLongField(env, to, o_REC_timestamp, U64.s);
 			(*env)->SetIntField(env, to, o_REC_len,
 			    (jint)(unsigned int)buf->e16);
 			(*env)->SetLongField(env, to, o_REC_mem,
 			    (jlong)(unsigned long long)buf->d32);
+			(*env)->SetLongField(env, to, o_REC_bwLimit,
+			    (jlong)buf->x64[0]);
+			(*env)->SetLongField(env, to, o_REC_extraLatency,
+			    (jlong)(1024ULL * (unsigned long long)buf->z.zQUEUESZ.extralatency));
+			(*env)->SetIntField(env, to, o_REC_handoverStarting,
+			    buf->f8 & TC_JANZ_RELAY_QUEUESZ_HOVER ? JNI_TRUE : JNI_FALSE);
 			(*env)->DeleteLocalRef(env, to);
 			++nQ;
 			break;
 		case TC_JANZ_RELAY_SOJOURN:
 			if (!(to = (*env)->GetObjectArrayElement(env, aP, nP)))
 				return (e_RecordFail);
+			U64.u = curofs;
+			(*env)->SetLongField(env, to, o_REC_tsOffset, U64.s);
 			U64.u = buf->ts;
 			(*env)->SetLongField(env, to, o_REC_timestamp, U64.s);
 			(*env)->SetLongField(env, to, o_REC_sojournTime,

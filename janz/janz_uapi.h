@@ -115,6 +115,7 @@ enum {
 /*efine TC_JANZ_RELAY_SOJOURN_xxxx (1U << 5)	-- (currently unused) */
 #define TC_JANZ_RELAY_SOJOURN_MARK (1U << 6)	/* markfree..markfull */
 #define TC_JANZ_RELAY_SOJOURN_DROP (1U << 7)	/* packet was dropped */
+#define TC_JANZ_RELAY_QUEUESZ_HOVER (1U << 0)	/* handover starting */
 
 #define TC_JANZ_RELAY_NRECORDS 256		/* per subbuffer */
 #define TC_JANZ_RELAY_SUBBUFSZ \

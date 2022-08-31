@@ -67,8 +67,9 @@ javac: .built/java
 
 e:=env "LD_LIBRARY_PATH=$$PWD"
 p=de.telekom.llcto.jens.reader
+if=eth0
 run: all .built/java
-	sudo $e java -cp .built $p.JensReaderDemo /sys/kernel/debug/sch_janz/0001:0
+	sudo $e java -cp .built $p.JensReaderDemo ${if} /sys/kernel/debug/sch_janz/0001:0
 
 install:
 	install -m 0755 -d ${DESTDIR}/usr/lib/jni

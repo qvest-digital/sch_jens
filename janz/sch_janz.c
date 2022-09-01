@@ -846,7 +846,12 @@ static struct sk_buff *
 janz_peek(struct Qdisc *sch)
 {
 	struct janz_priv *q = qdisc_priv(sch);
+	static bool warned_about_peek = false;
 
+	if (!warned_about_peek) {
+		printk(KERN_WARNING "sch_janz: .peek called... why exactly?\n");
+		warned_about_peek = true;
+	}
 	return (janz_getnext(sch, q, true));
 }
 

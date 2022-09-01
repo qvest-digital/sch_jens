@@ -30,7 +30,7 @@ Build-Depends: bison,
 Package: iproute2
 Priority: important
 Architecture: linux-any
-Provides: arpd
+Provides: arpd, iproute-janz
 Conflicts: arpd, iproute (<< 20130000-1)
 Replaces: iproute
 Depends: ${misc:Depends}, ${shlibs:Depends}, libcap2-bin,

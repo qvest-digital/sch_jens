@@ -17,7 +17,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd August 29, 2022
+.Dd August 31, 2022
 .Dt TC\-JANZ 8
 .Os Linux
 .Sh NAME
@@ -33,6 +33,7 @@
 .Op Ic markfull Ar TIME
 .Op Ic subbufs Ar NUMBER
 .Op Ic fragcache Ar NUMBER
+.Op Ic extralatency Ar TIME
 .Sh DESCRIPTION
 JENS is a network limitation simulator used in an
 .Pq L4S or similar
@@ -120,6 +121,11 @@ Default: 1
 sets the size of the IP packet fragment cache, in 64-byte structs.
 This parameter can only be set at load time because memory has to be allocated.
 Default: 1024
+.It Ic extralatency
+adds artificial network-side
+.Pq before Nm janz
+latency.
+Default: 0\ ms
 .El
 .Sh STATISTICS
 This qdisc reports extensively via relayfs over debugfs; therefore, regular
@@ -142,14 +148,53 @@ while enqueueing a new packet
 Specifically, drops accounting in the gnet stats is not done.
 .Sh EXAMPLES
 Set up a queue with standard parameters and display its statistics:
-.Bd -literal
-$ sudo tc qdisc add dev eth0 root handle 1: janz
-$ sudo tc \-s qdisc show dev eth0
+.Bd -literal -offset 4n
+$ \fBsudo tc qdisc add dev eth0 root handle 1: janz\fR\fC
+$ \fBsudo tc \-s qdisc show dev eth0\fR\fC
 qdisc janz 1: root refcnt 2 limit 10240 rate 10000kbit \e
-    markfree 4ms markfull 14ms subbufs 1024 fragcache 1024
+    markfree 4ms markfull 14ms subbufs 1024 fragcache 1024 \e
+    extralatency 0us
  Sent 158 bytes 1 pkt (dropped 0, overlimits 0, requeues 0)
  backlog 0b 0p
 .Ed
+.Pp
+Introduce somewhat more harsh limits to simulate a slow network:
+.Bd -literal -offset 4n
+$ \fBping \-c4 8.8.8.8\fR\fC
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=5.00 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=117 time=4.87 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=117 time=4.90 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=117 time=4.86 ms
+
+\-\-\- 8.8.8.8 ping statistics \-\-\-
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 4.864/4.907/5.001/0.055 ms
+$ \fBsudo tc qdisc del dev eth0 root\fR\fC
+$ \fBsudo tc qdisc add dev eth0 root handle 1: janz\fR\fC \e
+    \fBlimit 128 rate 128kbit extralatency 80ms\fR\fC
+$ \fBping \-c4 8.8.8.8\fR\fC
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=101 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=117 time=85.3 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=117 time=85.1 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=117 time=85.1 ms
+
+\-\-\- 8.8.8.8 ping statistics \-\-\-
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 85.124/89.219/101.302/6.976 ms
+$ \fBsudo tc \-s qdisc show dev eth0\fR\fC
+qdisc janz 1: root refcnt 2 limit 128 rate 128kbit \e
+    markfree 4ms markfull 14ms subbufs 1024 fragcache 1024 \e
+    extralatency 80ms
+ Sent 6620 bytes 14 pkt (dropped 0, overlimits 0, requeues 0)
+ backlog 1008b 2p
+.Ed
+.Pp
+Note: the author first attempted this with a rate of 64 kbit/s.
+This led to packet loss making the SSH session hang because some
+packets ended up being older than 100 ms due to that low a bandwidth,
+and thus dropped.
 .Sh SEE ALSO
 .Xr tc 8
 .Pp
@@ -177,3 +222,11 @@ by the amount of bytes (not bits!) per second, then divide
 1000000000 by the result of the first division, resulting,
 again, in bytes per second
 .Pq or just read it from the relayfs channel .
+.Pp
+The
+.Ic extralatency
+is asymmetric: it is only applied on the egress channel, because
+Linux cannot delay on ingress.
+It is applied before enqueueing but does not affect sojourn time.
+Basically, it simulates extra latency on the network in front of
+the JENS node.

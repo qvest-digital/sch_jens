@@ -303,7 +303,7 @@ _tc_qdisc_options()
             ;;
         janz)
             _tc_once_attr 'limit rate handover markfree markfull \
-                subbufs fragcache'
+                subbufs fragcache extralatency'
             return 0
             ;;
         gred)

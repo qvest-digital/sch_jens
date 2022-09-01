@@ -10,10 +10,15 @@ iproute2 (5.10.0-4jens14) tarent; urgency=medium
   * In TC_JANZ_RELAY_QUEUESZ now also indicate:
     - starting a handover (f8 bit#0)
     - current bandwidth limit, in bits/s (x8[0‥7] as u64)
+    - currently added input latency, in 1024 ns units (z.zQUEUESZ)
+    - current timestamp offset (x8[8‥15] as u64)
   * Emit TC_JANZ_RELAY_QUEUESZ, even if early, when changing the rate
     and/or initiating a handover
+  * In jensdmp and JensReader*.java format wall time as well, with the
+    offset from whatever the last seen TC_JANZ_RELAY_QUEUESZ sent
+  * Implement extralatency for janz
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 29 Aug 2022 23:18:40 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 01 Sep 2022 03:33:18 +0200
 
 iproute2 (5.10.0-4jens12) tarent; urgency=medium
 

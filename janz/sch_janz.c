@@ -132,6 +132,7 @@ struct janz_priv {
 	struct janz_fragcache *fragcache_base;						//@  +8
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 	spinlock_t record_lock;		/* for record_chan */				//@?
+	janz1024_time xlatency;		/* extra artificial pre-enqueue latency */	//@?
 	u8 crediting;
 };
 
@@ -179,7 +180,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 	r.f8 = f;
 	r.x64[0] = div64_u64(NSEC_PER_SEC, q->ns_pro_byte) * 8ULL;
 	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
-	r.z.zQUEUESZ.extralatency = 0; //XXX tbd
+	r.z.zQUEUESZ.extralatency = q->xlatency;
 	janz_record_write(&r, q);
 
 	/* use of ktime_get_ns() is deliberate */
@@ -280,7 +281,15 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, int qid,
 	q->memusage -= cb->truesz;
 	qdisc_qstats_backlog_dec(sch, skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
-	qdelay = resizing ? (janz1024_time)-1 : (ns_to_t1024(now) - cb->enq_ts);
+	if (resizing)
+		qdelay = (janz1024_time)-1;
+	else {
+		qdelay = ns_to_t1024(now);
+		if (unlikely(wrap_t1024_before(qdelay, cb->enq_ts)))
+			qdelay = (janz1024_time)-2;
+		else
+			qdelay -= cb->enq_ts;
+	}
 	janz_record_packet(q, skb, cb, now, qdelay);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
@@ -351,7 +360,9 @@ static inline struct sk_buff *
 janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 {
 	u64 now = ktime_get_ns();
+	janz1024_time now1024, rs1024 = (janz1024_time)-1, d;
 	struct sk_buff *skb;
+	struct janz_skb *cb;
 	int qid;
 
 	janz_dropchk(sch, q, now);
@@ -375,17 +386,39 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 		goto out;
 	}
 
-	skb = (q->q[(qid = 0)].first) ? : \
-	      (q->q[(qid = 1)].first) ? : \
-	      (q->q[(qid = 2)].first);
-	if (WARN(!skb, "supposed to equal !sch->q.qlen"))
-		goto nothing_to_send;
-	if (is_peek)
-		goto out;
+	now1024 = ns_to_t1024(now);
+
+#define try_qid(i) do {							\
+	qid = (i);							\
+	skb = q->q[qid].first;						\
+	if (skb) {							\
+		cb = get_janz_skb(skb);					\
+		if (is_peek)						\
+			return (skb);					\
+		if (!wrap_t1024_before(now1024, cb->enq_ts))		\
+			goto got_skb;					\
+		/* now < enq_ts: packet has not reached us yet */	\
+		d = cb->enq_ts - now1024;				\
+		if (d < rs1024)						\
+			rs1024 = d;					\
+	}								\
+} while (/* CONSTCOND */ 0)
+
+	try_qid(0);
+	try_qid(1);
+	try_qid(2);
+
+	/* nothing to send, but we have to reschedule first */
+	/* if we end up here, rs1024 has been assigned at least once */
+	qdisc_watchdog_schedule_range_ns(&q->watchdog,
+	    now + t1024_to_ns(rs1024), 0);
+	goto nothing_to_send;
+
+ got_skb:
 	if (!(q->q[qid].first = skb->next))
 		q->q[qid].last = NULL;
 	--sch->q.qlen;
-	q->memusage -= get_janz_skb(skb)->truesz;
+	q->memusage -= cb->truesz;
 	skb->next = NULL;
 	qdisc_qstats_backlog_dec(sch, skb);
 	qdisc_bstats_update(sch, skb);
@@ -395,7 +428,7 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	q->crediting = 1;
 
  out:
-	if (!is_peek && (now >= q->qsz_next))
+	if (now >= q->qsz_next)
 		janz_record_queuesz(sch, q, now, 0);
 	return (skb);
 }
@@ -492,7 +525,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	struct ipv6hdr *ih6;
 	struct iphdr *ih4;
 
-	cb->enq_ts = ns_to_t1024(now);
+	cb->enq_ts = ns_to_t1024(now) + q->xlatency;
 	cb->truesz = skb->truesize;
 	/* computed later */
 	cb->chance = 0;
@@ -919,6 +952,9 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		/* only at load time */
 		q->fragcache_num = nla_get_u32(tb[TCA_JANZ_FRAGCACHE]);
 
+	if (tb[TCA_JANZ_XLATENCY])
+		q->xlatency = us_to_t1024(nla_get_u32(tb[TCA_JANZ_XLATENCY]));
+
 	/* assert: sch->q.qlen == 0 || q->record_chan != nil */
 	/* assert: sch->limit > 0 */
 	if (unlikely(sch->q.qlen > sch->limit))
@@ -960,6 +996,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	q->markfull = ns_to_t1024(nsmul(14, NSEC_PER_MSEC)) + /* fix */ 1;
 	q->nsubbufs = 0;
 	q->fragcache_num = 0;
+	q->xlatency = 0;
 
 	/* qdisc state */
 	sch->q.qlen = 0;
@@ -1087,6 +1124,7 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 	    nla_put_u32(skb, TCA_JANZ_MARKFULL, t1024_to_us(q->markfull)) ||
 	    nla_put_u32(skb, TCA_JANZ_SUBBUFS, q->nsubbufs) ||
 	    nla_put_u32(skb, TCA_JANZ_FRAGCACHE, q->fragcache_num) ||
+	    nla_put_u32(skb, TCA_JANZ_XLATENCY, t1024_to_us(q->xlatency)) ||
 	    nla_put_u32(skb, TCA_JANZ_LIMIT, sch->limit))
 		goto nla_put_failure;
 

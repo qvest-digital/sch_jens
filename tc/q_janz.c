@@ -25,7 +25,7 @@ explain(void)
 	fprintf(stderr, "Usage: ... qdisc"
 	       " add ... janz [limit PACKETS] [rate RATE] [handover TIME]"
 		"\n\t	[markfree TIME] [markfull TIME]"
-		"\n\t	[subbufs NUMBER] [fragcache NUMBER]"
+		"\n\t	[subbufs NUMBER] [fragcache NUMBER] [extralatency TIME]"
 		"\n");
 }
 
@@ -48,6 +48,7 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	unsigned int markfull = ~0U;
 	unsigned int subbufs = ~0U;
 	unsigned int fragcache = ~0U;
+	unsigned int extralatency = ~0U;
 	struct rtattr *tail;
 
 	while (argc > 0) {
@@ -82,6 +83,10 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 			NEXT_ARG();
 			if (get_unsigned(&fragcache, *argv, 0))
 				janz_ejal(fragcache);
+		} else if (!strcmp(*argv, "extralatency")) {
+			NEXT_ARG();
+			if (get_time(&extralatency, *argv))
+				janz_ejal(extralatency);
 		} else {
 			fprintf(stderr, "Invalid option: \"%s\"\n", *argv);
 			explain();
@@ -106,6 +111,8 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		addattr_l(n, 1024, TCA_JANZ_SUBBUFS, &subbufs, sizeof(subbufs));
 	if (fragcache != ~0U)
 		addattr_l(n, 1024, TCA_JANZ_FRAGCACHE, &fragcache, sizeof(fragcache));
+	if (extralatency != ~0U)
+		addattr_l(n, 1024, TCA_JANZ_XLATENCY, &extralatency, sizeof(extralatency));
 	addattr_nest_end(n, tail);
 	return (0);
 }
@@ -120,6 +127,7 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	unsigned int markfull;
 	unsigned int subbufs;
 	unsigned int fragcache;
+	unsigned int extralatency;
 
 	SPRINT_BUF(b1);
 
@@ -163,6 +171,13 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 	    RTA_PAYLOAD(tb[TCA_JANZ_FRAGCACHE]) >= sizeof(fragcache)) {
 		fragcache = rta_getattr_u32(tb[TCA_JANZ_FRAGCACHE]);
 		print_uint(PRINT_ANY, "fragcache", "fragcache %u ", fragcache);
+	}
+	if (tb[TCA_JANZ_XLATENCY] &&
+	    RTA_PAYLOAD(tb[TCA_JANZ_XLATENCY]) >= sizeof(extralatency)) {
+		extralatency = rta_getattr_u32(tb[TCA_JANZ_XLATENCY]);
+		print_string(PRINT_FP, NULL, "extralatency %s ",
+		    sprint_time(extralatency, b1));
+		print_uint(PRINT_JSON, "extralatency", NULL, extralatency);
 	}
 
 	return (0);

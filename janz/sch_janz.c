@@ -142,13 +142,12 @@ struct janz_skb {
 	janz1024_time enq_ts;		/* enqueue timestamp */			//@8   :4
 	unsigned int truesz;		/* memory usage */			//@ +4 :4
 
-	u16 chance;			/* chance on ECN CE marking */		//@8   :2
-	u16 srcport;								//@ +2 :2
-	u16 dstport;								//@ +4 :2
-	u8 record_flag;			/* for debugfs/relayfs reporting */	//@ +6 :1
-	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@ +7 :1
-	u8 ipver;			/* 6 (IP) or 4 (Legacy IP) */		//@8   :1
-	u8 nexthdr;								//@ +1 :1
+	u16 srcport;								//@8   :2
+	u16 dstport;								//@ +2 :2
+	u8 record_flag;			/* for debugfs/relayfs reporting */	//@ +4 :1
+	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@ +5 :1
+	u8 ipver;			/* 6 (IP) or 4 (Legacy IP) */		//@ +6 :1
+	u8 nexthdr;								//@ +7 :1
 };
 
 static inline struct janz_skb *
@@ -190,14 +189,14 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 static inline void
 janz_record_packet(struct janz_priv *q,
     struct sk_buff *skb, struct janz_skb *cb, u64 now,
-    janz1024_time queuedelay)
+    janz1024_time queuedelay, u16 chance)
 {
 	struct tc_janz_relay r = {0};
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_SOJOURN;
 	r.d32 = queuedelay;
-	r.e16 = cb->chance;
+	r.e16 = chance;
 	r.f8 = cb->record_flag;
 	r.z.zSOJOURN.psize = skb->len;
 	r.z.zSOJOURN.ipver = cb->ipver;
@@ -290,7 +289,7 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, int qid,
 		else
 			qdelay -= cb->enq_ts;
 	}
-	janz_record_packet(q, skb, cb, now, qdelay);
+	janz_record_packet(q, skb, cb, now, qdelay, 0);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
 	rtnl_kfree_skbs(skb, skb);
@@ -439,6 +438,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 	janz1024_time qdelay;
 	u64 now = ktime_get_ns();
 	struct janz_skb *cb = get_janz_skb(skb);
+	u16 chance;
 
 	qdelay = ns_to_t1024(now) - cb->enq_ts;
 
@@ -464,10 +464,10 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 	 * even the cases that can’t happen would work correctly
 	 */
 	if (qdelay >= q->markfull) {
-		cb->chance = 0xFFFFU;
+		chance = 0xFFFFU;
 		goto domark;
 	} else if (qdelay <= q->markfree)
-		cb->chance = 0;
+		chance = 0;
 	else {
 		/* we know: tmin < t < tmax */
 		/* tmin = markfree, t = qdelay, tmax = markfull */
@@ -481,7 +481,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 		/* for rounding */
 		c += (tmax / 2);
 		/* result [0; 65535] */
-		cb->chance = div_u64(c, tmax);
+		chance = div_u64(c, tmax);
 
 		/*
 		 * we want to mark with (t' / tmax' * 100)% probability
@@ -496,7 +496,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 		}
 	}
 
-	janz_record_packet(q, skb, cb, now, qdelay);
+	janz_record_packet(q, skb, cb, now, qdelay, chance);
 }
 
 static inline void
@@ -527,8 +527,6 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 
 	cb->enq_ts = ns_to_t1024(now) + q->xlatency;
 	cb->truesz = skb->truesize;
-	/* computed later */
-	cb->chance = 0;
 	/* init values */
 	cb->srcport = 0;
 	cb->dstport = 0;

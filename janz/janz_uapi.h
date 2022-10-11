@@ -57,12 +57,14 @@ struct tc_janz_relay {
 			__u16 pad1;
 			__u32 pad2;
 		} zSOJOURN;
+#if 0
 		struct {
-			__u32 extralatency;
+			__u32 pad0;
 			__u32 pad1;
 			__u32 pad2;
 			__u32 pad3;
 		} zQUEUESZ;
+#endif
 	} z;
 };
 /* compile-time check for correct size */

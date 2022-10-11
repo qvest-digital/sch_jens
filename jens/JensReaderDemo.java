@@ -54,12 +54,11 @@ public final class JensReaderDemo {
                 System.out.printf("%s [%17s] ",
                   JensReaderLib.formatTimestamp(r[i].timestamp, r[i].tsOffset),
                   JensReaderLib.formatTimestamp(r[i].timestamp));
-                System.out.printf("queue-size: extra latency %9s ms; ",
-                  JensReaderLib.formatTimestamp(r[i].extraLatency));
+                System.out.printf("queue-size: bwlimit %.3f Mbit/s; ",
+                  (double) r[i].bwLimit / 1000000.0);
                 if (r[i].handoverStarting)
                     System.out.print("handover starting; ");
-                System.out.printf("bwlimit %.3f Mbit/s; %7.2f KiB in %d packet%s\n",
-                  (double) r[i].bwLimit / 1000000.0,
+                System.out.printf("%7.2f KiB in %d packet%s\n",
                   (double) r[i].mem / 1024.0,
                   r[i].len, r[i].len == 1 ? "" : "s");
             }

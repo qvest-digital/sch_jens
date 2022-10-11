@@ -313,7 +313,6 @@ public final class JensReaderLib {
          * <li>{@link #len}</li>
          * <li>{@link #mem}</li>
          * <li>{@link #bwLimit}</li>
-         * <li>{@link #extraLatency}</li>
          * <li>{@link #handoverStarting}</li>
          * </ul>
          *
@@ -398,13 +397,6 @@ public final class JensReaderLib {
              */
             @UsedByJNI
             public @Positive(max = 8000000000L) long bwLimit;
-            /**
-             * <p>Currently enacted extra latency, in nanoseconds.</p>
-             *
-             * <p>{@link #handleQueueSize(Record[], int)} only.</p>
-             */
-            @UsedByJNI
-            public @Positive(max = 0x3FFFFFFFC00L) long extraLatency;
             /**
              * <p>Whether a handover is just starting.</p>
              *

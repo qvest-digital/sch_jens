@@ -39,41 +39,29 @@
 
 #define nsmul(val, fac) ((u64)((u64)(val) * (u64)(fac)))
 
-typedef u32 janz1024_time;
-
-static inline janz1024_time
+static inline u32
 ns_to_t1024(u64 ns)
 {
-	return ((janz1024_time)(ns >> TC_JANZ_TIMESHIFT));
-}
-
-static inline janz1024_time
-us_to_t1024(u32 us)
-{
-	/* us * 1000 / 2¹⁰ will fit u32 again */
-	return (ns_to_t1024(nsmul(us, NSEC_PER_USEC)));
+	return ((u32)(ns >> TC_JANZ_TIMESHIFT));
 }
 
 static inline u64
-t1024_to_ns(janz1024_time ts)
+t1024_to_ns(u32 ts1024)
 {
-	return ((u64)ts << TC_JANZ_TIMESHIFT);
+	return ((u64)ts1024 << TC_JANZ_TIMESHIFT);
 }
 
-static inline u32
-t1024_to_us(janz1024_time ts)
+static inline u64
+us_to_ns(u32 us)
 {
-	return ((u32)div_u64(t1024_to_ns(ts), NSEC_PER_USEC));
+	return (nsmul(us, NSEC_PER_USEC));
 }
 
-/*
- * With apologies to RFC 1982 or CoDel however mind that this
- * is IB but should be safe enough in Linux.
- */
-#define wrap_t1024_before(a, b) (		\
-	    typecheck(janz1024_time, a) &&	\
-	    typecheck(janz1024_time, b) &&	\
-	    ((s32)((b) - (a)) > 0))
+static inline u64
+ns_to_us(u64 ns)
+{
+	return (div_u64(ns, NSEC_PER_USEC));
+}
 
 struct janz_fragcomp {
 	struct in6_addr sip;			//@0    :16
@@ -86,16 +74,16 @@ struct janz_fragcache {
 	struct janz_fragcomp c;			//@0
 	u8 nexthdr;				//@ +37 :1
 	u8 _pad[2];				//@ +38 :2
-	janz1024_time ts;			//@ +40 :4
-	u16 sport;				//@ +44 :2
-	u16 dport;				//@ +46 :2
-	struct janz_fragcache *next;		//@16
-};
+	u64 ts;					//@ +40 :8
+	struct janz_fragcache *next;		//@16   :ptr
+	u16 sport;				//@ +ptr:2
+	u16 dport;				//@ +"" :2
+} __attribute__((__packed__));
 
 /* compile-time assertion */
 struct janz_fragcache_check {
 	int cmp[sizeof(struct janz_fragcomp) == 37 ? 1 : -1];
-	int cac[sizeof(struct janz_fragcache) == (48 + sizeof(void *)) ? 1 : -1];
+	int cac[sizeof(struct janz_fragcache) == (48 + sizeof(void *) + 4) ? 1 : -1];
 	int tot[sizeof(struct janz_fragcache) <= 64 ? 1 : -1];
 	int xip[sizeof_field(struct tc_janz_relay, xip) == 16 ? 1 : -1];
 	int yip[sizeof_field(struct tc_janz_relay, yip) == 16 ? 1 : -1];
@@ -120,35 +108,35 @@ struct janz_priv {
 	u64 drop_next;			/* next time to check drops */			//@16
 	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@  +8
 	u64 ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@16
-	janz1024_time markfree;								//@  +8
-	janz1024_time markfull;								//@  +12
-	u32 memusage;			/* enqueued packet truesize */			//@16
-	u32 nsubbufs;									//@  +4
-	u32 fragcache_num;								//@  +8
-	janz1024_time fragcache_aged;							//@  +12
+	u64 markfree;									//@  +8
+	u64 markfull;									//@16
+	u64 xlatency;			/* extra artificial pre-enqueue latency */	//@  +8
 	struct janz_fragcache *fragcache_used;						//@16
 	struct janz_fragcache *fragcache_last; /* last used element */			//@  +8
 	struct janz_fragcache *fragcache_free;						//@16
 	struct janz_fragcache *fragcache_base;						//@  +8
+	u64 fragcache_aged;								//@16
+	u32 fragcache_num;								//@  +8
+	u32 memusage;			/* enqueued packet truesize */			//@  +12
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 	spinlock_t record_lock;		/* for record_chan */				//@?
-	janz1024_time xlatency;		/* extra artificial pre-enqueue latency */	//@?
+	u32 nsubbufs;
 	u8 crediting;
 };
 
 /* struct janz_skb *cb = get_janz_skb(skb); */
 struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
-	janz1024_time enq_ts;		/* enqueue timestamp */			//@8   :4
-	unsigned int truesz;		/* memory usage */			//@ +4 :4
+	u64 enq_ts;			/* enqueue timestamp */			//@8   :8
+	unsigned int truesz;		/* memory usage */			//@ +8 :4
 
-	u16 srcport;								//@8   :2
-	u16 dstport;								//@ +2 :2
-	u8 record_flag;			/* for debugfs/relayfs reporting */	//@ +4 :1
-	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@ +5 :1
-	u8 ipver;			/* 6 (IP) or 4 (Legacy IP) */		//@ +6 :1
-	u8 nexthdr;								//@ +7 :1
-};
+	u16 srcport;								//@ +12:2
+	u16 dstport;								//@ +14:2
+	u8 record_flag;			/* for debugfs/relayfs reporting */	//@8   :1
+	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@ +1 :1
+	u8 ipver;			/* 6 (IP) or 4 (Legacy IP) */		//@ +2 :1
+	u8 nexthdr;								//@ +3 :1
+} __attribute__((__packed__));
 
 static inline struct janz_skb *
 get_janz_skb(const struct sk_buff *skb)
@@ -179,7 +167,6 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 	r.f8 = f;
 	r.x64[0] = div64_u64(NSEC_PER_SEC, q->ns_pro_byte) * 8ULL;
 	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
-	r.z.zQUEUESZ.extralatency = q->xlatency;
 	janz_record_write(&r, q);
 
 	/* use of ktime_get_ns() is deliberate */
@@ -189,7 +176,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 static inline void
 janz_record_packet(struct janz_priv *q,
     struct sk_buff *skb, struct janz_skb *cb, u64 now,
-    janz1024_time queuedelay, u16 chance)
+    u32 queuedelay, u16 chance)
 {
 	struct tc_janz_relay r = {0};
 
@@ -227,7 +214,7 @@ janz_record_packet(struct janz_priv *q,
 static inline void
 janz_fragcache_maint(struct janz_priv *q, u64 now)
 {
-	janz1024_time old;
+	u64 old;
 	struct janz_fragcache *lastnew;
 	struct janz_fragcache *firstold;
 	struct janz_fragcache *lastold;
@@ -235,33 +222,32 @@ janz_fragcache_maint(struct janz_priv *q, u64 now)
 	if (!q->fragcache_used)
 		return;
 
-	old = ns_to_t1024(now - nsmul(60, NSEC_PER_SEC));
+	old = now - nsmul(60, NSEC_PER_SEC);
 
-	if (!wrap_t1024_before(q->fragcache_aged, old))
+	if (old <= q->fragcache_aged)
 		return;
 
-	if (wrap_t1024_before(q->fragcache_used->ts, old)) {
+	if (old <= q->fragcache_used->ts) {
+		lastnew = q->fragcache_used;
+		while (lastnew->next && (old <= lastnew->next->ts))
+			lastnew = lastnew->next;
+		q->fragcache_aged = lastnew->ts;
+		if (!lastnew->next) {
+			/* shouldn’t happen, but… */
+			return;
+		}
+		firstold = lastnew->next;
+		lastold = q->fragcache_last;
+		lastnew->next = NULL;
+		q->fragcache_last = lastnew;
+		lastold->next = q->fragcache_free;
+		q->fragcache_free = firstold;
+	} else {
 		q->fragcache_last->next = q->fragcache_free;
 		q->fragcache_free = q->fragcache_used;
 		q->fragcache_used = NULL;
 		q->fragcache_last = NULL;
-		return;
 	}
-
-	lastnew = q->fragcache_used;
-	while (lastnew->next && !wrap_t1024_before(lastnew->next->ts, old))
-		lastnew = lastnew->next;
-	q->fragcache_aged = lastnew->ts;
-	if (!lastnew->next) {
-		/* shouldn’t happen, but… */
-		return;
-	}
-	firstold = lastnew->next;
-	lastold = q->fragcache_last;
-	lastnew->next = NULL;
-	q->fragcache_last = lastnew;
-	lastold->next = q->fragcache_free;
-	q->fragcache_free = firstold;
 }
 
 static inline void
@@ -270,7 +256,8 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, int qid,
 {
 	struct sk_buff *skb;
 	struct janz_skb *cb;
-	janz1024_time qdelay;
+	u64 qdelay;
+	u32 qd1024;
 
 	skb = q->q[qid].first;
 	if (!(q->q[qid].first = skb->next))
@@ -281,15 +268,14 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, int qid,
 	qdisc_qstats_backlog_dec(sch, skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	if (resizing)
-		qdelay = (janz1024_time)-1;
-	else {
-		qdelay = ns_to_t1024(now);
-		if (unlikely(wrap_t1024_before(qdelay, cb->enq_ts)))
-			qdelay = (janz1024_time)-2;
-		else
-			qdelay -= cb->enq_ts;
-	}
-	janz_record_packet(q, skb, cb, now, qdelay, 0);
+		qd1024 = 0xFFFFFFFFUL;
+	else if (unlikely(cb->enq_ts > now))
+		qd1024 = 0xFFFFFFFEUL;
+	else if ((qdelay = now - cb->enq_ts) > t1024_to_ns(0xFFFFFFFDUL))
+		qd1024 = 0xFFFFFFFDUL;
+	else
+		qd1024 = ns_to_t1024(qdelay);
+	janz_record_packet(q, skb, cb, now, qd1024, 0);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
 	rtnl_kfree_skbs(skb, skb);
@@ -315,38 +301,36 @@ janz_drop_overlen(struct Qdisc *sch, struct janz_priv *q, u64 now, bool isenq)
 }
 
 static inline bool
-janz_qheadolder(struct janz_priv *q, int qid, janz1024_time ots)
+janz_qheadolder(u64 ots, struct janz_priv *q, int qid)
 {
 	struct janz_skb *cb;
 
 	if (unlikely(!q->q[qid].first))
 		return (false);
 	cb = get_janz_skb(q->q[qid].first);
-	return ((unlikely(wrap_t1024_before(cb->enq_ts, ots))) ? true : false);
+	return ((unlikely(cb->enq_ts < ots)) ? true : false);
 }
 
 static inline void
 janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 {
-	janz1024_time qnow, ots;
+	u64 ots;
 	int qid;
 
 	if (now < q->drop_next)
 		return;
 
-	qnow = ns_to_t1024(now);
-
 	/* drop one packet if one or more packets are older than 100 ms */
-	ots = qnow - ns_to_t1024(nsmul(100, NSEC_PER_MSEC));
-	if (janz_qheadolder(q, 2, ots) ||
-	    janz_qheadolder(q, 1, ots) ||
-	    janz_qheadolder(q, 0, ots))
+	ots = now - nsmul(100, NSEC_PER_MSEC);
+	if (janz_qheadolder(ots, q, 2) ||
+	    janz_qheadolder(ots, q, 1) ||
+	    janz_qheadolder(ots, q, 0))
 		janz_drop_1pkt(sch, q, now, false);
 
 	/* drop all packets older than 500 ms */
-	ots = qnow - ns_to_t1024(nsmul(500, NSEC_PER_MSEC));
+	ots = now - nsmul(500, NSEC_PER_MSEC);
 	for (qid = 0; qid <= 2; ++qid)
-		while (janz_qheadolder(q, qid, ots))
+		while (janz_qheadolder(ots, q, qid))
 			janz_drop_pkt(sch, q, now, qid, false);
 
 	q->drop_next += DROPCHK_INTERVAL;
@@ -358,12 +342,13 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 static inline struct sk_buff *
 janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 {
-	u64 now = ktime_get_ns();
-	janz1024_time now1024, rs1024 = (janz1024_time)-1, d;
+	u64 now, rs;
 	struct sk_buff *skb;
 	struct janz_skb *cb;
 	int qid;
 
+	now = ktime_get_ns();
+	rs = (u64)~(u64)0U;
 	janz_dropchk(sch, q, now);
 
 	if (now < q->notbefore) {
@@ -385,8 +370,6 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 		goto out;
 	}
 
-	now1024 = ns_to_t1024(now);
-
 #define try_qid(i) do {							\
 	qid = (i);							\
 	skb = q->q[qid].first;						\
@@ -394,12 +377,11 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 		cb = get_janz_skb(skb);					\
 		if (is_peek)						\
 			return (skb);					\
-		if (!wrap_t1024_before(now1024, cb->enq_ts))		\
+		if (now >= cb->enq_ts)					\
 			goto got_skb;					\
 		/* now < enq_ts: packet has not reached us yet */	\
-		d = cb->enq_ts - now1024;				\
-		if (d < rs1024)						\
-			rs1024 = d;					\
+		if (cb->enq_ts < rs)					\
+			rs = cb->enq_ts;				\
 	}								\
 } while (/* CONSTCOND */ 0)
 
@@ -408,9 +390,8 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	try_qid(2);
 
 	/* nothing to send, but we have to reschedule first */
-	/* if we end up here, rs1024 has been assigned at least once */
-	qdisc_watchdog_schedule_range_ns(&q->watchdog,
-	    now + t1024_to_ns(rs1024), 0);
+	/* if we end up here, rs has been assigned at least once */
+	qdisc_watchdog_schedule_range_ns(&q->watchdog, rs, 0);
 	goto nothing_to_send;
 
  got_skb:
@@ -435,12 +416,12 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 static inline void
 janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 {
-	janz1024_time qdelay;
+	u64 qdelay;
 	u64 now = ktime_get_ns();
 	struct janz_skb *cb = get_janz_skb(skb);
 	u16 chance;
 
-	qdelay = ns_to_t1024(now) - cb->enq_ts;
+	qdelay = now - cb->enq_ts;
 
 	/**
 	 * maths proof, by example:
@@ -471,17 +452,25 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 	else {
 		/* we know: tmin < t < tmax */
 		/* tmin = markfree, t = qdelay, tmax = markfull */
-		u32 t = qdelay - q->markfree;
-		u32 tmax = q->markfull - q->markfree;
+		u64 t = qdelay - q->markfree;
+		u64 tmax = q->markfull - q->markfree;
 		/* now we have: 0 < t' < tmax' */
 
-		/* scale tmax' to 65535 to calculate the chance */
-		u64 c = t;
-		c *= 65535;
-		/* for rounding */
-		c += (tmax / 2);
-		/* result [0; 65535] */
-		chance = div_u64(c, tmax);
+		/* scale tmax' for fitting into u32 for below */
+		while (unlikely(tmax > (u64)0xFFFFFFFFUL)) {
+			tmax >>= 1;
+			t >>= 1;
+		}
+
+		{
+			/* scale tmax' to 65535 to calculate the chance */
+			u64 c = t;
+			c *= 65535U;
+			/* for rounding */
+			c += (tmax / 2U);
+			/* result [0; 65535] */
+			chance = div_u64(c, tmax);
+		}
 
 		/*
 		 * we want to mark with (t' / tmax' * 100)% probability
@@ -496,7 +485,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 		}
 	}
 
-	janz_record_packet(q, skb, cb, now, qdelay, chance);
+	janz_record_packet(q, skb, cb, now, ns_to_t1024(qdelay), chance);
 }
 
 static inline void
@@ -525,7 +514,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	struct ipv6hdr *ih6;
 	struct iphdr *ih4;
 
-	cb->enq_ts = ns_to_t1024(now) + q->xlatency;
+	cb->enq_ts = now + q->xlatency;
 	cb->truesz = skb->truesize;
 	/* init values */
 	cb->srcport = 0;
@@ -942,10 +931,10 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	}
 
 	if (tb[TCA_JANZ_MARKFREE])
-		q->markfree = us_to_t1024(nla_get_u32(tb[TCA_JANZ_MARKFREE]));
+		q->markfree = us_to_ns(nla_get_u32(tb[TCA_JANZ_MARKFREE]));
 
 	if (tb[TCA_JANZ_MARKFULL])
-		q->markfull = us_to_t1024(nla_get_u32(tb[TCA_JANZ_MARKFULL]));
+		q->markfull = us_to_ns(nla_get_u32(tb[TCA_JANZ_MARKFULL]));
 
 	if (tb[TCA_JANZ_SUBBUFS])
 		/* only at load time */
@@ -956,7 +945,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		q->fragcache_num = nla_get_u32(tb[TCA_JANZ_FRAGCACHE]);
 
 	if (tb[TCA_JANZ_XLATENCY])
-		q->xlatency = us_to_t1024(nla_get_u32(tb[TCA_JANZ_XLATENCY]));
+		q->xlatency = us_to_ns(nla_get_u32(tb[TCA_JANZ_XLATENCY]));
 
 	/* assert: sch->q.qlen == 0 || q->record_chan != nil */
 	/* assert: sch->limit > 0 */
@@ -995,8 +984,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	/* config values’ defaults */
 	sch->limit = 10240;
 	q->ns_pro_byte = 800; /* 10 Mbit/s */
-	q->markfree = ns_to_t1024(nsmul(4, NSEC_PER_MSEC)) + /* round fix */ 1;
-	q->markfull = ns_to_t1024(nsmul(14, NSEC_PER_MSEC)) + /* fix */ 1;
+	q->markfree = nsmul(4, NSEC_PER_MSEC);
+	q->markfull = nsmul(14, NSEC_PER_MSEC);
 	q->nsubbufs = 0;
 	q->fragcache_num = 0;
 	q->xlatency = 0;
@@ -1123,11 +1112,11 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
 	      div64_u64(NSEC_PER_SEC, q->ns_pro_byte), TCA_JANZ_PAD64) ||
-	    nla_put_u32(skb, TCA_JANZ_MARKFREE, t1024_to_us(q->markfree)) ||
-	    nla_put_u32(skb, TCA_JANZ_MARKFULL, t1024_to_us(q->markfull)) ||
+	    nla_put_u32(skb, TCA_JANZ_MARKFREE, ns_to_us(q->markfree)) ||
+	    nla_put_u32(skb, TCA_JANZ_MARKFULL, ns_to_us(q->markfull)) ||
 	    nla_put_u32(skb, TCA_JANZ_SUBBUFS, q->nsubbufs) ||
 	    nla_put_u32(skb, TCA_JANZ_FRAGCACHE, q->fragcache_num) ||
-	    nla_put_u32(skb, TCA_JANZ_XLATENCY, t1024_to_us(q->xlatency)) ||
+	    nla_put_u32(skb, TCA_JANZ_XLATENCY, ns_to_us(q->xlatency)) ||
 	    nla_put_u32(skb, TCA_JANZ_LIMIT, sch->limit))
 		goto nla_put_failure;
 

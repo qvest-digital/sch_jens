@@ -15,7 +15,7 @@
 #endif
 
 #undef JANZ_REPORTING
-#if 1
+#if 0
 #define JANZ_REPORTING			1
 #else
 #define JANZ_REPORTING			0 /* for debugging without */

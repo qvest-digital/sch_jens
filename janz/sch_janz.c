@@ -141,7 +141,7 @@ struct janz_skb {
 static inline struct janz_skb *
 get_janz_skb(const struct sk_buff *skb)
 {
-//XXX	qdisc_cb_private_validate(skb, sizeof(struct janz_skb));
+	qdisc_cb_private_validate(skb, sizeof(struct janz_skb));
 	return ((struct janz_skb *)qdisc_skb_cb(skb)->data);
 }
 
@@ -1144,20 +1144,6 @@ static int __init
 janz_modinit(void)
 {
 	int rv;
-
-struct janz_skb x;
-#define t(a) printk(KERN_WARNING "sch_janz: %02u @%02u - %s\n", (unsigned)sizeof(x. a ), (unsigned)offsetof(struct janz_skb, a), #a)
-	t(enq_ts);
-	t(truesz);
-	t(srcport);
-	t(dstport);
-	t(record_flag);
-	t(tosbyte);
-	t(ipver);
-	t(nexthdr);
-#undef t
-	printk(KERN_WARNING "sch_janz: %u bytes\n", (unsigned)sizeof(struct janz_skb));
-	return -ENOSYS;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 1, 0)
 	printk(KERN_WARNING "sch_janz: kernel too old: will misfunction for locally originating packets, see README\n");

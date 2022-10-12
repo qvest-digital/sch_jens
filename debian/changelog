@@ -1,3 +1,18 @@
+iproute2 (5.10.0-4jens15) tarent; urgency=medium
+
+  * iproute2 Provides iproute-janz to indicate the patched version, so
+    consumers can Depends on iproute2 (= 5.10.0-4jens15) | iproute-janz
+  * Do not list the current extra latency in TC_JANZ_RELAY_QUEUESZ after
+    all; this is less flexible, and the value is not the one in use for
+    what’s reported anyway
+  * Keep times in nanoseconds everywhere, as recommended by Dave Täht,
+    as this targets amd64 only basically so it’s no speed loss but makes
+    code reviews easier; keep 1024ns units for TC_JANZ_RELAY_SOJOURN.d32
+  * Refactor code for better timestamp comparisons and some extra checks
+  * Correct free-skb method for qdisc fast path; thanks Eric Dumazet
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 12 Oct 2022 22:09:59 +0000
+
 iproute2 (5.10.0-4jens14) tarent; urgency=medium
 
   * Replace sch_jens/sch_jhtb with sch_janz entirely (testing indicates

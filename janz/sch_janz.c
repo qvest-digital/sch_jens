@@ -21,6 +21,13 @@
 #define JANZ_REPORTING			0 /* for debugging without */
 #endif
 
+#undef JANZ_PERIODIC_DROPPING
+#if 0
+#define JANZ_PERIODIC_DROPPING		1
+#else
+#define JANZ_PERIODIC_DROPPING		0 /* for debugging without */
+#endif
+
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -117,8 +124,10 @@ struct janz_priv {
 #define QSZ_INTERVAL nsmul(5, NSEC_PER_MSEC)
 	u64 qsz_next;			/* next time to emit queue-size */		//@  +8
 #endif
+#if JANZ_PERIODIC_DROPPING
 #define DROPCHK_INTERVAL nsmul(200, NSEC_PER_MSEC)
 	u64 drop_next;			/* next time to check drops */			//@16
+#endif
 	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@  +8
 	u64 ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@16
 	u64 markfree;									//@  +8
@@ -325,6 +334,7 @@ janz_drop_overlen(struct Qdisc *sch, struct janz_priv *q, u64 now, bool isenq)
 	} while (unlikely(sch->q.qlen > sch->limit));
 }
 
+#if JANZ_PERIODIC_DROPPING
 static inline bool
 janz_qheadolder(u64 ots, struct janz_priv *q, int qid)
 {
@@ -363,6 +373,7 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 	if (q->drop_next < now)
 		q->drop_next = now + DROPCHK_INTERVAL;
 }
+#endif
 
 static inline struct sk_buff *
 janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
@@ -374,12 +385,18 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 
 	now = ktime_get_ns();
 	rs = (u64)~(u64)0U;
+#if JANZ_PERIODIC_DROPPING
 	janz_dropchk(sch, q, now);
+#endif
 
 	if (now < q->notbefore) {
 		if (!is_peek)
 			qdisc_watchdog_schedule_range_ns(&q->watchdog,
+#if JANZ_PERIODIC_DROPPING
 			    min(q->notbefore, q->drop_next),
+#else
+			    q->notbefore,
+#endif
 			    NSEC_PER_MSEC);
 		skb = NULL;
 		goto out;
@@ -831,7 +848,9 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	u64 now;
 
 	now = ktime_get_ns();
+#if JANZ_PERIODIC_DROPPING
 	janz_dropchk(sch, q, now);
+#endif
 	janz_analyse(sch, q, skb, cb, now);
 
 	qid = 1;
@@ -1100,7 +1119,9 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 #if JANZ_REPORTING
 	q->qsz_next = now + QSZ_INTERVAL;
 #endif
+#if JANZ_PERIODIC_DROPPING
 	q->drop_next = now + DROPCHK_INTERVAL;
+#endif
 
 	sch->flags &= ~TCQ_F_CAN_BYPASS;
 	return (0);

@@ -29,7 +29,7 @@
 #endif
 
 #undef JANZ_HEADDROP
-#if 0
+#if 1
 #define JANZ_HEADDROP			1
 #else
 #define JANZ_HEADDROP			0 /* for debugging without */
@@ -319,6 +319,7 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, int qid,
 #endif
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
+	ASSERT_RTNL();
 	rtnl_kfree_skbs(skb, skb);
 }
 

@@ -28,6 +28,13 @@
 #define JANZ_PERIODIC_DROPPING		0 /* for debugging without */
 #endif
 
+#undef JANZ_HEADDROP
+#if 0
+#define JANZ_HEADDROP			1
+#else
+#define JANZ_HEADDROP			0 /* for debugging without */
+#endif
+
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -817,13 +824,20 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	struct janz_priv *q = qdisc_priv(sch);
 	struct janz_skb *cb = get_janz_skb(skb);
 	u8 qid;
+#if JANZ_HEADDROP
 	u32 prev_backlog = sch->qstats.backlog;
 	bool overlimit;
+#endif
 	u64 now;
 
 	now = ktime_get_ns();
 #if JANZ_PERIODIC_DROPPING
 	janz_dropchk(sch, q, now);
+#endif
+
+#if !JANZ_HEADDROP
+	if (sch->q.qlen >= sch->limit)
+		return (qdisc_drop(skb, sch, to_free));
 #endif
 
 	/* initialise values in cb */
@@ -856,8 +870,12 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		skb->next = NULL;
 
 	q->memusage += cb->truesz;
+#if JANZ_HEADDROP
 	if (unlikely(overlimit = (++sch->q.qlen > sch->limit)))
 		janz_drop_overlen(sch, q, now, true);
+#else
+	++sch->q.qlen;
+#endif
 	if (!q->q[qid].first) {
 		q->q[qid].first = skb;
 		q->q[qid].last = skb;
@@ -872,12 +890,14 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		janz_record_queuesz(sch, q, now, 0);
 #endif
 
+#if JANZ_HEADDROP
 	if (unlikely(overlimit)) {
 		qdisc_qstats_overlimit(sch);
 		qdisc_tree_reduce_backlog(sch, 0,
 		    prev_backlog - sch->qstats.backlog);
 		return (NET_XMIT_CN);
 	}
+#endif
 	return (NET_XMIT_SUCCESS);
 }
 

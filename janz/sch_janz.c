@@ -15,14 +15,14 @@
 #endif
 
 #undef JANZ_REPORTING
-#if 0
+#if 1
 #define JANZ_REPORTING			1
 #else
 #define JANZ_REPORTING			0 /* for debugging without */
 #endif
 
 #undef JANZ_PERIODIC_DROPPING
-#if 0
+#if 1
 #define JANZ_PERIODIC_DROPPING		1
 #else
 #define JANZ_PERIODIC_DROPPING		0 /* for debugging without */

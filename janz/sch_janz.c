@@ -537,23 +537,6 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 #endif
 }
 
-static inline void
-janz_initcb(struct Qdisc *sch, struct janz_priv *q,
-    struct sk_buff *skb, struct janz_skb *cb, u64 now)
-{
-	cb->enq_ts = now + q->xlatency;
-	cb->truesz = skb->truesize;
-	/* init values */
-	cb->srcport = 0;
-	cb->dstport = 0;
-	cb->tosbyte = 0;
-	cb->ipver = 0;
-	cb->nexthdr = 0;
-#if JANZ_REPORTING
-	cb->record_flag = 0;
-#endif
-}
-
 #if JANZ_REPORTING
 static inline void
 janz_init_record_flag(struct janz_skb *cb)
@@ -580,8 +563,6 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	struct janz_fragcomp fc;
 	struct ipv6hdr *ih6;
 	struct iphdr *ih4;
-
-	janz_initcb(sch, q, skb, cb, now);
 
 	/* addresses */
 	switch (skb->protocol) {
@@ -798,13 +779,6 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	cb->nexthdr = noportinfo;
 	return;
 }
-#else
-static inline void
-janz_analyse(struct Qdisc *sch, struct janz_priv *q,
-    struct sk_buff *skb, struct janz_skb *cb, u64 now)
-{
-	janz_initcb(sch, q, skb, cb, now);
-}
 #endif
 
 static struct dentry *
@@ -851,7 +825,25 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 #if JANZ_PERIODIC_DROPPING
 	janz_dropchk(sch, q, now);
 #endif
+
+	/* initialise values in cb */
+	cb->enq_ts = now + q->xlatency;
+	cb->truesz = skb->truesize;
+	/* init values from before analysis */
+	cb->srcport = 0;
+	cb->dstport = 0;
+	cb->tosbyte = 0;
+	cb->ipver = 0;
+	cb->nexthdr = 0;
+#if JANZ_REPORTING
+	cb->record_flag = 0;
+#endif
+	/* note ↑ struct order */
+
+#if JANZ_REPORTING
+	/* analyse skb determining tosbyte etc. */
 	janz_analyse(sch, q, skb, cb, now);
+#endif
 
 	qid = 1;
 	if (cb->tosbyte & 0x10)
@@ -933,8 +925,10 @@ janz_reset(struct Qdisc *sch)
 	sch->qstats.overlimits = 0;
 	q->notbefore = 0;
 	q->crediting = 0;
+#if JANZ_REPORTING
 	if (q->record_chan)
 		relay_flush(q->record_chan);
+#endif
 }
 
 static const struct nla_policy janz_nla_policy[TCA_JANZ_MAX + 1] = {

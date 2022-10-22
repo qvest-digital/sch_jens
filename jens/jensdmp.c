@@ -263,5 +263,23 @@ consume(size_t idx)
 			fputs(" handover=\"starting\"", stdout);
 		printf("/>\n");
 		break;
+
+	case TC_JANZ_RELAY_WDOGDBG:
+		printf("<wdog ts=\"%llX\" early=\"%X\" u50=\"%llX\""
+		   " u1m=\"%llX\" u4m=\"%llX\" a4m=\"%llX\"",
+		    (unsigned long long)rbuf[idx].ts,
+		    (unsigned int)rbuf[idx].e16,
+		    (unsigned long long)rbuf[idx].x64[0],
+		    (unsigned long long)rbuf[idx].x64[1],
+		    (unsigned long long)rbuf[idx].y64[0],
+		    (unsigned long long)rbuf[idx].y64[1]);
+		if (rbuf[idx].f8 != 0)
+			printf(" c=\"%s\" d=\"%s%u\"",
+			    (rbuf[idx].f8 & 0x30) == 0x10 ? "notbef" :
+			    (rbuf[idx].f8 & 0x30) == 0x20 ? "ntsend" : "unkERR",
+			    (rbuf[idx].f8 & 2) ? "-" : "",
+			    (unsigned int)rbuf[idx].d32);
+		printf("/>\n");
+		break;
 	}
 }

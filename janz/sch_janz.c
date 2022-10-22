@@ -122,6 +122,10 @@ struct janz_priv {
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u32 nsubbufs;
 	u8 crediting;
+	u8 wdogreason;			/* 10=notbefore 20=nothingtosend */
+	u16 wdogearly;
+	u64 wdogtimers[4];		/* <50us <1000us <4000us >=4ms */
+	u64 wdognext;
 };
 
 /* struct janz_skb *cb = get_janz_skb(skb); */
@@ -171,6 +175,42 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 
 	/* use of ktime_get_ns() is deliberate */
 	q->qsz_next = ktime_get_ns() + QSZ_INTERVAL;
+}
+
+static inline void
+janz_record_wdog(struct janz_priv *q, u64 now)
+{
+	struct tc_janz_relay r = {0};
+
+	r.ts = now;
+	r.type = TC_JANZ_RELAY_WDOGDBG;
+	if (q->wdogreason != 0) {
+		u64 delay;
+
+		r.f8 = q->wdogreason;
+		q->wdogreason = 0;
+		if (q->wdognext > now) {
+			r.f8 |= 2;
+			delay = q->wdognext - now;
+			++q->wdogearly;
+		} else {
+			r.f8 |= 1;
+			delay = now - q->wdognext;
+			++q->wdogtimers[ \
+			    delay < us_to_ns(50U) ? 0 : \
+			    delay < us_to_ns(1000U) ? 1 : \
+			    delay < us_to_ns(4000U) ? 2 : 3];
+		}
+		if (delay > 0xFFFFFFFFUL)
+			delay = 0xFFFFFFFFUL;
+		r.d32 = (u32)delay;
+	}
+	r.e16 = q->wdogearly;
+	r.x64[0] = q->wdogtimers[0];
+	r.x64[1] = q->wdogtimers[1];
+	r.y64[0] = q->wdogtimers[2];
+	r.y64[1] = q->wdogtimers[3];
+	janz_record_write(&r, q);
 }
 
 static inline void
@@ -348,14 +388,17 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	int qid;
 
 	now = ktime_get_ns();
+	janz_record_wdog(q, now);
 	rs = (u64)~(u64)0U;
 	janz_dropchk(sch, q, now);
 
 	if (now < q->notbefore) {
-		if (!is_peek)
+		if (!is_peek) {
+			q->wdogreason = 0x10;
+			q->wdognext = min(q->notbefore, q->drop_next);
 			qdisc_watchdog_schedule_range_ns(&q->watchdog,
-			    min(q->notbefore, q->drop_next),
-			    NSEC_PER_MSEC);
+			    q->wdognext, NSEC_PER_MSEC);
+		}
 		skb = NULL;
 		goto out;
 	}
@@ -392,6 +435,8 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	/* nothing to send, but we have to reschedule first */
 	/* if we end up here, rs has been assigned at least once */
 	qdisc_watchdog_schedule_range_ns(&q->watchdog, rs, 0);
+	q->wdogreason = 0x20;
+	q->wdognext = rs;
 	goto nothing_to_send;
 
  got_skb:
@@ -865,6 +910,13 @@ janz_reset(struct Qdisc *sch)
 	sch->qstats.overlimits = 0;
 	q->notbefore = 0;
 	q->crediting = 0;
+	q->wdogreason = 0;
+	q->wdogearly = 0;
+	q->wdogtimers[0] = 0;
+	q->wdogtimers[1] = 0;
+	q->wdogtimers[2] = 0;
+	q->wdogtimers[3] = 0;
+	q->wdognext = 0;
 	if (q->record_chan)
 		relay_flush(q->record_chan);
 }

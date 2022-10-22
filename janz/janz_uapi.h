@@ -44,6 +44,7 @@ struct tc_janz_relay {
 	};
 	union {
 		__u8 y8[16];	/* 128 bits of yet more extra data */
+		__u64 y64[2];
 		struct in6_addr yip;
 	};
 	union {
@@ -103,6 +104,18 @@ enum {
 	/* z.zSOJOURN = packet size, IP version (4, 6, 0 for not IP) */
 	/* + if IP: L4 proto, if TCP/UDP also src/dst port */
 	TC_JANZ_RELAY_SOJOURN,
+
+	/* watchdog performance debugging */
+	/* f8 = 0 (not scheduled because of watchdog) or bitfield: */
+	/*	0x10=notbefore 0x20=nothingtosend */
+	/*	0x01=now>=wdognext 0x02=now<wdognext */
+	/* e16 = amount of times it was called too early */
+	/* d32 = ns delay of this, if f8≠0 */
+	/* x64[0] = amount of times delay < 50 us */
+	/* x64[1] = amount of times delay < 1000 us */
+	/* y64[0] = amount of times delay < 4000 us */
+	/* y64[1] = amount of times delay >= 4 ms */
+	TC_JANZ_RELAY_WDOGDBG,
 
 	/* invalid, too high */
 	__TC_JANZ_RELAY_MAX

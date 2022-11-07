@@ -82,6 +82,7 @@ struct janz_fragcache {
 
 /* compile-time assertion */
 struct janz_fragcache_check {
+	int hasatomic64[sizeof(atomic64_t) == 8 ? 1 : -1];
 	int cmp[sizeof(struct janz_fragcomp) == 37 ? 1 : -1];
 	int cac[sizeof(struct janz_fragcache) == (48 + sizeof(void *) + 4) ? 1 : -1];
 	int tot[sizeof(struct janz_fragcache) <= 64 ? 1 : -1];
@@ -107,7 +108,7 @@ struct janz_priv {
 #define DROPCHK_INTERVAL nsmul(200, NSEC_PER_MSEC)
 	u64 drop_next;			/* next time to check drops */			//@16
 	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@  +8
-	u64 ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@16
+	atomic64_t ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@16
 	u64 markfree;									//@  +8
 	u64 markfull;									//@16
 	u64 xlatency;			/* extra artificial pre-enqueue latency */	//@  +8
@@ -163,13 +164,14 @@ static inline void
 janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 {
 	struct tc_janz_relay r = {0};
+	u64 rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_QUEUESZ;
 	r.d32 = q->memusage;
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
 	r.f8 = f;
-	r.x64[0] = div64_u64(NSEC_PER_SEC, q->ns_pro_byte) * 8ULL;
+	r.x64[0] = div64_u64(NSEC_PER_SEC, rate) * 8ULL;
 	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
 	janz_record_write(&r, q);
 
@@ -382,7 +384,7 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 static inline struct sk_buff *
 janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 {
-	u64 now, rs;
+	u64 now, rs, rate;
 	struct sk_buff *skb;
 	struct janz_skb *cb;
 	int qid;
@@ -448,8 +450,9 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	qdisc_qstats_backlog_dec(sch, skb);
 	qdisc_bstats_update(sch, skb);
 
+	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	q->notbefore = (q->crediting ? q->notbefore : now) +
-	    (q->ns_pro_byte * (u64)skb->len);
+	    (rate * (u64)skb->len);
 	q->crediting = 1;
 
  out:
@@ -964,14 +967,14 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	if (tb[TCA_JANZ_RATE64]) {
 		u64 tmp = nla_get_u64(tb[TCA_JANZ_RATE64]);
+		u64 old;
 
 		tmp = div64_u64(NSEC_PER_SEC, tmp);
 		if (tmp < 1)
 			tmp = 1;
-		if (q->ns_pro_byte != tmp) {
-			q->ns_pro_byte = tmp;
-			rate_changed = true;
-		}
+		old = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
+		atomic64_set_release(&(q->ns_pro_byte), (s64)tmp);
+		rate_changed = old != tmp;
 	}
 
 	if (tb[TCA_JANZ_HANDOVER]) {
@@ -1039,7 +1042,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	/* config values’ defaults */
 	sch->limit = 10240;
-	q->ns_pro_byte = 800; /* 10 Mbit/s */
+	atomic64_set_release(&(q->ns_pro_byte), /* 10 Mbit/s */ 800);
 	q->markfree = nsmul(4, NSEC_PER_MSEC);
 	q->markfull = nsmul(14, NSEC_PER_MSEC);
 	q->nsubbufs = 0;
@@ -1161,13 +1164,15 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 {
 	struct janz_priv *q = qdisc_priv(sch);
 	struct nlattr *opts;
+	u64 rate;
 
 	opts = nla_nest_start(skb, TCA_OPTIONS);
 	if (opts == NULL)
 		goto nla_put_failure;
 
+	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
-	      div64_u64(NSEC_PER_SEC, q->ns_pro_byte), TCA_JANZ_PAD64) ||
+	      div64_u64(NSEC_PER_SEC, rate), TCA_JANZ_PAD64) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFREE, ns_to_us(q->markfree)) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFULL, ns_to_us(q->markfull)) ||
 	    nla_put_u32(skb, TCA_JANZ_SUBBUFS, q->nsubbufs) ||

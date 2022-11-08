@@ -34,16 +34,25 @@ OBJS?=		${SRCS:.c=.o}
 
 CLEANFILES+=	${PROG} ${OBJS}
 
+PROG2=		ratedemo
+SRCS2?=		${PROG2}.c
+OBJS2?=		${SRCS2:.c=.o}
+
+CLEANFILES+=	${PROG2} ${OBJS2}
+
 JLIB=		libjensdmpJNI.so
 JSRC=		nativelib.c
 JOBJ=		${JSRC:.c=.o}
 
 CLEANFILES+=	${JLIB} ${JOBJ}
 
-all: ${PROG}
+all: ${PROG} ${PROG2}
 
 ${PROG}: ${OBJS}
 	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS} ${LDADD}
+
+${PROG2}: ${OBJS2}
+	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS2} ${LDADD}
 
 .c.o:
 	${CC} -c ${CPPFLAGS} ${CFLAGS} $<
@@ -70,6 +79,9 @@ p=de.telekom.llcto.jens.reader
 if=eth0
 run: all .built/java
 	sudo $e java -cp .built $p.JensReaderDemo ${if} /sys/kernel/debug/sch_janz/0001:0
+
+rundemo: ratedemo
+	sudo ./ratedemo /sys/kernel/debug/sch_janz/0001:v1
 
 install:
 	install -m 0755 -d ${DESTDIR}/usr/lib/jni

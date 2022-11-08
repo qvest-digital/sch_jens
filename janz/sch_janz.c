@@ -119,7 +119,8 @@ struct janz_priv {
 	u64 fragcache_aged;								//@16
 	u32 fragcache_num;								//@  +8
 	u32 memusage;			/* enqueued packet truesize */			//@  +12
-	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
+	struct dentry *ctlfile;								//@16
+	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u32 nsubbufs;
 	u8 crediting;
@@ -148,6 +149,27 @@ get_janz_skb(const struct sk_buff *skb)
 {
 	qdisc_cb_private_validate(skb, sizeof(struct janz_skb));
 	return ((struct janz_skb *)qdisc_skb_cb(skb)->data);
+}
+
+static inline ssize_t
+janz_ctlfile_write(struct file *filp, const char __user *buf,
+    size_t count, loff_t *posp)
+{
+	u64 newrate;
+	struct janz_priv *q = filp->private_data;
+	struct janz_ctlfile_pkt data;
+
+	if (count != sizeof(data))
+		return (-EINVAL);
+	if (copy_from_user(&data, buf, sizeof(data)))
+		return (-EFAULT);
+
+	newrate = div64_u64(8ULL * NSEC_PER_SEC, data.bits_per_second);
+	if (newrate < 1)
+		newrate = 1;
+	atomic64_set_release(&(q->ns_pro_byte), (s64)newrate);
+
+	return (sizeof(data));
 }
 
 static inline void
@@ -1031,12 +1053,18 @@ static /*const*/ struct rchan_callbacks janz_debugfs_relay_hooks = {
 	.subbuf_start = janz_subbuf_init,
 };
 
+static const struct file_operations janz_ctlfile_fops = {
+	.open = simple_open,
+	.write = janz_ctlfile_write,
+	.llseek = no_llseek,
+};
+
 static int
 janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 {
 	struct janz_priv *q = qdisc_priv(sch);
 	int err;
-	char name[6];
+	char name[12];
 	u64 now;
 	int i;
 
@@ -1053,6 +1081,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	sch->q.qlen = 0;
 	/* needed so janz_reset DTRT */
 	q->record_chan = NULL;
+	q->ctlfile = NULL;
 	janz_reset(sch);
 	qdisc_watchdog_init_clockid(&q->watchdog, sch, CLOCK_MONOTONIC);
 
@@ -1076,6 +1105,18 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	}
 	spin_lock_init(&q->record_lock);
 
+	snprintf(name, sizeof(name), "%04X:v" __stringify(JANZ_CTLFILE_VERSION),
+	    sch->handle >> 16);
+	q->ctlfile = debugfs_create_file(name, 0200, janz_debugfs_main,
+	    q, &janz_ctlfile_fops);
+	if (IS_ERR_OR_NULL(q->ctlfile)) {
+		err = q->ctlfile ? PTR_ERR(q->ctlfile) : -ENOENT;
+		q->ctlfile = NULL;
+		printk(KERN_WARNING "sch_janz: control channel creation failed\n");
+		goto init_fail;
+	}
+	d_inode(q->ctlfile)->i_size = sizeof(struct janz_ctlfile_pkt);
+
 	q->fragcache_base = kvcalloc(q->fragcache_num,
 	    sizeof(struct janz_fragcache), GFP_KERNEL);
 	if (!q->fragcache_base) {
@@ -1098,6 +1139,10 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	return (0);
 
  init_fail:
+	if (q->ctlfile) {
+		debugfs_remove(q->ctlfile);
+		q->ctlfile = NULL;
+	}
 	if (q->record_chan) {
 		relay_close(q->record_chan);
 		q->record_chan = NULL;
@@ -1129,6 +1174,11 @@ janz_done(struct Qdisc *sch)
 	struct janz_gwq_ovl *ovl;
 
 	qdisc_watchdog_cancel(&q->watchdog);
+
+	if (q->ctlfile) {
+		debugfs_remove(q->ctlfile);
+		q->ctlfile = NULL;
+	}
 
 	if (!q->record_chan) {
 		/* the fast/easy path out, do everything now */

@@ -139,4 +139,12 @@ enum {
 #define TC_JANZ_RELAY_SUBBUFSZ \
     (TC_JANZ_RELAY_NRECORDS * sizeof(struct tc_janz_relay))
 
+#define JANZ_CTLFILE_VERSION 1
+
+struct janz_ctlfile_pkt {
+	__u64 bits_per_second;
+};
+/* compile-time check for correct size */
+extern struct janz_ctlfile_pkt janz_ctlfile_pkt_cta[sizeof(struct janz_ctlfile_pkt) == 8 ? 1 : -1];
+
 #endif

@@ -8,5 +8,6 @@ gmf_uninstall: ${gmf_module_srcdir}/gmf_uninstall
 
 ${gmf_module_srcdir}/gmf_uninstall:
 	rm -f $(MODLIB)/$(modinst_dir)/sch_janz.*
+	rm -f $(MODLIB)/$(modinst_dir)/sch_janzdbg.*
 
 .PHONY: gmf_uninstall ${gmf_module_srcdir}/gmf_uninstall

@@ -19,6 +19,7 @@ delay) reaches markfull.
 
 See the tc-janz(8) manpage for details.
 
+
 Live measurement
 ────────────────
 
@@ -63,6 +64,7 @@ the data members are filled. This is one of:
 • TC_JANZ_RELAY_PADDING (quietly skip/ignore this record)
 • TC_JANZ_RELAY_SOJOURN (an IP packet’s sojourn time)
 • TC_JANZ_RELAY_QUEUESZ (amount of packets in the FIFO)
+• TC_JANZ_RELAY_WDOGDBG (sch_janzdbg-only performance self-measurement)
 
 The remaining members are per-record-type data. They are:
 • f8 (8-bit unsigned integer)
@@ -124,6 +126,9 @@ Record types define the following data members:
       │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
+• TC_JANZ_RELAY_WDOGDBG: see comment in janz_uapi.h and example
+  parser in ../jens/jensdmp.c for details
+
 • TC_JANZ_RELAY_PADDING: none; shouldn’t occur but ignore silently
 
 • TC_JANZ_RELAY_INVALID: none; must not occur (do warn)
@@ -149,3 +154,65 @@ https://en.wikipedia.org/wiki/List_of_IP_protocol_numbers
 
 Subbuffers are flushed on queue deconfiguration and when starting a
 handover (after the TC_JANZ_RELAY_QUEUESZ indicating so was emitted).
+
+
+Control interface
+─────────────────
+
+The control interface is versioned; the current version number is 1
+as can be seen in janz_uapi.h (JANZ_CTLFILE_VERSION macro). All data
+must be in host byteorder as with the above.
+
+To use this, open the v1 file corresponding to the 0 file for the
+reporting, for example: /sys/kernel/debug/sch_janz/0001:v1
+
+Keep this file open, only ever write to it (no seek, read or so),
+close it only once you don’t need it any more at program termination,
+or when unconfiguring the sch_janz qdisc.
+
+Then, you can write(2) the janz_ctlfile_pkt structure many times per
+second. Do note that the structure must be written with one write(2)
+call (not buffered or split), and the amount of bytes written must
+be precisely the struct size (no more, no less), otherwise, an error
+will be returned. The expected amount is also exposed as the nominal
+file’s size.
+
+For v1, the janz_ctlfile_pkt structure is 8 bytes long:
+
+      ┌───┬───┬───┬───┬───┬───┬───┬───┐
+      │ <-bits_per_second-----------> │
+      └───┴───┴───┴───┴───┴───┴───┴───┘
+
+The members are:
+
+• u64 bits_per_second: the bandwidth to pace outgoing packets to,
+  in bits per second (default: 10'000'000); corresponds to
+  the “rate” tc-janz(8) parameter, however changing this via the
+  control interface does NOT trigger TC_JANZ_RELAY_QUEUESZ writing
+
+Only write control packets when you really have to change something;
+do not, for example, send the same bandwidth rate over and over again.
+
+For other control operations such as starting a handover, you will
+still need tc change.
+
+
+Performance considerations
+──────────────────────────
+
+$ ps ax | fgrep ksoftirqd/
+   12 ?        S      0:20 [ksoftirqd/0]
+   19 ?        S      0:07 [ksoftirqd/1]
+   24 ?        S      0:01 [ksoftirqd/2]
+28085 pts/1    S+     0:00 grep -F ksoftirqd/
+$ sudo renice -n -15 12 19 24
+$ ps ax | fgrep ksoftirqd/   # to see whether this worked
+   12 ?        S<     0:20 [ksoftirqd/0]
+   19 ?        S<     0:07 [ksoftirqd/1]
+   24 ?        S<     0:01 [ksoftirqd/2]
+28111 pts/1    S+     0:00 grep -F ksoftirqd/
+
+This can, however, make other tasks on the same system slower.
+However, a JENS instance’s primary job is to forward packets
+with as low latency and latency’s jitter as possible, so this
+is warranted.

@@ -1,3 +1,13 @@
+iproute2 (5.10.0-4jens16) tarent; urgency=medium
+
+  * Add sch_janzdbg kernel module, with self-monitoring for performance
+    of the kernel qdisc_watchdog functionality
+  * Add debugfs-based mass rate change functionality and example program
+  * Update documentation accordingly
+  * Note performance considerations (renice ksoftirqd) in the docs
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Tue, 08 Nov 2022 23:52:56 +0100
+
 iproute2 (5.10.0-4jens15) tarent; urgency=medium
 
   * iproute2 Provides iproute-janz to indicate the patched version, so

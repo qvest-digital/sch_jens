@@ -124,10 +124,12 @@ struct janz_priv {
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u32 nsubbufs;
 	u8 crediting;
+#ifdef SCH_JANZDBG
 	u8 wdogreason;			/* 10=notbefore 20=nothingtosend */
 	u16 wdogearly;
 	u64 wdogtimers[4];		/* <50us <1000us <4000us >=4ms */
 	u64 wdognext;
+#endif
 };
 
 /* struct janz_skb *cb = get_janz_skb(skb); */
@@ -201,6 +203,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
 	q->qsz_next = ktime_get_ns() + QSZ_INTERVAL;
 }
 
+#ifdef SCH_JANZDBG
 static inline void
 janz_record_wdog(struct janz_priv *q, u64 now)
 {
@@ -236,6 +239,7 @@ janz_record_wdog(struct janz_priv *q, u64 now)
 	r.y64[1] = q->wdogtimers[3];
 	janz_record_write(&r, q);
 }
+#endif
 
 static inline void
 janz_record_packet(struct janz_priv *q,
@@ -412,16 +416,23 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	int qid;
 
 	now = ktime_get_ns();
+#ifdef SCH_JANZDBG
 	janz_record_wdog(q, now);
+#endif
 	rs = (u64)~(u64)0U;
 	janz_dropchk(sch, q, now);
 
 	if (now < q->notbefore) {
 		if (!is_peek) {
+			register u64 nextns;
+
+			nextns = min(q->notbefore, q->drop_next);
+#ifdef SCH_JANZDBG
 			q->wdogreason = 0x10;
-			q->wdognext = min(q->notbefore, q->drop_next);
+			q->wdognext = nextns;
+#endif
 			qdisc_watchdog_schedule_range_ns(&q->watchdog,
-			    q->wdognext, NSEC_PER_MSEC);
+			    nextns, NSEC_PER_MSEC);
 		}
 		skb = NULL;
 		goto out;
@@ -459,8 +470,10 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	/* nothing to send, but we have to reschedule first */
 	/* if we end up here, rs has been assigned at least once */
 	qdisc_watchdog_schedule_range_ns(&q->watchdog, rs, 0);
+#ifdef SCH_JANZDBG
 	q->wdogreason = 0x20;
 	q->wdognext = rs;
+#endif
 	goto nothing_to_send;
 
  got_skb:
@@ -935,6 +948,7 @@ janz_reset(struct Qdisc *sch)
 	sch->qstats.overlimits = 0;
 	q->notbefore = 0;
 	q->crediting = 0;
+#ifdef SCH_JANZDBG
 	q->wdogreason = 0;
 	q->wdogearly = 0;
 	q->wdogtimers[0] = 0;
@@ -942,6 +956,7 @@ janz_reset(struct Qdisc *sch)
 	q->wdogtimers[2] = 0;
 	q->wdogtimers[3] = 0;
 	q->wdognext = 0;
+#endif
 	if (q->record_chan)
 		relay_flush(q->record_chan);
 }

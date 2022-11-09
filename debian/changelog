@@ -1,3 +1,9 @@
+iproute2 (5.10.0-4jens17) tarent; urgency=high
+
+  * Fix an oops in the DKMS file
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 09 Nov 2022 19:12:31 +0100
+
 iproute2 (5.10.0-4jens16) tarent; urgency=medium
 
   * Add sch_janzdbg kernel module, with self-monitoring for performance

@@ -87,7 +87,7 @@ install:
 	install -m 0755 -d ${DESTDIR}/usr/lib/jni
 	install -m 0644 ${JLIB} ${DESTDIR}/usr/lib/jni/
 	install -m 0755 -d ${DESTDIR}/usr/libexec
-	install -m 0755 ${PROG} ${DESTDIR}/usr/libexec/
+	install -m 0755 ${PROG} ${PROG2} ${DESTDIR}/usr/libexec/
 	@echo do install the *.java examples
 
 .PHONY: all install javac run clean

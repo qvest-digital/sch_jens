@@ -1,8 +1,9 @@
-iproute2 (5.10.0-4jens18) UNRELEASED; urgency=medium
+iproute2 (5.10.0-4jens18) tarent; urgency=medium
 
   * Install ratedemo as well
+  * Re-add compatibility with Linux 5.4 as used on focal
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 17 Nov 2022 12:10:50 +0100
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 17 Nov 2022 12:11:51 +0100
 
 iproute2 (5.10.0-4jens17) tarent; urgency=high
 

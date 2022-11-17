@@ -431,8 +431,7 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 			q->wdogreason = 0x10;
 			q->wdognext = nextns;
 #endif
-			qdisc_watchdog_schedule_range_ns(&q->watchdog,
-			    nextns, NSEC_PER_MSEC);
+			qdisc_watchdog_schedule_ns(&q->watchdog, nextns);
 		}
 		skb = NULL;
 		goto out;
@@ -468,8 +467,8 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	try_qid(2);
 
 	/* nothing to send, but we have to reschedule first */
-	/* if we end up here, rs has been assigned at least once */
-	qdisc_watchdog_schedule_range_ns(&q->watchdog, rs, 0);
+	/* if we end up here, rs was set above */
+	qdisc_watchdog_schedule_ns(&q->watchdog, rs);
 #ifdef SCH_JANZDBG
 	q->wdogreason = 0x20;
 	q->wdognext = rs;

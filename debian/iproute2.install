@@ -1,5 +1,4 @@
 etc/
-usr/include/iproute2/
 sbin/arpd /usr/sbin
 sbin/bridge
 sbin/devlink
@@ -15,6 +14,7 @@ sbin/rtmon
 sbin/ss /bin
 sbin/tc
 sbin/tipc
+usr/include/iproute2/
 usr/lib/jni/libjensdmpJNI.so
 usr/lib/tc/
 usr/libexec/jensdmp

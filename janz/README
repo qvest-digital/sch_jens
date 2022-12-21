@@ -18,7 +18,7 @@ ECN CE marking is applied to packets slower than markfree with
 a percentage chance rising to 100% if the sojourn time (queue
 delay) reaches markfull.
 
-See the tc-janz(8) manpage for details.
+See the tc-janz(8) manual page or queue.png for details.
 
 
 Live measurement

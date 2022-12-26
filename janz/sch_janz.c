@@ -51,6 +51,14 @@ t1024_to_ns(u32 ts1024)
 	return ((u64)ts1024 << TC_JANZ_TIMESHIFT);
 }
 
+static inline s32
+cmp1024(u32 lhs, u32 rhs)
+{
+	u32 delta = (0U + lhs) - (0U + rhs);
+
+	return ((s32)delta); /* guaranteed in Linux */
+}
+
 static inline u64
 us_to_ns(u32 us)
 {
@@ -74,17 +82,17 @@ struct janz_fragcache {
 	struct janz_fragcomp c;			//@0
 	u8 nexthdr;				//@ +37 :1
 	u8 _pad[2];				//@ +38 :2
-	u64 ts;					//@ +40 :8
+	u32 ts;					//@ +40 :4
+	u16 sport;				//@ +44 :2
+	u16 dport;				//@ +46 :2
 	struct janz_fragcache *next;		//@16   :ptr
-	u16 sport;				//@ +ptr:2
-	u16 dport;				//@ +"" :2
 } __attribute__((__packed__));
 
 /* compile-time assertion */
 struct janz_fragcache_check {
 	int hasatomic64[sizeof(atomic64_t) == 8 ? 1 : -1];
 	int cmp[sizeof(struct janz_fragcomp) == 37 ? 1 : -1];
-	int cac[sizeof(struct janz_fragcache) == (48 + sizeof(void *) + 4) ? 1 : -1];
+	int cac[sizeof(struct janz_fragcache) == (48 + sizeof(void *)) ? 1 : -1];
 	int tot[sizeof(struct janz_fragcache) <= 64 ? 1 : -1];
 	int xip[sizeof_field(struct tc_janz_relay, xip) == 16 ? 1 : -1];
 	int yip[sizeof_field(struct tc_janz_relay, yip) == 16 ? 1 : -1];
@@ -116,13 +124,13 @@ struct janz_priv {
 	struct janz_fragcache *fragcache_last; /* last used element */			//@  +8
 	struct janz_fragcache *fragcache_free;						//@16
 	struct janz_fragcache *fragcache_base;						//@  +8
-	u64 fragcache_aged;								//@16
-	u32 fragcache_num;								//@  +8
+	u32 fragcache_aged;								//@16
+	u32 fragcache_num;								//@  +4
+	u32 nsubbufs;									//@  +8
 	u32 memusage;			/* enqueued packet truesize */			//@  +12
 	struct dentry *ctlfile;								//@16
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
 	spinlock_t record_lock;		/* for record_chan */				//@?
-	u32 nsubbufs;
 	u8 crediting;
 #ifdef SCH_JANZDBG
 	u8 wdogreason;			/* 10=notbefore 20=nothingtosend */
@@ -135,7 +143,8 @@ struct janz_priv {
 /* struct janz_skb *cb = get_janz_skb(skb); */
 struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
-	u64 enq_ts;			/* enqueue timestamp */			//@8   :8
+	u32 ts_begin;			/* real enqueue ts1024 */		//@8   :4
+	u32 ts_arrive;			/* adjusted by extralatency */		//@ +4 :4
 	unsigned int truesz;		/* memory usage */			//@ +8 :4
 
 	u16 srcport;								//@ +12:2
@@ -276,13 +285,15 @@ janz_record_packet(struct janz_priv *q,
 	    }
 	}
 
+	r.z.zSOJOURN.real_owd = (u32)cmp1024(ns_to_t1024(ktime_get_ns()),
+	    cb->ts_begin);
 	janz_record_write(&r, q);
 }
 
 static inline void
 janz_fragcache_maint(struct janz_priv *q, u64 now)
 {
-	u64 old;
+	u32 old;
 	struct janz_fragcache *lastnew;
 	struct janz_fragcache *firstold;
 	struct janz_fragcache *lastold;
@@ -290,14 +301,14 @@ janz_fragcache_maint(struct janz_priv *q, u64 now)
 	if (!q->fragcache_used)
 		return;
 
-	old = now - nsmul(60, NSEC_PER_SEC);
+	old = ns_to_t1024(now - nsmul(60, NSEC_PER_SEC));
 
-	if (old <= q->fragcache_aged)
+	if (cmp1024(old, q->fragcache_aged) <= 0)
 		return;
 
-	if (old <= q->fragcache_used->ts) {
+	if (cmp1024(old, q->fragcache_used->ts) <= 0) {
 		lastnew = q->fragcache_used;
-		while (lastnew->next && (old <= lastnew->next->ts))
+		while (lastnew->next && (cmp1024(old, lastnew->next->ts) <= 0))
 			lastnew = lastnew->next;
 		q->fragcache_aged = lastnew->ts;
 		if (!lastnew->next) {
@@ -319,12 +330,11 @@ janz_fragcache_maint(struct janz_priv *q, u64 now)
 }
 
 static inline void
-janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, int qid,
-    bool resizing)
+janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024,
+    int qid, bool resizing)
 {
 	struct sk_buff *skb;
 	struct janz_skb *cb;
-	u64 qdelay;
 	u32 qd1024;
 
 	skb = q->q[qid].first;
@@ -337,12 +347,10 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, int qid,
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	if (resizing)
 		qd1024 = 0xFFFFFFFFUL;
-	else if (unlikely(cb->enq_ts > now))
+	else if (unlikely(cmp1024(cb->ts_arrive, now1024) > 0))
 		qd1024 = 0xFFFFFFFEUL;
-	else if ((qdelay = now - cb->enq_ts) > t1024_to_ns(0xFFFFFFFDUL))
+	else if (unlikely((qd1024 = now1024 - cb->ts_arrive) > 0xFFFFFFFDUL))
 		qd1024 = 0xFFFFFFFDUL;
-	else
-		qd1024 = ns_to_t1024(qdelay);
 	janz_record_packet(q, skb, cb, now, qd1024, 0);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
@@ -350,56 +358,58 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, int qid,
 }
 
 static inline void
-janz_drop_1pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, bool resizing)
+janz_drop_1pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024,
+    bool resizing)
 {
 	if (q->q[2].first)
-		janz_drop_pkt(sch, q, now, 2, resizing);
+		janz_drop_pkt(sch, q, now, now1024, 2, resizing);
 	else if (q->q[1].first)
-		janz_drop_pkt(sch, q, now, 1, resizing);
+		janz_drop_pkt(sch, q, now, now1024, 1, resizing);
 	else if (likely(q->q[0].first))
-		janz_drop_pkt(sch, q, now, 0, resizing);
+		janz_drop_pkt(sch, q, now, now1024, 0, resizing);
 }
 
 static inline void
-janz_drop_overlen(struct Qdisc *sch, struct janz_priv *q, u64 now, bool isenq)
+janz_drop_overlen(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024,
+    bool isenq)
 {
 	do {
-		janz_drop_1pkt(sch, q, now, !isenq);
+		janz_drop_1pkt(sch, q, now, now1024, !isenq);
 	} while (unlikely(sch->q.qlen > sch->limit));
 }
 
 static inline bool
-janz_qheadolder(u64 ots, struct janz_priv *q, int qid)
+janz_qheadolder(struct janz_priv *q, u32 ots, int qid)
 {
 	struct janz_skb *cb;
 
 	if (unlikely(!q->q[qid].first))
 		return (false);
 	cb = get_janz_skb(q->q[qid].first);
-	return ((unlikely(cb->enq_ts < ots)) ? true : false);
+	return ((unlikely(cmp1024(cb->ts_arrive, ots) < 0)) ? true : false);
 }
 
 static inline void
-janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
+janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024)
 {
-	u64 ots;
+	u32 ots;
 	int qid;
 
 	if (now < q->drop_next)
 		return;
 
 	/* drop one packet if one or more packets are older than 100 ms */
-	ots = now - nsmul(100, NSEC_PER_MSEC);
-	if (janz_qheadolder(ots, q, 2) ||
-	    janz_qheadolder(ots, q, 1) ||
-	    janz_qheadolder(ots, q, 0))
-		janz_drop_1pkt(sch, q, now, false);
+	ots = ns_to_t1024(now - nsmul(100, NSEC_PER_MSEC));
+	if (janz_qheadolder(q, ots, 2) ||
+	    janz_qheadolder(q, ots, 1) ||
+	    janz_qheadolder(q, ots, 0))
+		janz_drop_1pkt(sch, q, now, now1024, false);
 
 	/* drop all packets older than 500 ms */
-	ots = now - nsmul(500, NSEC_PER_MSEC);
+	ots = ns_to_t1024(now - nsmul(500, NSEC_PER_MSEC));
 	for (qid = 0; qid <= 2; ++qid)
-		while (janz_qheadolder(ots, q, qid))
-			janz_drop_pkt(sch, q, now, qid, false);
+		while (janz_qheadolder(q, ots, qid))
+			janz_drop_pkt(sch, q, now, now1024, qid, false);
 
 	q->drop_next += DROPCHK_INTERVAL;
 	now = ktime_get_ns();
@@ -410,17 +420,20 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 static inline struct sk_buff *
 janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 {
-	u64 now, rs, rate;
+	u64 now, rate;
 	struct sk_buff *skb;
 	struct janz_skb *cb;
 	int qid;
+	u32 now1024, rs;
+	s32 drs;
 
 	now = ktime_get_ns();
+	now1024 = ns_to_t1024(now);
 #ifdef SCH_JANZDBG
 	janz_record_wdog(q, now);
 #endif
-	rs = (u64)~(u64)0U;
-	janz_dropchk(sch, q, now);
+	rs = (u32)~(u32)0U;
+	janz_dropchk(sch, q, now, now1024);
 
 	if (now < q->notbefore) {
 		if (!is_peek) {
@@ -454,11 +467,12 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 		cb = get_janz_skb(skb);					\
 		if (is_peek)						\
 			return (skb);					\
-		if (now >= cb->enq_ts)					\
+		drs = cmp1024(cb->ts_arrive, now1024);			\
+		if (drs <= 0)						\
 			goto got_skb;					\
-		/* now < enq_ts: packet has not reached us yet */	\
-		if (cb->enq_ts < rs)					\
-			rs = cb->enq_ts;				\
+		/* ts_arrive > now: packet has not reached us yet */	\
+		if (/* > 0 */ (u32)drs < rs)				\
+			rs = (u32)drs;					\
 	}								\
 } while (/* CONSTCOND */ 0)
 
@@ -468,10 +482,10 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 
 	/* nothing to send, but we have to reschedule first */
 	/* if we end up here, rs was set above */
-	qdisc_watchdog_schedule_ns(&q->watchdog, rs);
+	qdisc_watchdog_schedule_ns(&q->watchdog, now + t1024_to_ns(rs));
 #ifdef SCH_JANZDBG
+	q->wdognext = now + t1024_to_ns(rs);
 	q->wdogreason = 0x20;
-	q->wdognext = rs;
 #endif
 	goto nothing_to_send;
 
@@ -503,7 +517,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb)
 	struct janz_skb *cb = get_janz_skb(skb);
 	u16 chance;
 
-	qdelay = now - cb->enq_ts;
+	qdelay = t1024_to_ns((u32)cmp1024(ns_to_t1024(now), cb->ts_arrive));
 
 	/**
 	 * maths proof, by example:
@@ -777,7 +791,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		}
 		memcpy(&(fe->c), &fc, sizeof(struct janz_fragcomp));
 		fe->nexthdr = cb->nexthdr;
-		fe->ts = cb->enq_ts;
+		fe->ts = cb->ts_begin;
 		fe->sport = cb->srcport;
 		fe->dport = cb->dstport;
 		fe->next = q->fragcache_used;
@@ -850,12 +864,15 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	u32 prev_backlog = sch->qstats.backlog;
 	bool overlimit;
 	u64 now;
+	u32 now1024;
 
 	now = ktime_get_ns();
-	janz_dropchk(sch, q, now);
+	now1024 = ns_to_t1024(now);
+	janz_dropchk(sch, q, now, now1024);
 
 	/* initialise values in cb */
-	cb->enq_ts = now + q->xlatency;
+	cb->ts_begin = now1024;
+	cb->ts_arrive = ns_to_t1024(now + q->xlatency);
 	cb->truesz = skb->truesize;
 	/* init values from before analysis */
 	cb->srcport = 0;
@@ -881,7 +898,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 
 	q->memusage += cb->truesz;
 	if (unlikely(overlimit = (++sch->q.qlen > sch->limit)))
-		janz_drop_overlen(sch, q, now, true);
+		janz_drop_overlen(sch, q, now, now1024, true);
 	if (!q->q[qid].first) {
 		q->q[qid].first = skb;
 		q->q[qid].last = skb;
@@ -1043,8 +1060,11 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	/* assert: sch->q.qlen == 0 || q->record_chan != nil */
 	/* assert: sch->limit > 0 */
-	if (unlikely(sch->q.qlen > sch->limit))
-		janz_drop_overlen(sch, q, ktime_get_ns(), false);
+	if (unlikely(sch->q.qlen > sch->limit)) {
+		u64 now = ktime_get_ns();
+
+		janz_drop_overlen(sch, q, now, ns_to_t1024(now), false);
+	}
 
 	if (q->record_chan) {
 		/* report if rate changes or a handover starts */

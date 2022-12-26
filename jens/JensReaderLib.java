@@ -320,6 +320,7 @@ public final class JensReaderLib {
          * <li>{@link #timestamp}</li>
          * <li>{@link #tsOffset}</li>
          * <li>{@link #sojournTime}</li>
+         * <li>{@link #realOWD}</li>
          * <li>{@link #chance}</li>
          * <li>{@link #ecnIn}</li>
          * <li>{@link #ecnOut}</li>
@@ -419,6 +420,17 @@ public final class JensReaderLib {
              */
             @UsedByJNI
             public @Positive(max = 0x3FFFFFFFC00L) long sojournTime;
+            /**
+             * <p>Real one-way delay of this packet, in nanoseconds.</p>
+             *
+             * <p>The real OWD, as pertains to this qdisc, is comprised of
+             * the extra latency, the sojourn time and delay caused by
+             * (simulated RAN) retransmissions. Within: [0;0x3FFFFFFFC00L]</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 0x3FFFFFFFC00L) long realOWD;
             /**
              * <p>Chance in [0, 1] that this packet is to be ECN CE marked,
              * based on {@code markfull} and {@code markfree}.</p>

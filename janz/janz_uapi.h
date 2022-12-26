@@ -56,7 +56,7 @@ struct tc_janz_relay {
 			__u16 sport;	/* host byteorder */
 			__u16 dport;	/* host byteorder */
 			__u16 pad1;
-			__u32 pad2;
+			__u32 real_owd;
 		} zSOJOURN;
 #if 0
 		struct {

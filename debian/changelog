@@ -2,8 +2,10 @@ iproute2 (5.10.0-4jens19) UNRELEASED; urgency=medium
 
   * Add qdisc inner workings documentation
   * Java: improve sojourn time display
+  * Record the “real one-way delay” through sch_janz (comprised of
+    extralatency, queue delay and (later…) retransmission delays)
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 26 Dec 2022 09:46:40 +0100
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 26 Dec 2022 09:50:07 +0100
 
 iproute2 (5.10.0-4jens18) tarent; urgency=medium
 

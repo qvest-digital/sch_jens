@@ -108,9 +108,11 @@ Record types define the following data members:
     ‣ __u8 nexthdr (iff ipver; 6 = TCP / 17 = UDP, else {s,d}port invalid)
     ‣ __u16 sport (source port, for TCP or UDP)
     ‣ __u16 dport (destination port, "      " )
+    ‣ __u16 unused
+    ‣ __u32 real one-way delay, as pertains to this qdisc (1024 ns units)
 
       ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-      │ <-psize-----> │ i │ n │ <-s-> │ <-d-> │ - │ - │ - │ - │ - │ - │
+      │ <-psize-----> │ i │ n │ <-s-> │ <-d-> │ - │ - │ <-real_owd--> │
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 • TC_JANZ_RELAY_QUEUESZ:

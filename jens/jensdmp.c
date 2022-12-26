@@ -249,7 +249,9 @@ consume(size_t idx)
 			    (unsigned)rbuf[idx].z.zSOJOURN.sport,
 			    (unsigned)rbuf[idx].z.zSOJOURN.dport);
 		}
-		printf(" size=\"%u\"/>\n", rbuf[idx].z.zSOJOURN.psize);
+		printf(" real-owd=\"%X\" size=\"%u\"/>\n",
+		    rbuf[idx].z.zSOJOURN.real_owd,
+		    rbuf[idx].z.zSOJOURN.psize);
 		break;
 
 	case TC_JANZ_RELAY_QUEUESZ:

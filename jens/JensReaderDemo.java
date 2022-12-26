@@ -120,7 +120,9 @@ public final class JensReaderDemo {
                         break;
                     }
                 }
-                System.out.printf("; %d bytes", r[i].pktSize);
+                System.out.printf("; real delay %s ms; %d bytes",
+                  JensReaderLib.formatTimestamp(r[i].realOWD),
+                  r[i].pktSize);
                 System.out.println();
             }
         }

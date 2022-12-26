@@ -71,17 +71,14 @@ public final class JensReaderDemo {
                 System.out.printf("%s [%17s] ",
                   JensReaderLib.formatTimestamp(r[i].timestamp, r[i].tsOffset),
                   JensReaderLib.formatTimestamp(r[i].timestamp));
-                switch (r[i].sojournTime) {
-                case 0x3FFFFFFF400L:
+                // https://stackoverflow.com/q/2676210/2171120
+                if (r[i].sojournTime == 0x3FFFFFFF400L) {
                     System.out.print("sojourn-time: > 4398046 ms; ");
-                    break;
-                case 0x3FFFFFFF800L:
+                } else if (r[i].sojournTime == 0x3FFFFFFF800L) {
                     System.out.print("sojourn-time: ((negative)); ");
-                    break;
-                case 0x3FFFFFFFC00L:
+                } else if (r[i].sojournTime == 0x3FFFFFFFC00L) {
                     System.out.print("drop due to queue resizing; ");
-                    break;
-                default:
+                } else {
                     System.out.printf("sojourn-time: %9s ms; ",
                       JensReaderLib.formatTimestamp(r[i].sojournTime));
                 }

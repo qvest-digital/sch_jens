@@ -410,9 +410,10 @@ public final class JensReaderLib {
             /**
              * <p>Sojourn time of this packet in the FIFO, in nanoseconds.</p>
              *
-             * <p>Note this may be 0x3FFFFFFFC00L, for example if the packet
-             * was dropped while the queue was resized, or if it could not
-             * be determined otherwise.</p>
+             * <p>Note: this is 0x3FFFFFFF400L when the sojourn time was
+             * too large to be represented; 0x3FFFFFFF800L if the sojourn
+             * time is negative; 0x3FFFFFFFC00L for packets dropped due
+             * to queue resizing; within [0, 0x3FFFFFFF400L[ otherwise.</p>
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */

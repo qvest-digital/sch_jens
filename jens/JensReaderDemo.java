@@ -71,7 +71,20 @@ public final class JensReaderDemo {
                 System.out.printf("%s [%17s] ",
                   JensReaderLib.formatTimestamp(r[i].timestamp, r[i].tsOffset),
                   JensReaderLib.formatTimestamp(r[i].timestamp));
-                System.out.printf("sojourn-time: %9s ms; ", JensReaderLib.formatTimestamp(r[i].sojournTime));
+                switch (r[i].sojournTime) {
+                case 0x3FFFFFFF400L:
+                    System.out.print("sojourn-time: > 4398046 ms; ");
+                    break;
+                case 0x3FFFFFFF800L:
+                    System.out.print("sojourn-time: ((negative)); ");
+                    break;
+                case 0x3FFFFFFFC00L:
+                    System.out.print("drop due to queue resizing; ");
+                    break;
+                default:
+                    System.out.printf("sojourn-time: %9s ms; ",
+                      JensReaderLib.formatTimestamp(r[i].sojournTime));
+                }
                 if (r[i].ecnValid) {
                     System.out.printf("ECN bits %s → %s",
                       JensReaderLib.formatECNBits(r[i].ecnIn),

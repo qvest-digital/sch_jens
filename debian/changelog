@@ -1,3 +1,10 @@
+iproute2 (5.10.0-4jens19) UNRELEASED; urgency=medium
+
+  * Add qdisc inner workings documentation
+  * Java: improve sojourn time display
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 26 Dec 2022 09:46:40 +0100
+
 iproute2 (5.10.0-4jens18) tarent; urgency=medium
 
   * Install ratedemo as well

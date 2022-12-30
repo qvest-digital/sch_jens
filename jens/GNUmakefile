@@ -83,6 +83,10 @@ run: all .built/java
 rundemo: ratedemo
 	sudo ./ratedemo /sys/kernel/debug/sch_janz/0001:v1
 
+jd= #-t
+rundump: jensdmp
+	sudo ./jensdmp ${jd} /sys/kernel/debug/sch_janz/0001:0
+
 install:
 	install -m 0755 -d ${DESTDIR}/usr/lib/jni
 	install -m 0644 ${JLIB} ${DESTDIR}/usr/lib/jni/

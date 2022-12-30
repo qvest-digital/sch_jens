@@ -111,7 +111,7 @@ struct janz_skbfifo {
 struct janz_priv {
 	struct janz_skbfifo q[3];	/* TOS FIFOs */					//@cacheline
 	struct rchan *record_chan;	/* relay to userspace */			//@16
-#define QSZ_INTERVAL nsmul(5, NSEC_PER_MSEC)
+#define QSZ_INTERVAL nsmul(500, NSEC_PER_MSEC)
 	u64 qsz_next;			/* next time to emit queue-size */		//@  +8
 #define DROPCHK_INTERVAL nsmul(200, NSEC_PER_MSEC)
 	u64 drop_next;			/* next time to check drops */			//@16

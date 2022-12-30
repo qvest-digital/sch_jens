@@ -34,7 +34,7 @@ This can also be achieved with an /etc/fstab line as follows:
 
 We’re currently intending to measure the following KPIs:
 
-• queue length (integer, ≤ “limit”) every 5 ms
+• queue length (integer, ≤ “limit”) every 500 ms (or when triggered)
 • timestamp (at least µs) and sojourn time (dito) for every packet
 
 This data is passed from kernel to userspace in records structured

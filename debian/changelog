@@ -4,8 +4,14 @@ iproute2 (5.10.0-4jens19) UNRELEASED; urgency=medium
   * Java: improve sojourn time display
   * Record the “real one-way delay” through sch_janz (comprised of
     extralatency, queue delay and (later…) retransmission delays)
+  * Mention -rt kernel trouble; renicing ksoftirqd is probably unneeded
+  * Record queue size only every 500 ms unless triggered (which it is
+    frequently)
+  * Trigger queue size report upon and just before sending the first
+    packet after a rate change unless already triggered/scheduled
+  * Add tab-separated jensdmp output format, for jensjsacquire
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 26 Dec 2022 09:50:07 +0100
+ -- Thorsten Glaser <t.glaser@tarent.de>  Fri, 30 Dec 2022 14:22:54 +0100
 
 iproute2 (5.10.0-4jens18) tarent; urgency=medium
 

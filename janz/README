@@ -218,4 +218,7 @@ $ ps ax | fgrep ksoftirqd/   # to see whether this worked
 This can, however, make other tasks on the same system slower.
 However, a JENS instance’s primary job is to forward packets
 with as low latency and latency’s jitter as possible, so this
-is warranted.
+may possibly be warranted.
+
+In our experiments, however, use of a -rt kernel *increased*
+latency and jitter both, so do not use them.

@@ -129,7 +129,8 @@ struct janz_priv {
 	u32 nsubbufs;									//@  +8
 	u32 memusage;			/* enqueued packet truesize */			//@  +12
 	struct dentry *ctlfile;								//@16
-	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
+	u64 lastknownrate;								//@  +8
+	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u8 crediting;
 #ifdef SCH_JANZDBG
@@ -194,10 +195,14 @@ janz_record_write(struct tc_janz_relay *record, struct janz_priv *q)
 }
 
 static inline void
-janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now, u8 f)
+janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now,
+    u64 rate, u8 f)
 {
 	struct tc_janz_relay r = {0};
-	u64 rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
+
+	if (!rate)
+		rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
+	q->lastknownrate = rate;
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_QUEUESZ;
@@ -420,7 +425,7 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024)
 static inline struct sk_buff *
 janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 {
-	u64 now, rate;
+	u64 now, rate = 0;
 	struct sk_buff *skb;
 	struct janz_skb *cb;
 	int qid;
@@ -502,10 +507,14 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek)
 	q->notbefore = (q->crediting ? q->notbefore : now) +
 	    (rate * (u64)skb->len);
 	q->crediting = 1;
+	if (rate != q->lastknownrate)
+		goto force_rate_and_out;
 
  out:
-	if (now >= q->qsz_next)
-		janz_record_queuesz(sch, q, now, 0);
+	if (now >= q->qsz_next) {
+ force_rate_and_out:
+		janz_record_queuesz(sch, q, now, rate, 0);
+	}
 	return (skb);
 }
 
@@ -909,7 +918,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	qdisc_qstats_backlog_inc(sch, skb);
 
 	if (now >= q->qsz_next)
-		janz_record_queuesz(sch, q, now, 0);
+		janz_record_queuesz(sch, q, now, 0, 0);
 
 	if (unlikely(overlimit)) {
 		qdisc_qstats_overlimit(sch);
@@ -1069,7 +1078,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (q->record_chan) {
 		/* report if rate changes or a handover starts */
 		if (rate_changed || handover_started)
-			janz_record_queuesz(sch, q, ktime_get_ns(), 1);
+			janz_record_queuesz(sch, q, ktime_get_ns(), 0, 1);
 		/* flush subbufs before handover */
 		if (handover_started)
 			relay_flush(q->record_chan);
@@ -1105,6 +1114,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	/* config values’ defaults */
 	sch->limit = 10240;
 	atomic64_set_release(&(q->ns_pro_byte), /* 10 Mbit/s */ 800);
+	q->lastknownrate = 800; /* same as above */
 	q->markfree = nsmul(4, NSEC_PER_MSEC);
 	q->markfull = nsmul(14, NSEC_PER_MSEC);
 	q->nsubbufs = 0;

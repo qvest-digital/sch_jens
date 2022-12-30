@@ -175,8 +175,8 @@ main(int argc, char *argv[])
 	return (0);
 }
 
-#define IPADDRFMTLEN	(INET_ADDRSTRLEN > INET6_ADDRSTRLEN ? \
-			 INET_ADDRSTRLEN : INET6_ADDRSTRLEN)
+#define IPADDRFMTLEN	((size_t)(INET_ADDRSTRLEN > INET6_ADDRSTRLEN ? \
+			 INET_ADDRSTRLEN : INET6_ADDRSTRLEN))
 static inline void
 ipfmt(char dst[IPADDRFMTLEN], const unsigned char *src, int ipver)
 {

@@ -1,5 +1,5 @@
 /*-
- * Copyright © 2021, 2022
+ * Copyright © 2021, 2022, 2023
  *	mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom
  *
@@ -309,7 +309,7 @@ tsv_header(void)
 	    ",\"TS.\""
 	    ",\"OWD.|MEMBYTES|wdogscheduled?\""
 	    ",\"QDELAY.|NPKTS|NTOOEARLY\""
-	    ",\"&CHANCE|handover?|N50US\""
+	    ",\"CHANCE|handover?|N50US\""
 	    ",\"ecnin|BWLIM|N1MS\""
 	    ",\"ecnout|TSOFS.|N4MS\""
 	    ",\"bit5?|-|NLATER\""
@@ -364,7 +364,7 @@ tsv_show(size_t idx)
 		ul1 <<= 10;
 		u3 = ul1 / 1000000000UL;
 		u4 = ul1 % 1000000000UL;
-		printf("\"p\"\t%llu.%09u\t%u.%09u\t%u.%09u\t%04X\t%s\t%s\t%u\t%u\t%u\t\"%s\"\t%u\n",
+		printf("\"p\"\t%llu.%09u\t%u.%09u\t%u.%09u\t%u\t%s\t%s\t%u\t%u\t%u\t\"%s\"\t%u\n",
 		    t1, t2,
 		    u3, u4,
 		    u1, u2,

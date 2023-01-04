@@ -309,7 +309,7 @@ tsv_header(void)
 	    ",\"TS.\""
 	    ",\"OWD.|MEMBYTES|wdogscheduled?\""
 	    ",\"QDELAY.|NPKTS|NTOOEARLY\""
-	    ",\"CHANCE|handover?|N50US\""
+	    ",\"&CHANCE|handover?|N50US\""
 	    ",\"ecnin|BWLIM|N1MS\""
 	    ",\"ecnout|TSOFS.|N4MS\""
 	    ",\"bit5?|-|NLATER\""

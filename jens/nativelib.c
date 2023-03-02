@@ -1,5 +1,5 @@
 /*-
- * Copyright © 2020, 2021, 2022
+ * Copyright © 2020, 2021, 2022, 2023
  *	mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom
  *
@@ -112,7 +112,8 @@ static jfieldID o_REC_ecnValid;		// bool
 //static jfieldID o_REC_markCoDel;	// bool
 static jfieldID o_REC_markJENS;		// bool
 static jfieldID o_REC_dropped;		// bool
-static jfieldID o_REC_pktSize;		// long (u32)
+static jfieldID o_REC_usedFIFO;		// int
+static jfieldID o_REC_pktSize;		// int
 static jfieldID o_REC_ipVer;		// int
 static jfieldID o_REC_nextHeader;	// int
 static jfieldID o_REC_srcIP;		// byte[16]
@@ -258,7 +259,8 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	//getfield(REC, markCoDel, "Z");
 	getfield(REC, markJENS, "Z");
 	getfield(REC, dropped, "Z");
-	getfield(REC, pktSize, "J");
+	getfield(REC, usedFIFO, "I");
+	getfield(REC, pktSize, "I");
 	getfield(REC, ipVer, "I");
 	getfield(REC, nextHeader, "I");
 	getfield(REC, srcIP, "[B");
@@ -515,8 +517,10 @@ nativeRead(JNIEnv *env, jobject obj)
 			    (jint)(unsigned int)buf->z.zSOJOURN.sport);
 			(*env)->SetIntField(env, to, o_REC_dstPort,
 			    (jint)(unsigned int)buf->z.zSOJOURN.dport);
-			(*env)->SetLongField(env, to, o_REC_pktSize,
-			    (jlong)(unsigned long long)buf->z.zSOJOURN.psize);
+			(*env)->SetIntField(env, to, o_REC_usedFIFO,
+			    (jint)(buf->z.zSOJOURN.psize >> 30));
+			(*env)->SetIntField(env, to, o_REC_pktSize,
+			    (jint)(buf->z.zSOJOURN.psize & 0x3FFFFFFFU));
 			(*env)->SetLongField(env, to, o_REC_realOWD,
 			    (jlong)(1024ULL * (unsigned long long)buf->z.zSOJOURN.real_owd));
 			(*env)->DeleteLocalRef(env, to);

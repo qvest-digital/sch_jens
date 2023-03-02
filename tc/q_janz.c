@@ -24,7 +24,7 @@ explain(void)
 {
 	fprintf(stderr, "Usage: ... qdisc"
 	       " add ... janz [limit PACKETS] [rate RATE] [handover TIME]"
-		"\n\t	[markfree TIME] [markfull TIME]"
+		"\n\t	[ignoretos] [markfree TIME] [markfull TIME]"
 		"\n\t	[subbufs NUMBER] [fragcache NUMBER] [extralatency TIME]"
 		"\n");
 }
@@ -49,6 +49,7 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 	unsigned int subbufs = ~0U;
 	unsigned int fragcache = ~0U;
 	unsigned int extralatency = ~0U;
+	bool ignoretos = false;
 	struct rtattr *tail;
 
 	while (argc > 0) {
@@ -67,6 +68,8 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 			NEXT_ARG();
 			if (get_time(&handover, *argv))
 				janz_ejal(handover);
+		} else if (!strcmp(*argv, "ignoretos")) {
+			ignoretos = true;
 		} else if (!strcmp(*argv, "markfree")) {
 			NEXT_ARG();
 			if (get_time(&markfree, *argv))
@@ -103,6 +106,8 @@ janz_parse_opt(struct qdisc_util *qu, int argc, char **argv,
 		addattr_l(n, 1024, TCA_JANZ_RATE64, &rate64, sizeof(rate64));
 	if (handover)
 		addattr_l(n, 1024, TCA_JANZ_HANDOVER, &handover, sizeof(handover));
+	if (ignoretos)
+		addattr_l(n, 1024, TCA_JANZ_IGNORETOS, NULL, 0);
 	if (markfree != ~0U)
 		addattr_l(n, 1024, TCA_JANZ_MARKFREE, &markfree, sizeof(markfree));
 	if (markfull != ~0U)
@@ -147,6 +152,9 @@ janz_print_opt(struct qdisc_util *qu, FILE *f, struct rtattr *opt)
 		print_string(PRINT_FP, NULL, "rate %s ",
 		    sprint_rate(rate64, b1));
 		print_lluint(PRINT_JSON, "rate", NULL, rate64);
+	}
+	if (tb[TCA_JANZ_IGNORETOS]) {
+		print_bool(PRINT_ANY, "ignoretos", "ignoretos ", true);
 	}
 	if (tb[TCA_JANZ_MARKFREE] &&
 	    RTA_PAYLOAD(tb[TCA_JANZ_MARKFREE]) >= sizeof(markfree)) {

@@ -1,6 +1,6 @@
 iproute2 (5.10.0-4jens19) UNRELEASED; urgency=medium
 
-  * Add qdisc inner workings documentation
+  * Add qdisc inner workings documentation picture
   * Java: improve sojourn time display
   * Record the “real one-way delay” through sch_janz (comprised of
     extralatency, queue delay and (later…) retransmission delays)
@@ -10,8 +10,11 @@ iproute2 (5.10.0-4jens19) UNRELEASED; urgency=medium
   * Trigger queue size report upon and just before sending the first
     packet after a rate change unless already triggered/scheduled
   * Add tab-separated jensdmp output format, for jensjsacquire
+  * Correct dropping of a single packet if one+ are too old
+  * Report which FIFO is used using psize top two bits
+  * Add ignoretos option, e.g. for DSCP-classifying networks
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Fri, 30 Dec 2022 14:22:54 +0100
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 02 Mar 2023 01:42:22 +0100
 
 iproute2 (5.10.0-4jens18) tarent; urgency=medium
 

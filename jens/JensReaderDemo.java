@@ -1,7 +1,7 @@
 package de.telekom.llcto.jens.reader;
 
 /*-
- * Copyright © 2021, 2022
+ * Copyright © 2021, 2022, 2023
  *      mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom
  *
@@ -123,6 +123,19 @@ public final class JensReaderDemo {
                 System.out.printf("; real delay %s ms; %d bytes",
                   JensReaderLib.formatTimestamp(r[i].realOWD),
                   r[i].pktSize);
+		switch (r[i].usedFIFO) {
+		case 0:
+			break;
+		case 1:
+			System.out.print("; lodelay FIFO");
+			break;
+		case 2:
+			System.out.print("; normal FIFO");
+			break;
+		case 3:
+			System.out.print("; bulk FIFO");
+			break;
+		}
                 System.out.println();
             }
         }

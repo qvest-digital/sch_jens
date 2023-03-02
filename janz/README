@@ -103,7 +103,8 @@ Record types define the following data members:
   – y8 destination IP, if any (ipver…)
   – z struct
     ‣ __u32 psize (raw packet size, including partial Layer 2 framing,
-	e.g. 802.11 WLAN, or Ethernet header (though not trailer))
+	e.g. 802.11 WLAN, or Ethernet header (though not trailer));
+	bit30‥31 show which FIFO: 0=unknown 1=lowdelay 2=normal 3=bulk
     ‣ __u8 ipver (4 = IPv4; 6 = IPv6; 0 = other and x8/y8 are invalid)
     ‣ __u8 nexthdr (iff ipver; 6 = TCP / 17 = UDP, else {s,d}port invalid)
     ‣ __u16 sport (source port, for TCP or UDP)
@@ -112,7 +113,7 @@ Record types define the following data members:
     ‣ __u32 real one-way delay, as pertains to this qdisc (1024 ns units)
 
       ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-      │ <-psize-----> │ i │ n │ <-s-> │ <-d-> │ - │ - │ <-real_owd--> │
+      │ ▌<-psize----> │ i │ n │ <-s-> │ <-d-> │ - │ - │ <-real_owd--> │
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 • TC_JANZ_RELAY_QUEUESZ:

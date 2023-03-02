@@ -1,4 +1,5 @@
-.\" Copyright © 2022 mirabilos <t.glaser@tarent.de>
+.\" Copyright © 2022, 2023
+.\"	mirabilos <t.glaser@tarent.de>
 .\" Licensor: Deutsche Telekom LLCTO
 .\"
 .\" Provided that these terms and disclaimer and all copyright notices
@@ -17,7 +18,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd November 8, 2022
+.Dd March 1, 2023
 .Dt TC\-JANZ 8
 .Os Linux
 .Sh NAME
@@ -29,6 +30,7 @@
 .Op Ic limit Ar PACKETS
 .Op Ic rate Ar RATE
 .Op Ic handover Ar TIME
+.Op Ic ignoretos
 .Op Ic markfree Ar TIME
 .Op Ic markfull Ar TIME
 .Op Ic subbufs Ar NUMBER
@@ -61,11 +63,14 @@ although
 .Nm sch_janz
 moves ARP, RARP and PPPoE discovery traffic into the lodelay FIFO
 and uses a less complicated mapping from iptos values.
+The
+.Ic ignoretos
+option (see below) changes it.
 .Pp
 Every 200 ms, the packets at the heads of the FIFOs are checked for their age
-.Pq sojourn time , a.k.a.\& queue delay ;
+.Pq sojourn time , a.k.a.\& queue delay :
 if one or more packets are older than 100 ms a single packet is dropped
-from the head with the worst TOS;
+from the head;
 then, all packets older than 500 ms are dropped.
 .Pp
 Outgoing packets are paced based on the configured
@@ -99,6 +104,13 @@ is the bandwidth outgoing packets are limited to.
 Default: 10\ Mbit/s
 .It Ic handover
 stops traffic for the specified amount of time.
+.It Ic ignoretos
+do not split traffic into multiple FIFOs based on the IP QoS bits
+.Dv IPTOS_THROUGHPUT
+.Pq Li 0x08
+and
+.Dv IPTOS_LOWDELAY
+.Pq Li 0x10 .
 .It Ic markfree
 is the maximum queue delay packets are allowed to sojourn in the queue
 without being ECN CE-marked.
@@ -231,3 +243,15 @@ Linux cannot delay on ingress.
 It is applied before enqueueing but does not affect sojourn time.
 Basically, it simulates extra latency on the network in front of
 the JENS node.
+.Pp
+The RAN does not use the IPTOS bits to split up traffic.
+To better simulate it, or if your traffic uses DSCP classification
+instead, use the
+.Ic ignoretos
+option to disable classification of IP and Legacy IP traffic.
+.Em Note :
+The
+.Ic ignoretos
+option must be passed with every
+.Ic tc qdisc change
+invocation that does not intentionally unsets it.

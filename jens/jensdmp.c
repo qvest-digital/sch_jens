@@ -257,9 +257,10 @@ consume(size_t idx)
 			    (unsigned)rbuf[idx].z.zSOJOURN.sport,
 			    (unsigned)rbuf[idx].z.zSOJOURN.dport);
 		}
-		printf(" real-owd=\"%X\" size=\"%u\"/>\n",
+		printf(" real-owd=\"%X\" size=\"%u\" FIFO=\"%u\"/>\n",
 		    rbuf[idx].z.zSOJOURN.real_owd,
-		    rbuf[idx].z.zSOJOURN.psize);
+		    rbuf[idx].z.zSOJOURN.psize & 0x3FFFFFFFU,
+		    rbuf[idx].z.zSOJOURN.psize >> 30);
 		break;
 
 	case TC_JANZ_RELAY_QUEUESZ:
@@ -324,6 +325,10 @@ static const char ecnidx[5][5] = {
 	"\"00\"", "\"01\"", "\"10\"", "\"11\"", "\"??\""
 };
 
+static const char *fifoidstrs[4] = {
+	"", " FIFO lodelay", " FIFO normal", " FIFO bulk"
+};
+
 static void
 tsv_show(size_t idx)
 {
@@ -331,31 +336,35 @@ tsv_show(size_t idx)
 	unsigned long long ul1, t1;
 	char ipsrc[IPADDRFMTLEN], ipdst[IPADDRFMTLEN];
 	char flow[2U * IPADDRFMTLEN + 28];
+	const char *fifoidstr;
 
 	ul1 = rbuf[idx].ts;
 	t1 = ul1 / 1000000000UL;
 	t2 = ul1 % 1000000000UL;
 	switch (rbuf[idx].type) {
 	case TC_JANZ_RELAY_SOJOURN:
+		fifoidstr = fifoidstrs[rbuf[idx].z.zSOJOURN.psize >> 30];
+		rbuf[idx].z.zSOJOURN.psize &= 0x3FFFFFFFU;
 		if (rbuf[idx].z.zSOJOURN.ipver) {
 			ipfmt(ipsrc, rbuf[idx].x8, rbuf[idx].z.zSOJOURN.ipver);
 			ipfmt(ipdst, rbuf[idx].y8, rbuf[idx].z.zSOJOURN.ipver);
 			if (rbuf[idx].z.zSOJOURN.nexthdr == 6 ||
 			    rbuf[idx].z.zSOJOURN.nexthdr == 17)
 				snprintf(flow, sizeof(flow),
-				    "IPv%u %s [%s]:%u->[%s]:%u",
+				    "IPv%u %s [%s]:%u->[%s]:%u%s",
 				    (unsigned int)rbuf[idx].z.zSOJOURN.ipver,
 				    rbuf[idx].z.zSOJOURN.nexthdr == 6 ? "TCP" : "UDP",
 				    ipsrc, (unsigned int)rbuf[idx].z.zSOJOURN.sport,
-				    ipdst, (unsigned int)rbuf[idx].z.zSOJOURN.dport);
+				    ipdst, (unsigned int)rbuf[idx].z.zSOJOURN.dport,
+				    fifoidstr);
 			else
 				snprintf(flow, sizeof(flow),
-				    "IPv%u x%02X [%s]->[%s]",
+				    "IPv%u x%02X [%s]->[%s]%s",
 				    (unsigned int)rbuf[idx].z.zSOJOURN.ipver,
 				    (unsigned int)rbuf[idx].z.zSOJOURN.nexthdr,
-				    ipsrc, ipdst);
+				    ipsrc, ipdst, fifoidstr);
 		} else
-			memcpy(flow, "noIP", sizeof("noIP"));
+			snprintf(flow, sizeof(flow), "noIP%s", fifoidstr);
 		ul1 = rbuf[idx].d32;
 		ul1 <<= 10;
 		u1 = ul1 / 1000000000UL;

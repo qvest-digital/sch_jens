@@ -1,7 +1,7 @@
 package de.telekom.llcto.jens.reader;
 
 /*-
- * Copyright © 2021, 2022
+ * Copyright © 2021, 2022, 2023
  *      mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom
  *
@@ -327,6 +327,7 @@ public final class JensReaderLib {
          * <li>{@link #ecnValid}</li>
          * <li>{@link #markJENS}</li>
          * <li>{@link #dropped}</li>
+         * <li>{@link #usedFIFO}</li>
          * <li>{@link #pktSize}</li>
          * <li>{@link #ipVer}</li>
          * <li>{@link #nextHeader}</li>
@@ -490,12 +491,19 @@ public final class JensReaderLib {
             @UsedByJNI
             public boolean dropped;
             /**
+             * <p>Which FIFO was used (0 = unknown).</p>
+             *
+             * <p>{@link #handlePacket(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 3) int usedFIFO;
+            /**
              * <p>Real size of the packet, including Layer 2 framing.</p>
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */
             @UsedByJNI
-            public @Positive(max = 0xFFFFFFFFL) long pktSize;
+            public @Positive(max = 0x3FFFFFFF) int pktSize;
             /**
              * <p>IP version (4 or 6), or 0 to indicate not IP.</p>
              *

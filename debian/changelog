@@ -12,9 +12,9 @@ iproute2 (5.10.0-4jens19) UNRELEASED; urgency=medium
   * Add tab-separated jensdmp output format, for jensjsacquire
   * Correct dropping of a single packet if one+ are too old
   * Report which FIFO is used using psize top two bits
-  * Add ignoretos option, e.g. for DSCP-classifying networks
+  * Add qosmode option e.g. for DSCP-classifying networks
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 02 Mar 2023 01:42:22 +0100
+ -- Thorsten Glaser <t.glaser@tarent.de>  Sat, 04 Mar 2023 23:34:51 +0100
 
 iproute2 (5.10.0-4jens18) tarent; urgency=medium
 

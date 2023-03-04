@@ -133,13 +133,13 @@ struct janz_priv {
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u8 crediting;
-	u8 usetospriobits;
 #ifdef SCH_JANZDBG
 	u8 wdogreason;			/* 10=notbefore 20=nothingtosend */
 	u16 wdogearly;
 	u64 wdogtimers[4];		/* <50us <1000us <4000us >=4ms */
 	u64 wdognext;
 #endif
+	unsigned int qosmode;
 };
 
 /* struct janz_skb *cb = get_janz_skb(skb); */
@@ -911,14 +911,40 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	/* analyse skb determining tosbyte etc. */
 	janz_analyse(sch, q, skb, cb, now);
 
-	qid = 1;
-	if (q->usetospriobits || (
-	    skb->protocol != htons(ETH_P_IP) &&
-	    skb->protocol != htons(ETH_P_IPV6))) {
+	switch (q->qosmode) {
+	case 0:
+	default:
+		qid = 1;
 		if (cb->tosbyte & 0x10)
 			--qid;
 		if (cb->tosbyte & 0x08)
 			++qid;
+		break;
+	case 1:
+		// IPv{4,6} traffic is not categorised
+		qid = 1;
+		if (skb->protocol != htons(ETH_P_IP) &&
+		    skb->protocol != htons(ETH_P_IPV6)) {
+			if (cb->tosbyte & 0x10)
+				--qid;
+			if (cb->tosbyte & 0x08)
+				++qid;
+		}
+		break;
+	case 2:
+		// IPv{4,6} traffic is categorised by ECT(1) or else only
+		qid = 1;
+		if (skb->protocol != htons(ETH_P_IP) &&
+		    skb->protocol != htons(ETH_P_IPV6)) {
+			if (cb->tosbyte & 0x10)
+				--qid;
+			if (cb->tosbyte & 0x08)
+				++qid;
+		} else {
+			if ((cb->record_flag & INET_ECN_MASK) == INET_ECN_ECT_1)
+				--qid;
+		}
+		break;
 	}
 
 	// assumption is 1 packet is passed
@@ -1012,12 +1038,12 @@ static const struct nla_policy janz_nla_policy[TCA_JANZ_MAX + 1] = {
 	[TCA_JANZ_LIMIT]	= { .type = NLA_U32 },
 	[TCA_JANZ_RATE64]	= { .type = NLA_U64 },
 	[TCA_JANZ_HANDOVER]	= { .type = NLA_U32 },
+	[TCA_JANZ_QOSMODE]	= { .type = NLA_U32 },
 	[TCA_JANZ_MARKFREE]	= { .type = NLA_U32 },
 	[TCA_JANZ_MARKFULL]	= { .type = NLA_U32 },
 	[TCA_JANZ_SUBBUFS]	= { .type = NLA_U32 },
 	[TCA_JANZ_FRAGCACHE]	= { .type = NLA_U32 },
 	[TCA_JANZ_XLATENCY]	= { .type = NLA_U32 },
-	[TCA_JANZ_IGNORETOS]	= { .type = NLA_FLAG },
 };
 
 static inline int
@@ -1074,6 +1100,9 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		q->crediting = 0;
 	}
 
+	if (tb[TCA_JANZ_QOSMODE])
+		q->qosmode = nla_get_u32(tb[TCA_JANZ_QOSMODE]);
+
 	if (tb[TCA_JANZ_MARKFREE])
 		q->markfree = us_to_ns(nla_get_u32(tb[TCA_JANZ_MARKFREE]));
 
@@ -1090,8 +1119,6 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	if (tb[TCA_JANZ_XLATENCY])
 		q->xlatency = us_to_ns(nla_get_u32(tb[TCA_JANZ_XLATENCY]));
-
-	q->usetospriobits = !nla_get_flag(tb[TCA_JANZ_IGNORETOS]);
 
 	/* assert: sch->q.qlen == 0 || q->record_chan != nil */
 	/* assert: sch->limit > 0 */
@@ -1146,7 +1173,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	q->nsubbufs = 0;
 	q->fragcache_num = 0;
 	q->xlatency = 0;
-	q->usetospriobits = 1;
+	q->qosmode = 0;
 
 	/* qdisc state */
 	sch->q.qlen = 0;
@@ -1291,12 +1318,10 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 	if (opts == NULL)
 		goto nla_put_failure;
 
-	if (!q->usetospriobits && nla_put_flag(skb, TCA_JANZ_IGNORETOS))
-		goto nla_put_failure;
-
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
 	      div64_u64(NSEC_PER_SEC, rate), TCA_JANZ_PAD64) ||
+	    nla_put_u32(skb, TCA_JANZ_QOSMODE, q->qosmode) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFREE, ns_to_us(q->markfree)) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFULL, ns_to_us(q->markfull)) ||
 	    nla_put_u32(skb, TCA_JANZ_SUBBUFS, q->nsubbufs) ||

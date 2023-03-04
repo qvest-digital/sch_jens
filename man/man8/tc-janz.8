@@ -187,9 +187,9 @@ Set up a queue with standard parameters and display its statistics:
 $ \fBsudo tc qdisc add dev eth0 root handle 1: janz\fR\fC
 $ \fBsudo tc \-s qdisc show dev eth0\fR\fC
 qdisc janz 1: root refcnt 2 limit 10240 rate 10000kbit \e
-    markfree 4ms markfull 14ms subbufs 1024 fragcache 1024 \e
-    extralatency 0us
- Sent 158 bytes 1 pkt (dropped 0, overlimits 0, requeues 0)
+    qosmode 0 markfree 4ms markfull 14ms \e
+    subbufs 1024 fragcache 1024 extralatency 0us
+ Sent 2012 bytes 12 pkt (dropped 0, overlimits 0, requeues 0)
  backlog 0b 0p
 .Ed
 .Pp
@@ -197,33 +197,33 @@ Introduce somewhat more harsh limits to simulate a slow network:
 .Bd -literal -offset 4n
 $ \fBping \-c4 8.8.8.8\fR\fC
 PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
-64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=5.00 ms
-64 bytes from 8.8.8.8: icmp_seq=2 ttl=117 time=4.87 ms
-64 bytes from 8.8.8.8: icmp_seq=3 ttl=117 time=4.90 ms
-64 bytes from 8.8.8.8: icmp_seq=4 ttl=117 time=4.86 ms
-
-\-\-\- 8.8.8.8 ping statistics \-\-\-
-4 packets transmitted, 4 received, 0% packet loss, time 3006ms
-rtt min/avg/max/mdev = 4.864/4.907/5.001/0.055 ms
-$ \fBsudo tc qdisc del dev eth0 root\fR\fC
-$ \fBsudo tc qdisc add dev eth0 root handle 1: janz\fR\fC \e
-    \fBlimit 128 rate 128kbit extralatency 80ms\fR\fC
-$ \fBping \-c4 8.8.8.8\fR\fC
-PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
-64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=101 ms
-64 bytes from 8.8.8.8: icmp_seq=2 ttl=117 time=85.3 ms
-64 bytes from 8.8.8.8: icmp_seq=3 ttl=117 time=85.1 ms
-64 bytes from 8.8.8.8: icmp_seq=4 ttl=117 time=85.1 ms
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=58 time=4.62 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=58 time=4.50 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=58 time=4.51 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=58 time=4.43 ms
 
 \-\-\- 8.8.8.8 ping statistics \-\-\-
 4 packets transmitted, 4 received, 0% packet loss, time 3005ms
-rtt min/avg/max/mdev = 85.124/89.219/101.302/6.976 ms
+rtt min/avg/max/mdev = 4.433/4.515/4.619/0.066 ms
+$ \fBsudo tc qdisc change dev eth0 handle 1: janz\fR\fC \e
+    \fBlimit 128 rate 128kbit extralatency 80ms\fR\fC
+$ \fBping \-c4 8.8.8.8\fR\fC
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=58 time=87.5 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=58 time=84.4 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=58 time=84.4 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=58 time=84.4 ms
+
+\-\-\- 8.8.8.8 ping statistics \-\-\-
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 84.417/85.193/87.486/1.323 ms
 $ \fBsudo tc \-s qdisc show dev eth0\fR\fC
 qdisc janz 1: root refcnt 2 limit 128 rate 128kbit \e
-    markfree 4ms markfull 14ms subbufs 1024 fragcache 1024 \e
-    extralatency 80ms
- Sent 6620 bytes 14 pkt (dropped 0, overlimits 0, requeues 0)
- backlog 1008b 2p
+    qosmode 0 markfree 4ms markfull 14ms \e
+    subbufs 1024 fragcache 1024 extralatency 80ms
+ Sent 13022 bytes 79 pkt (dropped 0, overlimits 0, requeues 0)
+ backlog 110b 1p
+$ \fBsudo tc qdisc del dev eth0 root\fR\fC
 .Ed
 .Pp
 Note: the author first attempted this with a rate of 64 kbit/s.

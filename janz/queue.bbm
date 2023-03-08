@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Map>
   <Version>9</Version>
-  <nbItems>144</nbItems>
+  <nbItems>199</nbItems>
   <BackgroundColor>
     <IsKnownColor>true</IsKnownColor>
     <Name>White</Name>
@@ -16,13 +16,13 @@
   </Date>
   <Comment />
   <ExportInfo>
-    <ExportPath>Untitled.png</ExportPath>
+    <ExportPath>queue.bbm.png</ExportPath>
     <ExportFileType>1</ExportFileType>
     <ExportArea>
       <X>8</X>
       <Y>-87</Y>
       <Width>594.0992</Width>
-      <Height>399.1486</Height>
+      <Height>460.1486</Height>
     </ExportArea>
     <ExportScale>6.89447170306196</ExportScale>
     <ExportWatermark>false</ExportWatermark>
@@ -88,22 +88,22 @@
       <Bricks>
         <Brick id="11">
           <DisplayArea>
-            <X>36.5708</X>
-            <Y>233.4189</Y>
-            <Width>10.625</Width>
-            <Height>22.625</Height>
+            <X>41.11734</X>
+            <Y>202.7851</Y>
+            <Width>17.67075</Width>
+            <Height>23.16055</Height>
           </DisplayArea>
           <MyGroup />
           <PartNumber>TB CT R104BC.8</PartNumber>
-          <Orientation>1350</Orientation>
-          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Orientation>1012.5</Orientation>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
           <Altitude>0</Altitude>
           <Connexions count="2">
             <Connexion id="12">
-              <LinkedTo>1750</LinkedTo>
+              <LinkedTo>2199</LinkedTo>
             </Connexion>
             <Connexion id="13">
-              <LinkedTo>1744</LinkedTo>
+              <LinkedTo>2202</LinkedTo>
             </Connexion>
           </Connexions>
         </Brick>
@@ -125,27 +125,6 @@
             </Connexion>
             <Connexion id="642">
               <LinkedTo>134</LinkedTo>
-            </Connexion>
-          </Connexions>
-        </Brick>
-        <Brick id="646">
-          <DisplayArea>
-            <X>41.45784</X>
-            <Y>210.7193</Y>
-            <Width>13.85833</Width>
-            <Height>18.7291</Height>
-          </DisplayArea>
-          <MyGroup />
-          <PartNumber>2865.8</PartNumber>
-          <Orientation>1192.5</Orientation>
-          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
-          <Altitude>0</Altitude>
-          <Connexions count="2">
-            <Connexion id="647">
-              <LinkedTo>827</LinkedTo>
-            </Connexion>
-            <Connexion id="648">
-              <LinkedTo>1745</LinkedTo>
             </Connexion>
           </Connexions>
         </Brick>
@@ -1279,6 +1258,90 @@
               <LinkedTo>1799</LinkedTo>
             </Connexion>
             <Connexion id="1802">
+              <LinkedTo>2793</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2792">
+          <DisplayArea>
+            <X>506.4254</X>
+            <Y>328.6873</Y>
+            <Width>11.14083</Width>
+            <Height>18.21209</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>101.25</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2793">
+              <LinkedTo>1802</LinkedTo>
+            </Connexion>
+            <Connexion id="2794">
+              <LinkedTo>2796</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2795">
+          <DisplayArea>
+            <X>503.3039</X>
+            <Y>344.3798</Y>
+            <Width>11.14083</Width>
+            <Height>18.21209</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>101.25</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2796">
+              <LinkedTo>2794</LinkedTo>
+            </Connexion>
+            <Connexion id="2797">
+              <LinkedTo>2799</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2798">
+          <DisplayArea>
+            <X>500.1824</X>
+            <Y>360.0724</Y>
+            <Width>11.14083</Width>
+            <Height>18.21209</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>101.25</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2799">
+              <LinkedTo>2797</LinkedTo>
+            </Connexion>
+            <Connexion id="2800">
+              <LinkedTo>2802</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2801">
+          <DisplayArea>
+            <X>497.061</X>
+            <Y>375.765</Y>
+            <Width>11.14083</Width>
+            <Height>18.21209</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>101.25</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2802">
+              <LinkedTo>2800</LinkedTo>
+            </Connexion>
+            <Connexion id="2803">
               <LinkedTo />
             </Connexion>
           </Connexions>
@@ -1297,31 +1360,10 @@
           <Altitude>0</Altitude>
           <Connexions count="2">
             <Connexion id="820">
-              <LinkedTo>828</LinkedTo>
+              <LinkedTo>2203</LinkedTo>
             </Connexion>
             <Connexion id="821">
               <LinkedTo>641</LinkedTo>
-            </Connexion>
-          </Connexions>
-        </Brick>
-        <Brick id="826">
-          <DisplayArea>
-            <X>47.58077</X>
-            <Y>196.8345</Y>
-            <Width>15.39446</Width>
-            <Height>17.87967</Height>
-          </DisplayArea>
-          <MyGroup />
-          <PartNumber>2867.8</PartNumber>
-          <Orientation>1012.5</Orientation>
-          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
-          <Altitude>0</Altitude>
-          <Connexions count="2">
-            <Connexion id="827">
-              <LinkedTo>647</LinkedTo>
-            </Connexion>
-            <Connexion id="828">
-              <LinkedTo>820</LinkedTo>
             </Connexion>
           </Connexions>
         </Brick>
@@ -2545,49 +2587,7 @@
               <LinkedTo>1658</LinkedTo>
             </Connexion>
             <Connexion id="1661">
-              <LinkedTo>1861</LinkedTo>
-            </Connexion>
-          </Connexions>
-        </Brick>
-        <Brick id="1860">
-          <DisplayArea>
-            <X>180.8209</X>
-            <Y>10.21849</Y>
-            <Width>17</Width>
-            <Height>8</Height>
-          </DisplayArea>
-          <MyGroup />
-          <PartNumber>2865.8</PartNumber>
-          <Orientation>180</Orientation>
-          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
-          <Altitude>0</Altitude>
-          <Connexions count="2">
-            <Connexion id="1861">
-              <LinkedTo>1661</LinkedTo>
-            </Connexion>
-            <Connexion id="1862">
-              <LinkedTo>1864</LinkedTo>
-            </Connexion>
-          </Connexions>
-        </Brick>
-        <Brick id="1863">
-          <DisplayArea>
-            <X>164.8209</X>
-            <Y>10.21849</Y>
-            <Width>17</Width>
-            <Height>8</Height>
-          </DisplayArea>
-          <MyGroup />
-          <PartNumber>2865.8</PartNumber>
-          <Orientation>180</Orientation>
-          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
-          <Altitude>0</Altitude>
-          <Connexions count="2">
-            <Connexion id="1864">
-              <LinkedTo>1862</LinkedTo>
-            </Connexion>
-            <Connexion id="1865">
-              <LinkedTo>1867</LinkedTo>
+              <LinkedTo>2388</LinkedTo>
             </Connexion>
           </Connexions>
         </Brick>
@@ -2601,11 +2601,11 @@
           <MyGroup />
           <PartNumber>2865.8</PartNumber>
           <Orientation>180</Orientation>
-          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
           <Altitude>0</Altitude>
           <Connexions count="2">
             <Connexion id="1867">
-              <LinkedTo>1865</LinkedTo>
+              <LinkedTo>2386</LinkedTo>
             </Connexion>
             <Connexion id="1868">
               <LinkedTo>1870</LinkedTo>
@@ -3011,42 +3011,21 @@
             </Connexion>
           </Connexions>
         </Brick>
-        <Brick id="1743">
-          <DisplayArea>
-            <X>39.03961</X>
-            <Y>225.7737</Y>
-            <Width>10.09622</Width>
-            <Height>10.48907</Height>
-          </DisplayArea>
-          <MyGroup />
-          <PartNumber>9VHALFCURVE.8</PartNumber>
-          <Orientation>1001.25</Orientation>
-          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
-          <Altitude>0</Altitude>
-          <Connexions count="2">
-            <Connexion id="1744">
-              <LinkedTo>13</LinkedTo>
-            </Connexion>
-            <Connexion id="1745">
-              <LinkedTo>648</LinkedTo>
-            </Connexion>
-          </Connexions>
-        </Brick>
         <Brick id="1749">
           <DisplayArea>
-            <X>37.0083</X>
-            <Y>254.9814</Y>
+            <X>28.45793</X>
+            <Y>256.131</Y>
             <Width>8</Width>
             <Height>17</Height>
           </DisplayArea>
           <MyGroup />
           <PartNumber>2865.8</PartNumber>
           <Orientation>810</Orientation>
-          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
           <Altitude>0</Altitude>
           <Connexions count="2">
             <Connexion id="1750">
-              <LinkedTo>12</LinkedTo>
+              <LinkedTo>2198</LinkedTo>
             </Connexion>
             <Connexion id="1751">
               <LinkedTo>1753</LinkedTo>
@@ -3055,8 +3034,8 @@
         </Brick>
         <Brick id="1752">
           <DisplayArea>
-            <X>37.0083</X>
-            <Y>270.9814</Y>
+            <X>28.45798</X>
+            <Y>272.1313</Y>
             <Width>8</Width>
             <Height>17</Height>
           </DisplayArea>
@@ -3070,35 +3049,14 @@
               <LinkedTo>1751</LinkedTo>
             </Connexion>
             <Connexion id="1754">
-              <LinkedTo />
+              <LinkedTo>2778</LinkedTo>
             </Connexion>
           </Connexions>
         </Brick>
-        <Brick id="1755">
+        <Brick id="2777">
           <DisplayArea>
-            <X>37.55675</X>
-            <Y>287.3996</Y>
-            <Width>8</Width>
-            <Height>17</Height>
-          </DisplayArea>
-          <MyGroup />
-          <PartNumber>2865.8</PartNumber>
-          <Orientation>90</Orientation>
-          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
-          <Altitude>0</Altitude>
-          <Connexions count="2">
-            <Connexion id="1756">
-              <LinkedTo />
-            </Connexion>
-            <Connexion id="1757">
-              <LinkedTo>1759</LinkedTo>
-            </Connexion>
-          </Connexions>
-        </Brick>
-        <Brick id="1758">
-          <DisplayArea>
-            <X>37.55675</X>
-            <Y>303.3996</Y>
+            <X>28.45798</X>
+            <Y>288.1313</Y>
             <Width>8</Width>
             <Height>17</Height>
           </DisplayArea>
@@ -3108,11 +3066,1214 @@
           <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
           <Altitude>0</Altitude>
           <Connexions count="2">
-            <Connexion id="1759">
-              <LinkedTo>1757</LinkedTo>
+            <Connexion id="2778">
+              <LinkedTo>1754</LinkedTo>
             </Connexion>
-            <Connexion id="1760">
+            <Connexion id="2779">
+              <LinkedTo>2781</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2780">
+          <DisplayArea>
+            <X>28.45798</X>
+            <Y>304.1313</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>90</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2781">
+              <LinkedTo>2779</LinkedTo>
+            </Connexion>
+            <Connexion id="2782">
+              <LinkedTo>2784</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2783">
+          <DisplayArea>
+            <X>28.45798</X>
+            <Y>320.1313</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>90</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2784">
+              <LinkedTo>2782</LinkedTo>
+            </Connexion>
+            <Connexion id="2785">
+              <LinkedTo>2787</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2786">
+          <DisplayArea>
+            <X>28.45798</X>
+            <Y>336.1313</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>90</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2787">
+              <LinkedTo>2785</LinkedTo>
+            </Connexion>
+            <Connexion id="2788">
+              <LinkedTo>2790</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2789">
+          <DisplayArea>
+            <X>28.45798</X>
+            <Y>352.1313</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>90</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2790">
+              <LinkedTo>2788</LinkedTo>
+            </Connexion>
+            <Connexion id="2791">
+              <LinkedTo>2805</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2804">
+          <DisplayArea>
+            <X>28.45798</X>
+            <Y>368.1313</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>90</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2805">
+              <LinkedTo>2791</LinkedTo>
+            </Connexion>
+            <Connexion id="2806">
+              <LinkedTo>2808</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2807">
+          <DisplayArea>
+            <X>28.45798</X>
+            <Y>384.1313</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>90</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2808">
+              <LinkedTo>2806</LinkedTo>
+            </Connexion>
+            <Connexion id="2809">
               <LinkedTo />
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2197">
+          <DisplayArea>
+            <X>28.45795</X>
+            <Y>222.2561</Y>
+            <Width>20.75</Width>
+            <Height>34.875</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2859.8</PartNumber>
+          <Orientation>630</Orientation>
+          <ActiveConnectionPointIndex>2</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="3">
+            <Connexion id="2198">
+              <LinkedTo>1750</LinkedTo>
+            </Connexion>
+            <Connexion id="2199">
+              <LinkedTo>12</LinkedTo>
+            </Connexion>
+            <Connexion id="2200">
+              <LinkedTo>2205</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2204">
+          <DisplayArea>
+            <X>28.45795</X>
+            <Y>208.1311</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>270</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2205">
+              <LinkedTo>2200</LinkedTo>
+            </Connexion>
+            <Connexion id="2206">
+              <LinkedTo>2208</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2207">
+          <DisplayArea>
+            <X>28.45795</X>
+            <Y>192.1311</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>270</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2208">
+              <LinkedTo>2206</LinkedTo>
+            </Connexion>
+            <Connexion id="2209">
+              <LinkedTo>2211</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2210">
+          <DisplayArea>
+            <X>28.45795</X>
+            <Y>176.1311</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>270</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2211">
+              <LinkedTo>2209</LinkedTo>
+            </Connexion>
+            <Connexion id="2212">
+              <LinkedTo>2214</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2213">
+          <DisplayArea>
+            <X>28.45795</X>
+            <Y>160.1311</Y>
+            <Width>8</Width>
+            <Height>17</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>270</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2214">
+              <LinkedTo>2212</LinkedTo>
+            </Connexion>
+            <Connexion id="2215">
+              <LinkedTo>2217</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2216">
+          <DisplayArea>
+            <X>28.45795</X>
+            <Y>143.7561</Y>
+            <Width>10.75</Width>
+            <Height>17.375</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>270</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2217">
+              <LinkedTo>2215</LinkedTo>
+            </Connexion>
+            <Connexion id="2218">
+              <LinkedTo>2220</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2219">
+          <DisplayArea>
+            <X>31.63505</X>
+            <Y>129.4654</Y>
+            <Width>15.39446</Width>
+            <Height>17.87967</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>292.5</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2220">
+              <LinkedTo>2218</LinkedTo>
+            </Connexion>
+            <Connexion id="2221">
+              <LinkedTo>2223</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2222">
+          <DisplayArea>
+            <X>41.01754</X>
+            <Y>119.91</Y>
+            <Width>17.71428</Width>
+            <Height>15.68135</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>315</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2223">
+              <LinkedTo>2221</LinkedTo>
+            </Connexion>
+            <Connexion id="2224">
+              <LinkedTo>2226</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2225">
+          <DisplayArea>
+            <X>55.17701</X>
+            <Y>116.5444</Y>
+            <Width>17.87967</Width>
+            <Height>11.11472</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>337.5</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2226">
+              <LinkedTo>2224</LinkedTo>
+            </Connexion>
+            <Connexion id="2227">
+              <LinkedTo>2229</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2228">
+          <DisplayArea>
+            <X>71.95782</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2229">
+              <LinkedTo>2227</LinkedTo>
+            </Connexion>
+            <Connexion id="2230">
+              <LinkedTo>2232</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2231">
+          <DisplayArea>
+            <X>87.95782</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2232">
+              <LinkedTo>2230</LinkedTo>
+            </Connexion>
+            <Connexion id="2233">
+              <LinkedTo>2235</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2234">
+          <DisplayArea>
+            <X>103.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2235">
+              <LinkedTo>2233</LinkedTo>
+            </Connexion>
+            <Connexion id="2236">
+              <LinkedTo>2238</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2237">
+          <DisplayArea>
+            <X>119.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2238">
+              <LinkedTo>2236</LinkedTo>
+            </Connexion>
+            <Connexion id="2239">
+              <LinkedTo>2241</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2240">
+          <DisplayArea>
+            <X>135.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2241">
+              <LinkedTo>2239</LinkedTo>
+            </Connexion>
+            <Connexion id="2242">
+              <LinkedTo>2244</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2243">
+          <DisplayArea>
+            <X>151.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2244">
+              <LinkedTo>2242</LinkedTo>
+            </Connexion>
+            <Connexion id="2245">
+              <LinkedTo>2247</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2246">
+          <DisplayArea>
+            <X>167.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2247">
+              <LinkedTo>2245</LinkedTo>
+            </Connexion>
+            <Connexion id="2248">
+              <LinkedTo>2250</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2249">
+          <DisplayArea>
+            <X>183.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2250">
+              <LinkedTo>2248</LinkedTo>
+            </Connexion>
+            <Connexion id="2251">
+              <LinkedTo>2253</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2252">
+          <DisplayArea>
+            <X>199.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2253">
+              <LinkedTo>2251</LinkedTo>
+            </Connexion>
+            <Connexion id="2254">
+              <LinkedTo>2256</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2255">
+          <DisplayArea>
+            <X>215.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2256">
+              <LinkedTo>2254</LinkedTo>
+            </Connexion>
+            <Connexion id="2257">
+              <LinkedTo>2259</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2258">
+          <DisplayArea>
+            <X>231.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2259">
+              <LinkedTo>2257</LinkedTo>
+            </Connexion>
+            <Connexion id="2260">
+              <LinkedTo>2262</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2261">
+          <DisplayArea>
+            <X>247.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2262">
+              <LinkedTo>2260</LinkedTo>
+            </Connexion>
+            <Connexion id="2263">
+              <LinkedTo>2265</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2264">
+          <DisplayArea>
+            <X>263.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2265">
+              <LinkedTo>2263</LinkedTo>
+            </Connexion>
+            <Connexion id="2266">
+              <LinkedTo>2268</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2267">
+          <DisplayArea>
+            <X>279.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2268">
+              <LinkedTo>2266</LinkedTo>
+            </Connexion>
+            <Connexion id="2269">
+              <LinkedTo>2271</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2270">
+          <DisplayArea>
+            <X>295.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2271">
+              <LinkedTo>2269</LinkedTo>
+            </Connexion>
+            <Connexion id="2272">
+              <LinkedTo>2274</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2273">
+          <DisplayArea>
+            <X>311.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2274">
+              <LinkedTo>2272</LinkedTo>
+            </Connexion>
+            <Connexion id="2275">
+              <LinkedTo>2277</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2276">
+          <DisplayArea>
+            <X>327.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2277">
+              <LinkedTo>2275</LinkedTo>
+            </Connexion>
+            <Connexion id="2278">
+              <LinkedTo>2280</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2279">
+          <DisplayArea>
+            <X>343.9578</X>
+            <Y>116.6311</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2280">
+              <LinkedTo>2278</LinkedTo>
+            </Connexion>
+            <Connexion id="2281">
+              <LinkedTo>2284</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2282">
+          <DisplayArea>
+            <X>359.859</X>
+            <Y>113.6031</Y>
+            <Width>17.87967</Width>
+            <Height>11.11472</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>157.5</Orientation>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2283">
+              <LinkedTo>2287</LinkedTo>
+            </Connexion>
+            <Connexion id="2284">
+              <LinkedTo>2281</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2285">
+          <DisplayArea>
+            <X>374.1838</X>
+            <Y>105.671</Y>
+            <Width>17.71428</Width>
+            <Height>15.68135</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>135</Orientation>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2286">
+              <LinkedTo>2290</LinkedTo>
+            </Connexion>
+            <Connexion id="2287">
+              <LinkedTo>2283</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2288">
+          <DisplayArea>
+            <X>385.8862</X>
+            <Y>93.91718</Y>
+            <Width>15.39446</Width>
+            <Height>17.87967</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>112.5</Orientation>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2289">
+              <LinkedTo>2342</LinkedTo>
+            </Connexion>
+            <Connexion id="2290">
+              <LinkedTo>2286</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2340">
+          <DisplayArea>
+            <X>393.7077</X>
+            <Y>80.13124</Y>
+            <Width>10.75</Width>
+            <Height>17.375</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>90</Orientation>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2341">
+              <LinkedTo>2359</LinkedTo>
+            </Connexion>
+            <Connexion id="2342">
+              <LinkedTo>2289</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2201">
+          <DisplayArea>
+            <X>51.56537</X>
+            <Y>196.7206</Y>
+            <Width>11.60209</Width>
+            <Height>11.74004</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>9VHALFCURVE.8</PartNumber>
+          <Orientation>663.75</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2202">
+              <LinkedTo>13</LinkedTo>
+            </Connexion>
+            <Connexion id="2203">
+              <LinkedTo>820</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2358">
+          <DisplayArea>
+            <X>396.3952</X>
+            <Y>76.13124</Y>
+            <Width>8.125</Width>
+            <Height>5</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>9VQUARTERSTRAIGHT.8</PartNumber>
+          <Orientation>270</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2359">
+              <LinkedTo>2341</LinkedTo>
+            </Connexion>
+            <Connexion id="2360">
+              <LinkedTo>2476</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2367">
+          <DisplayArea>
+            <X>393.4297</X>
+            <Y>55.35043</Y>
+            <Width>11.11472</Width>
+            <Height>17.87967</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>67.5</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2368">
+              <LinkedTo>2372</LinkedTo>
+            </Connexion>
+            <Connexion id="2369">
+              <LinkedTo>2477</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2370">
+          <DisplayArea>
+            <X>385.4975</X>
+            <Y>41.19095</Y>
+            <Width>15.68135</Width>
+            <Height>17.71428</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>45</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2371">
+              <LinkedTo>2375</LinkedTo>
+            </Connexion>
+            <Connexion id="2372">
+              <LinkedTo>2368</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2373">
+          <DisplayArea>
+            <X>373.7437</X>
+            <Y>31.80846</Y>
+            <Width>17.87967</Width>
+            <Height>15.39446</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>22.5</Orientation>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2374">
+              <LinkedTo>2378</LinkedTo>
+            </Connexion>
+            <Connexion id="2375">
+              <LinkedTo>2371</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2376">
+          <DisplayArea>
+            <X>359.9578</X>
+            <Y>28.63136</Y>
+            <Width>17.375</Width>
+            <Height>10.75</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2377">
+              <LinkedTo>2380</LinkedTo>
+            </Connexion>
+            <Connexion id="2378">
+              <LinkedTo>2374</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2379">
+          <DisplayArea>
+            <X>343.9578</X>
+            <Y>28.63136</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>180</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2380">
+              <LinkedTo>2377</LinkedTo>
+            </Connexion>
+            <Connexion id="2381">
+              <LinkedTo>2383</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2382">
+          <DisplayArea>
+            <X>327.9578</X>
+            <Y>28.63136</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>180</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2383">
+              <LinkedTo>2381</LinkedTo>
+            </Connexion>
+            <Connexion id="2384">
+              <LinkedTo>2479</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2478">
+          <DisplayArea>
+            <X>311.9578</X>
+            <Y>28.63136</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>180</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2479">
+              <LinkedTo>2384</LinkedTo>
+            </Connexion>
+            <Connexion id="2480">
+              <LinkedTo>2482</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2481">
+          <DisplayArea>
+            <X>295.9578</X>
+            <Y>28.63136</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>180</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2482">
+              <LinkedTo>2480</LinkedTo>
+            </Connexion>
+            <Connexion id="2483">
+              <LinkedTo>2462</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2385">
+          <DisplayArea>
+            <X>164.8209</X>
+            <Y>10.21849</Y>
+            <Width>33</Width>
+            <Height>14</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2859HALFCURVE.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="3">
+            <Connexion id="2386">
+              <LinkedTo>1867</LinkedTo>
+            </Connexion>
+            <Connexion id="2387">
+              <LinkedTo>2473</LinkedTo>
+            </Connexion>
+            <Connexion id="2388">
+              <LinkedTo>1661</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2442">
+          <DisplayArea>
+            <X>191.9286</X>
+            <Y>22.06068</Y>
+            <Width>17.97022</Width>
+            <Height>13.32588</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2867.8</PartNumber>
+          <Orientation>191.25</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2443">
+              <LinkedTo>2447</LinkedTo>
+            </Connexion>
+            <Connexion id="2444">
+              <LinkedTo>2474</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2445">
+          <DisplayArea>
+            <X>207.4182</X>
+            <Y>27.39547</Y>
+            <Width>9.5</Width>
+            <Height>8.75</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>9VHALFCURVE.8</PartNumber>
+          <Orientation>180</Orientation>
+          <ActiveConnectionPointIndex>0</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2446">
+              <LinkedTo>2449</LinkedTo>
+            </Connexion>
+            <Connexion id="2447">
+              <LinkedTo>2443</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2448">
+          <DisplayArea>
+            <X>215.9182</X>
+            <Y>28.14547</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2449">
+              <LinkedTo>2446</LinkedTo>
+            </Connexion>
+            <Connexion id="2450">
+              <LinkedTo>2452</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2451">
+          <DisplayArea>
+            <X>231.9182</X>
+            <Y>28.14547</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2452">
+              <LinkedTo>2450</LinkedTo>
+            </Connexion>
+            <Connexion id="2453">
+              <LinkedTo>2455</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2454">
+          <DisplayArea>
+            <X>247.9182</X>
+            <Y>28.14547</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2455">
+              <LinkedTo>2453</LinkedTo>
+            </Connexion>
+            <Connexion id="2456">
+              <LinkedTo>2458</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2457">
+          <DisplayArea>
+            <X>263.9182</X>
+            <Y>28.14547</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2458">
+              <LinkedTo>2456</LinkedTo>
+            </Connexion>
+            <Connexion id="2459">
+              <LinkedTo>2461</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2460">
+          <DisplayArea>
+            <X>279.9182</X>
+            <Y>28.14547</Y>
+            <Width>17</Width>
+            <Height>8</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>2865.8</PartNumber>
+          <Orientation>0</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2461">
+              <LinkedTo>2459</LinkedTo>
+            </Connexion>
+            <Connexion id="2462">
+              <LinkedTo>2483</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2472">
+          <DisplayArea>
+            <X>184.8952</X>
+            <Y>17.32826</Y>
+            <Width>11.94885</Width>
+            <Height>11.70744</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>9VHALFSTRAIGHT.8</PartNumber>
+          <Orientation>33.75</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2473">
+              <LinkedTo>2387</LinkedTo>
+            </Connexion>
+            <Connexion id="2474">
+              <LinkedTo>2444</LinkedTo>
+            </Connexion>
+          </Connexions>
+        </Brick>
+        <Brick id="2475">
+          <DisplayArea>
+            <X>396.3952</X>
+            <Y>72.13124</Y>
+            <Width>8.125</Width>
+            <Height>5</Height>
+          </DisplayArea>
+          <MyGroup />
+          <PartNumber>9VQUARTERSTRAIGHT.8</PartNumber>
+          <Orientation>270</Orientation>
+          <ActiveConnectionPointIndex>1</ActiveConnectionPointIndex>
+          <Altitude>0</Altitude>
+          <Connexions count="2">
+            <Connexion id="2476">
+              <LinkedTo>2360</LinkedTo>
+            </Connexion>
+            <Connexion id="2477">
+              <LinkedTo>2369</LinkedTo>
             </Connexion>
           </Connexions>
         </Brick>

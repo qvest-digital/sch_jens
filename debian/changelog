@@ -1,4 +1,4 @@
-iproute2 (5.10.0-4jens19) UNRELEASED; urgency=medium
+iproute2 (5.10.0-4jens19) tarent; urgency=medium
 
   * Add qdisc inner workings documentation picture
   * Java: improve sojourn time display
@@ -14,7 +14,7 @@ iproute2 (5.10.0-4jens19) UNRELEASED; urgency=medium
   * Report which FIFO is used using psize top two bits
   * Add qosmode option e.g. for DSCP-classifying networks
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Sat, 04 Mar 2023 23:34:51 +0100
+ -- Thorsten Glaser <t.glaser@tarent.de>  Fri, 10 Mar 2023 20:42:29 +0100
 
 iproute2 (5.10.0-4jens18) tarent; urgency=medium
 

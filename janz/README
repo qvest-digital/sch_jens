@@ -10,15 +10,17 @@ base version should match the kernel version for other qdiscs.
 sch_janz Linux kernel module
 ────────────────────────────
 
-This is a new qdisc, JENS bespoke. It sorts traffic into one
-out of three FIFOs dependeing on their iptos (like the default
-Linux qdisc does) and lets them leave paced on the configured
-rate (bandwidth limit), possibly after a handover is passed.
-ECN CE marking is applied to packets slower than markfree with
-a percentage chance rising to 100% if the sojourn time (queue
-delay) reaches markfull.
+This is a new qdisc, JENS bespoke. It simulates a 5G L4S slice
+connection for one UE on egress: it applies sojourn time-based
+ECN CE marking, limits the bandwidth to simulate a slower link
+than the underlying physical link (Ethernet, or even WLAN) the
+simulation uses, can implement handovers, simulate extra delay
+on the ingress side (access network/internet), provides inter‐
+faces to rapidly change bandwidth (to apply data rate patterns
+to simulate changing network conditions) and sophisticated re‐
+porting of per-packet and per-queue information.
 
-See the tc-janz(8) manual page or queue.png for details.
+See the tc-janz(8) manual page and qdisc.md for details.
 
 
 Live measurement

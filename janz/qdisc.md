@@ -231,6 +231,8 @@ have been dropped in regular AQMs and lower the sending bandwidth / rate.
 #### bandwidth limitation
 
 The next step for the dequeued network packet is bandwidth limitation,
+visualised through the exit signal “A”, in front of which the packet
+waits until its bandwidth allotment is available, and which is
 implemented in `sch_janz` as packet pacing:
 
 The gross length of the packet (which in Linux includes some, but not all,

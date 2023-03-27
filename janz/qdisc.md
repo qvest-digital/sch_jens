@@ -247,15 +247,132 @@ we can saturate the requested bandwidth. (If the last call resulted in not
 sending a packet, however, the dequeue current time is used as start time
 to not send more than the configured bandwidth.)
 
+##### example diagram
+
+[![sch_janz packet pacing diagram](pacing.png)](pacing.png)](pacing.png "sch_janz packet pacing diagram")
+
+In this diagram, we see the packets output on a time axis. To ease
+explanation, equal-sized packets are sent.
+
+The blue arrows are the times `sch_janz` is called by the Linux kernel
+when it wants to send out a packet. The first time this happens, one
+packet (red block) is sent out, its length is calculated with the
+currently set bandwidth (in nanoseconds per byte) and added to `now`
+to get `notbefore`, a timestamp which is then stored away; `sch_janz`
+also notes we have just sent a packet.
+
+The second time `sch_janz` is called (blue arrow), it coïncides with
+precisely the stored `notbefore` time, so another packet is sent the
+next `notbefore` is calculated and saved and the just-sent-a-packet
+indicator is kept on.
+
+The third blue arrow occurs **before** the saved `notbefore`, so the
+kernel is told to please come back later (at `notbefore - now()`, to
+be exact — note it may still decide to call back earlier or later, the
+time requested is merely a hint) and nothing is sent. But since there
+is still a packet “in flight”, the just-sent-a-packet indicator is not
+changed.
+
+The fourth blue arrow, however, occurs **after** the saved `notbefore`.
+But since we have been sending a packet as last action, we just send a
+packet now at maximum link speed and still calculate the next `notbefore`
+based on the previous `notbefore`, not `now`, in order to be able to
+saturate the underlying link at the configured bandwidth even when called
+at different intervals from those indicated to the kernel to call us back.
+
+This assumes that the underlying link speed is higher than the configured
+bandwidth, of course. At 10GigE timing, the packet arrives a little later
+at the recipient than nanosecond-precise sending would have achieved, but
+(usually) still within its length-bandwidth-product interval (though note
+that multiple packets may be burst-sent at once if the call occurs _much_
+past `notbefore`), and, more importantly, the average/measured bandwidth
+is still the configured one. (If the underlying link is not fast enough,
+the kernel will not call back for another packet quickly save for buffers
+in the NIC, so that won’t be an issue normally. The JENS simulations are
+normally setting around 1‥50 Mbit/s on a 100+ Mbit/s link, so the link
+speed will be sufficiently fast unless the JENS NUC is kept at 100%CPU.)
+
+The fifth blue arrow occurs after the backdated `notbefore` from the burst
+packet has expired, so we continue normally.
+
+At the sixth blue arrow, the application has no packet to send (i.e. all
+three FIFOs (not shown) are empty), so the just-sent-a-packet indicator
+is reset.
+
+At the seventh blue arrow, the next `notbefore` will then again be
+calculated from `now` because the just-sent-a-packet indicator was off
+as there was no packet in flight.
+
+Note that the bypass FIFO does not affect the just-sent-a-packet indicator
+or `notbefore` calculation in any way as the calls (blue arrows) are only
+considered when the bypass FIFO is empty. While this can result in bypass
+traffic noticeably delaying traffic of interest, given the in-flight and
+backdating `notbefore` mechanism this effect should be limited in practice.
+
+##### after packet pacing (back to the overview diagram)
+
 The packet continues on, going into a left curve…
 
 #### RAN retransmissions
 
 In the 4G (LTE) and 5G networks, a number of packets are subject to
-retransmissions, possibly more than once even. In the current qdisc
-implementation, this is modelled after the RAN, as follows:
+retransmissions, possibly more than once even. Retransmissions due
+to bad link quality are not modelled by `sch_janz`; their net effect
+should be included in the DRP (data rate pattern) in use. However,
+systematic retransmissions *are* modelled by `sch_janz` because they
+have measurable impact on latency as link usage approaches capacity.
 
-Packets have a chance of retransmission:
-- …
+In the current qdisc implementation, this is modelled after the RAN,
+in a model (acknowledged by an Ericsson representative) simplified
+as follows:
 
-(to be done)
+Packets have a chance of retransmission, from a target BLER of 10%:
+- 0.1¹ once
+- 0.1² twice
+- 0.1³ thrice
+- 0.1⁴ four times
+- 0.1⁵ five times
+- six or more times is not simulated
+
+(For this reason, with retransmission simulation enabled, the DRP
+should be scaled up by 11.111% compared to operation without it.)
+
+Retransmission chance is stochastic, per packet. Sub-packet units
+are not affected. Since the RAN doesn’t reorder packets, `sch_janz`
+also doesn’t (i.e. all packets that transfer after one that is
+retransmitted also enter the loop, and once the retransmission delay
+is over, all packets from the loop pass on to the NIC at underlying
+wire speed; if the link is fast enough this should model the RAN
+behaviour sufficiently closely).
+
+The retransmission delay depends on the radio operation mode (TDD,
+FDD, …) and other factors. In a first stage, HARQ RTT of 8 ms is
+used for the simulation, resulting in:
+
+- 10% of all packets get a retransmission delay of 8 ms
+- 1% of all packets get a retransmission delay of 16 ms
+- 0.1% of all packets get a retransmission delay of 24 ms
+- 0.01% of all packets get a retransmission delay of 32 ms
+- 0.001% of all packets get a retransmission delay of 40 ms
+
+Note: this is not currently implemented
+
+#### onwards to the NIC
+
+After leaving `dequeue`, either directly from the bypass FIFO or
+having passed packet pacing and possibly RAN retransmissions, the
+packet is returned to the Linux kernel which will then send it to
+the network card to leave at wire speed. To get best results, the
+underlying link speed should be the maximum supported, i.e. keep
+the link speed at gigabit Ethernet or even faster if available
+instead of reducing it to, say, 100-baseTX, even if you only ever
+simulate 10–20 Mbit/s reduced data rate, because, as outlined in
+various places above, `sch_janz` out of necessity simulates part
+of radio conditions and in-UE processes in the qdisc and therefore
+before entering the physical link underlying the simulation.
+
+It is expected that the remaining “burstiness” of the actual
+network packets arriving at the recipient can be smoothed out
+in the millisecond, or at worst four-millisecond, scale, which
+is approximately the granularity the Linux kernel operates at
+anyway.

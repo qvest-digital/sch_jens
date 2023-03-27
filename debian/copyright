@@ -37,14 +37,14 @@ License: GPL-2
 
 Files: jens/*
        man/man8/tc-janz.8
-Copyright: 2021, 2022 mirabilos <t.glaser@tarent.de>
-           2021, 2022 Deutsche Telekom LLCTO
+Copyright: 2021, 2022, 2023 mirabilos <t.glaser@tarent.de>
+           2021, 2022, 2023 Deutsche Telekom LLCTO
 License: MirBSD
 
 Files: janz/*
        tc/q_janz.c
-Copyright: 2022 mirabilos <t.glaser@tarent.de>
-           2022 Deutsche Telekom LLCTO
+Copyright: 2022, 2023 mirabilos <t.glaser@tarent.de>
+           2022, 2023 Deutsche Telekom LLCTO
 License: GPL-2
 Comment:
  The file janz_uapi.h has the following GPL exception:
@@ -70,7 +70,7 @@ Copyright: 1996 Tom Lees <tom@lpsg.demon.co.uk>
            2005-2017 Alexander Wirt <formorer@debian.org>
            2008-2015 Andreas Henriksson <andreas@fatal.se>
            2017 Luca Boccassi <bluca@debian.org>
-           2021, 2022 mirabilos <t.glaser@tarent.de>
+           2021, 2022, 2023 mirabilos <t.glaser@tarent.de>
 License: GPL-2
 
 License: GPL-2

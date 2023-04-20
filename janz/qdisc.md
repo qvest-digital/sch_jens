@@ -337,7 +337,7 @@ Packets have a chance of retransmission, from a target BLER of 10%:
 - six or more times is not simulated
 
 (For this reason, with retransmission simulation enabled, the DRP
-should be scaled up by 11.111% compared to operation without it.)
+should be scaled up 10% compared to operation without it.)
 
 Retransmission chance is stochastic, per packet. Sub-packet units
 are not affected. Since the RAN doesn’t reorder packets, `sch_janz`

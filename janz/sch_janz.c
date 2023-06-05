@@ -896,12 +896,9 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	janz_dropchk(sch, q, now, now1024);
 
 #ifdef SCH_JANZDBG
-#ifndef CONFIG_NETWORK_SECMARK
-#error cannot do multijens without CONFIG_NETWORK_SECMARK
-#endif
-	if (skb->secmark != 0)
-		net_warn_ratelimited("sch_janzdbg: secmark not zero: 0x%08X\n",
-		    (unsigned int)skb->secmark);
+	if (skb->mark != 0)
+		net_warn_ratelimited("sch_janzdbg: mark 0x%08X\n",
+		    (unsigned int)skb->mark);
 #endif
 
 	/* initialise values in cb */

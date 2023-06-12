@@ -378,3 +378,11 @@ network packets arriving at the recipient can be smoothed out
 in the millisecond, or at worst four-millisecond, scale, which
 is approximately the granularity the Linux kernel operates at
 anyway.
+
+## Operation of the `sch_multijens` qdisc
+
+This qdisc for the Linux kernel implements the simulation of a
+fixed number of L4S slices, each for one UE, each operating as
+documented for `sch_janz` above.
+
+…tbd…

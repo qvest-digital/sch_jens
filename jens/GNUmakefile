@@ -40,19 +40,28 @@ OBJS2?=		${SRCS2:.c=.o}
 
 CLEANFILES+=	${PROG2} ${OBJS2}
 
+PROG3=		mratedemo
+SRCS3?=		${PROG3}.c
+OBJS3?=		${SRCS3:.c=.o}
+
+CLEANFILES+=	${PROG3} ${OBJS3}
+
 JLIB=		libjensdmpJNI.so
 JSRC=		nativelib.c
 JOBJ=		${JSRC:.c=.o}
 
 CLEANFILES+=	${JLIB} ${JOBJ}
 
-all: ${PROG} ${PROG2}
+all: ${PROG} ${PROG2} ${PROG3}
 
 ${PROG}: ${OBJS}
 	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS} ${LDADD}
 
 ${PROG2}: ${OBJS2}
 	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS2} ${LDADD}
+
+${PROG3}: ${OBJS3}
+	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS3} ${LDADD}
 
 .c.o:
 	${CC} -c ${CPPFLAGS} ${CFLAGS} $<
@@ -83,6 +92,9 @@ run: all .built/java
 rundemo: ratedemo
 	sudo ./ratedemo /sys/kernel/debug/sch_janz/0001:v1
 
+runmdemo: mratedemo
+	sudo ./mratedemo /sys/kernel/debug/sch_janz/0001:v1
+
 jd= #-t
 rundump: jensdmp
 	sudo ./jensdmp ${jd} /sys/kernel/debug/sch_janz/0001:0
@@ -91,7 +103,7 @@ install:
 	install -m 0755 -d ${DESTDIR}/usr/lib/jni
 	install -m 0644 ${JLIB} ${DESTDIR}/usr/lib/jni/
 	install -m 0755 -d ${DESTDIR}/usr/libexec
-	install -m 0755 ${PROG} ${PROG2} ${DESTDIR}/usr/libexec/
+	install -m 0755 ${PROG} ${PROG2} ${PROG3} ${DESTDIR}/usr/libexec/
 	@echo do install the *.java examples
 
 .PHONY: all install javac run clean

@@ -37,12 +37,14 @@ License: GPL-2
 
 Files: jens/*
        man/man8/tc-janz.8
+       man/man8/tc-multijens.8
 Copyright: 2021, 2022, 2023 mirabilos <t.glaser@tarent.de>
            2021, 2022, 2023 Deutsche Telekom LLCTO
 License: MirBSD
 
 Files: janz/*
        tc/q_janz.c
+       tc/q_multijens.c
 Copyright: 2022, 2023 mirabilos <t.glaser@tarent.de>
            2022, 2023 Deutsche Telekom LLCTO
 License: GPL-2

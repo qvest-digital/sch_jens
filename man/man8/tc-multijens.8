@@ -1,0 +1,236 @@
+.\" Copyright © 2022, 2023
+.\"	mirabilos <t.glaser@tarent.de>
+.\" Licensor: Deutsche Telekom LLCTO
+.\"
+.\" Provided that these terms and disclaimer and all copyright notices
+.\" are retained or reproduced in an accompanying document, permission
+.\" is granted to deal in this work without restriction, including un‐
+.\" limited rights to use, publicly perform, distribute, sell, modify,
+.\" merge, give away, or sublicence.
+.\"
+.\" This work is provided “AS IS” and WITHOUT WARRANTY of any kind, to
+.\" the utmost extent permitted by applicable law, neither express nor
+.\" implied; without malicious intent or gross negligence. In no event
+.\" may a licensor, author or contributor be held liable for indirect,
+.\" direct, other damage, loss, or other issues arising in any way out
+.\" of dealing in the work, even if advised of the possibility of such
+.\" damage or existence of a defect, except proven that it results out
+.\" of said person’s immediate fault when using the work as intended.
+.\"-
+.if \n(.g .hlm 0
+.Dd June 12, 2023
+.Dt TC\-MULTIJENS 8
+.Os Linux
+.Sh NAME
+.Nm tc\-multijens
+.Nd bespoke egress traffic scheduler for the JENS network simulator
+.Sh SYNOPSIS
+.Nm tc
+.Ic qdisc ...\& Nm multijens
+.Op Ic limit Ar PACKETS
+.Op Ic rate Ar RATE
+.Op Ic handover Ar TIME
+.Op Ic qosmode Ar NUMBER
+.Op Ic markfree Ar TIME
+.Op Ic markfull Ar TIME
+.Op Ic subbufs Ar NUMBER
+.Op Ic fragcache Ar NUMBER
+.Op Ic extralatency Ar TIME
+.Ic uenum Ar NUMBER
+.Sh DESCRIPTION
+The
+.Nm
+qdisc is a, currently experimental, extension to the
+.Xr tc\-janz 8
+qdisc, whose documentation is included here by reference.
+The difference is that
+.Nm
+uses the netfilter mark to distinguish traffic for multiple UEs while
+.Nm tc\-janz
+simulates the connection for exactly one UE
+.Pq user equipment .
+.Pp
+The scheduling of the subqueues is currently a dumb round-robin
+that starts at #0 when the qdisc is created and then iterates
+through the subqueues, unfairly skipping those with no packets
+to send until next time they are visited in order.
+The same round-robin iterator is used when dropping.
+.Pp
+The parameters have the same meaning as in
+.Nm tc\-janz ;
+the new mandatory
+.Ic uenum
+parameter sets the amount of UEs to support.
+UEs are mapped from the netfilter mark ranging from 0 to
+.Ic uenum Ns \-1 ;
+packets with netfilter mark outside of that range are mapped to UE #0.
+The
+.Ic limit
+and
+.Ic fragcache
+parameters are global to the
+.Nm
+qdisc; the other parameters are individual to each
+.Nm tc\-janz
+subqueue, even if currently they can only be set on the parent qdisc
+and therefore affect all subqueues at once; as a result,
+.Ic subbufs
+is technically global, too.
+.Sh PARAMETERS
+.Bl -tag -width XX
+.It Ic limit
+is a hard limit on the real queue size.
+When this limit is reached, packets are dropped.
+Default: 10240\ packets
+.It Ic rate
+is the bandwidth outgoing packets are limited to.
+Default: 10\ Mbit/s
+.It Ic handover
+stops traffic for the specified amount of time.
+.It Ic markfree
+is the maximum queue delay packets are allowed to sojourn in the queue
+without being ECN CE-marked.
+Default: 4\ ms
+.It Ic markfull
+is the minimum queue delay at which packets will be marked (see above)
+with 100% probability.
+Default: 14\ ms
+.It Ic qosmode
+configures traffic priorisation according to its parameter:
+.Pp
+.Bl -tag -width 0\&
+.It Ic 0
+.Pq Em default
+IP
+.Pq including Legacy IP
+traffic starts out in the normal FIFO.
+If
+.Dv IPTOS_LOWDELAY
+.Pq Li 0x10
+is set, the packet moves up one priority to the lodelay FIFO.
+If
+.Dv IPTOS_THROUGHPUT
+.Pq Li 0x08
+is (additionally) set, the packet moves down one priority, that is,
+to the normal or bulk FIFO.
+.It Ic 1
+Any IPv6 and IPv4 traffic is sorted into the normal FIFO.
+.It Ic 2
+IP packets with
+.Li "ECT(1)"
+marking are sorted into the lodelay FIFO,
+all other IP traffic into the normal FIFO.
+.El
+.Pp
+Other traffic (not IP) is handled differently; the specifics are
+implementation detail (e.g.\& ARP is priorised,
+but most traffic is sorted into the normal FIFO).
+.It Ic subbufs
+enables debugfs functionality, for use with
+.Nm jensdmp
+or its Java\(rg wrapper.
+Setting this to 1 will use a suitable default amount of subbuffers
+.Pq currently 128 ;
+any other value is used as number of subbuffers (containing 256 records,
+each sized 64 bytes, that is, 16\ KiB per subbuffer).
+This parameter can only be set at load time because memory has to be allocated.
+Default: 1
+.It Ic fragcache
+sets the size of the IP packet fragment cache, in 64-byte structs.
+This parameter can only be set at load time because memory has to be allocated.
+Default: 128
+.It Ic extralatency
+adds artificial network-side
+.Pq before Nm janz
+latency.
+Default: 0\ ms
+.El
+.Sh STATISTICS
+This qdisc reports extensively via relayfs over debugfs; therefore, regular
+.Xr tc 8
+statistics are not provided beyond the bare minimum:
+.Bl -tag -width XX -offset indent
+.It backlog Pq \fBb\fRytes
+amount of gross packet payload bytes, possibly adjusted by
+.Xr tc-stab 8 ,
+currently in the queue
+.Pq FIFOs
+.It backlog Pq \fBp\fRackets
+basically
+.Li sch\-\*(Gtq.qlen
+.It overlimits
+number of packets dropped because the queue length limit was reached
+while enqueueing a new packet
+.El
+.Pp
+Specifically, drops accounting in the gnet stats is not done.
+.Sh EXAMPLES
+Set up a queue with standard parameters and display its statistics:
+.Bd -literal -offset 4n
+XXX tbd
+$ \fBsudo tc qdisc add dev eth0 root handle 1: janz\fR\fC
+$ \fBsudo tc \-s qdisc show dev eth0\fR\fC
+qdisc janz 1: root refcnt 2 limit 10240 rate 10000kbit \e
+    qosmode 0 markfree 4ms markfull 14ms \e
+    subbufs 1024 fragcache 1024 extralatency 0us
+ Sent 2012 bytes 12 pkt (dropped 0, overlimits 0, requeues 0)
+ backlog 0b 0p
+.Ed
+.Sh SEE ALSO
+.Xr tc 8 ,
+.Xr tc\-janz 8
+.Pp
+.Pa /usr/share/doc/sch\-jens\-dkms/README.gz
+.Pp
+.Pa /usr/share/doc/iproute2/examples/JensReaderDemo.java
+.Sh AUTHORS
+.An mirabilos Aq t.glaser@tarent.de
+for Deutsche Telekom LLCTO
+.Sh CAVEATS
+This qdisc is only supported as the root egress qdisc on a device.
+.Pp
+This qdisc considers handles to be global, not per interface.
+.Pp
+The default queue limit is much too large, might want to adjust it,
+unless you have many UEs.
+When you have many UEs, however, the memory needed for
+.Ic subbufs
+increases proportionally; the default sizing allows for 8 UEs at
+the same memory usage of a
+.Nm tc\-janz
+in its default configuration.
+.Pp
+The traffic rate is internally converted to nanoseconds per byte
+needed to transfer, limiting it to about 8 Gbit/s; the closer the
+rate gets to the extremes, the less usable it will be.
+Experiments with 128 kbit/s as a lower bound show mixed results.
+To obtain the exact bandwidth in use, either run
+.Ic tc Fl j Ic qdisc show
+or do two 64-bit integer divisions: first divide 1000000000
+by the amount of bytes (not bits!) per second, then divide
+1000000000 by the result of the first division, resulting,
+again, in bytes per second
+.Pq or just read it from the relayfs channel .
+Packet pacing for bandwidth limiting only applies, too, on egress.
+.Pp
+The
+.Ic extralatency
+is asymmetric: it is only applied on the egress channel, because
+Linux cannot delay on ingress.
+It is applied before enqueueing but does not affect sojourn time.
+Basically, it simulates extra latency on the network in front of
+the JENS node.
+.Pp
+The RAN does not use the IPTOS QoS bits to categorise traffic.
+To better simulate it, or if your traffic uses DSCP classification
+instead, use the
+.Ic qosmode
+option to configure classification of IP and Legacy IP traffic.
+.Pp
+When using
+.Ic qosmode 2 ,
+mind that packets that were ECN
+.Li CE Ns -marked
+before arrival are not priorised even if they were
+.Li "ECT(1)"
+originally.

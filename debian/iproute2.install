@@ -18,6 +18,7 @@ usr/include/iproute2/
 usr/lib/jni/libjensdmpJNI.so
 usr/lib/tc/
 usr/libexec/jensdmp
+usr/libexec/mratedemo
 usr/libexec/ratedemo
 usr/share/bash-completion/
 usr/share/man/

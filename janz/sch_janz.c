@@ -895,12 +895,6 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	now1024 = ns_to_t1024(now);
 	janz_dropchk(sch, q, now, now1024);
 
-#ifdef SCH_JANZDBG
-	if (skb->mark != 0)
-		net_warn_ratelimited("sch_janzdbg: mark 0x%08X\n",
-		    (unsigned int)skb->mark);
-#endif
-
 	/* initialise values in cb */
 	cb->ts_begin = now1024;
 	cb->ts_arrive = ns_to_t1024(now + q->xlatency);

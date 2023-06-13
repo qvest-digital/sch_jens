@@ -1,7 +1,7 @@
 /*
  * Dǟ janz zesammene Kwejü-Disk
  *
- * Copyright © 2022 mirabilos <t.glaser@tarent.de>
+ * Copyright © 2022, 2023 mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom LLCTO
  *
  * This module for the Linux kernel is published under the GPLv2.
@@ -9,10 +9,12 @@
 
 #undef JANZ_IP_DECODER_DEBUG
 #if 1
-#define JANZ_IP_DECODER_DEBUG(...)	do { /* nothing */ } while (0)
+#define JANZ_IP_DECODER_DEBUG(fmt,...)	do { /* nothing */ } while (0)
 #else
-#define JANZ_IP_DECODER_DEBUG(...)	printk(__VA_ARGS__)
+#define JANZ_IP_DECODER_DEBUG(fmt,...)	printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
 #endif
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/version.h>
 #include <linux/module.h>
@@ -640,10 +642,10 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		ih4 = ip_hdr(skb);
 		hdrp = (void *)ih4;
 		if ((hdrp + sizeof(struct iphdr)) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv4 too short\n");
+			JANZ_IP_DECODER_DEBUG("IPv4 too short\n");
 			return;
 		}
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv4 %08X->%08X proto %u frag %d\n",
+		JANZ_IP_DECODER_DEBUG("IPv4 %08X->%08X proto %u frag %d\n",
 		    htonl(ih4->saddr), htonl(ih4->daddr), ih4->protocol, ip_is_fragment(ih4) ? 1 : 0);
 		cb->tosbyte = ih4->tos;
 		janz_init_record_flag(cb);
@@ -672,10 +674,10 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		ih6 = ipv6_hdr(skb);
 		hdrp = (void *)ih6;
 		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv6 too short\n");
+			JANZ_IP_DECODER_DEBUG("IPv6 too short\n");
 			return;
 		}
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv6 %02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X->%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X nexthdr %u\n",
+		JANZ_IP_DECODER_DEBUG("IPv6 %02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X->%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X nexthdr %u\n",
 		    ih6->saddr.s6_addr[0], ih6->saddr.s6_addr[1], ih6->saddr.s6_addr[2], ih6->saddr.s6_addr[3],
 		    ih6->saddr.s6_addr[4], ih6->saddr.s6_addr[5], ih6->saddr.s6_addr[6], ih6->saddr.s6_addr[7],
 		    ih6->saddr.s6_addr[8], ih6->saddr.s6_addr[9], ih6->saddr.s6_addr[10], ih6->saddr.s6_addr[11],
@@ -693,24 +695,24 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		break;
 	/* fake iptos for the rest */
 	case htons(ETH_P_ARP):
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: ARP packet\n");
+		JANZ_IP_DECODER_DEBUG("ARP packet\n");
 		cb->tosbyte = 0x10;	/* interactive/lodelay */
 		return;
 	case htons(ETH_P_RARP):
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: RARP packet\n");
+		JANZ_IP_DECODER_DEBUG("RARP packet\n");
 		cb->tosbyte = 0x10;
 		return;
 	case htons(ETH_P_PPP_DISC):
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: PPPoE discovery packet\n");
+		JANZ_IP_DECODER_DEBUG("PPPoE discovery packet\n");
 		cb->tosbyte = 0x10;
 		return;
 	case htons(ETH_P_LOOP):
 	case htons(ETH_P_LOOPBACK):
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: ethernet loopback packet\n");
+		JANZ_IP_DECODER_DEBUG("ethernet loopback packet\n");
 		cb->tosbyte = 0x08;	/* bulk */
 		return;
 	default:
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: unknown proto htons(0x%04X)\n", (unsigned)ntohs(skb->protocol));
+		JANZ_IP_DECODER_DEBUG("unknown proto htons(0x%04X)\n", (unsigned)ntohs(skb->protocol));
 		return;
 	}
 	/* we end here only if the packet is IPv4 or IPv6 */
@@ -721,7 +723,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	case 17:	/* UDP */
 		/* both begin with src and dst ports in this order */
 		if ((hdrp + 4) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		cb->srcport = ((unsigned int)hdrp[0] << 8) | hdrp[1];
@@ -731,7 +733,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	case 43:	/* IPv6 routing */
 	case 60:	/* IPv6 destination options */
 		if ((hdrp + 4) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		cb->nexthdr = hdrp[0];
@@ -739,15 +741,15 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		goto try_nexthdr;
 	case 44:	/* IPv6 fragment */
 		if ((hdrp + 8) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		if (fragoff != -1) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: two fragment headers\n");
+			JANZ_IP_DECODER_DEBUG("two fragment headers\n");
 			goto no_ports;
 		}
 		if (cb->ipver != 6) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv6 fragment header in %d packet\n", cb->ipver);
+			JANZ_IP_DECODER_DEBUG("IPv6 fragment header in %d packet\n", cb->ipver);
 			goto no_ports;
 		}
 		memcpy(&fc.sip, ih6->saddr.s6_addr, 16);
@@ -758,7 +760,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		noportinfo = 44;
 		/* first fragment? */
 		fragoff = (((unsigned int)hdrp[2] << 8) | hdrp[3]) & 0xFFF8U;
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: frag, ofs %u, nexthdr %u\n", fragoff, hdrp[0]);
+		JANZ_IP_DECODER_DEBUG("frag, ofs %u, nexthdr %u\n", fragoff, hdrp[0]);
 		if (fragoff) {
 			/* nope */
 			goto higher_fragment;
@@ -768,7 +770,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		goto try_nexthdr;
 	case 51:	/* IPsec AH */
 		if ((hdrp + 4) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		cb->nexthdr = hdrp[0];
@@ -778,7 +780,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	case 139:	/* Host Identity Protocol v2 */
 	case 140:	/* SHIM6: Site Multihoming by IPv6 Intermediation */
 		if ((hdrp + 4) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto done_addresses;
 		}
 		/* this kind of extension header has no payload normally */
@@ -788,7 +790,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		hdrp += ((unsigned int)hdrp[1] + 1U) * 8U;
 		goto try_nexthdr;
 	default:	/* any other L4 protocol, unknown extension headers */
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: unknown exthdr %u\n", cb->nexthdr);
+		JANZ_IP_DECODER_DEBUG("unknown exthdr %u\n", cb->nexthdr);
 		break;
 	}
 	/* we end here if either nexthdr is TCP/UDP and ports are filled in */
@@ -801,7 +803,7 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 		/* record for later packets */
 
 		if (unlikely(q->fragcache_free == NULL)) {
-			net_warn_ratelimited("sch_janz: no free fragment cache, please raise count\n");
+			net_warn_ratelimited("no free fragment cache, please raise count\n");
 			/* reuse last one */
 			fe = q->fragcache_used;
 			while (fe->next->next != NULL)
@@ -995,7 +997,7 @@ janz_peek(struct Qdisc *sch)
 	int qid;
 
 	if (!warned_about_peek) {
-		printk(KERN_WARNING "sch_janz: .peek called... why exactly?\n");
+		pr_warn(".peek called... why exactly?\n");
 		warned_about_peek = true;
 	}
 	return (janz_getnext(sch, q, true, &qid));
@@ -1197,7 +1199,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	    TC_JANZ_RELAY_SUBBUFSZ, q->nsubbufs,
 	    &janz_debugfs_relay_hooks, sch);
 	if (!q->record_chan) {
-		printk(KERN_WARNING "sch_janz: relay channel creation failed\n");
+		pr_warn("relay channel creation failed\n");
 		err = -ENOENT;
 		goto init_fail;
 	}
@@ -1210,7 +1212,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (IS_ERR_OR_NULL(q->ctlfile)) {
 		err = q->ctlfile ? PTR_ERR(q->ctlfile) : -ENOENT;
 		q->ctlfile = NULL;
-		printk(KERN_WARNING "sch_janz: control channel creation failed\n");
+		pr_warn("control channel creation failed\n");
 		goto init_fail;
 	}
 	d_inode(q->ctlfile)->i_size = sizeof(struct janz_ctlfile_pkt);
@@ -1356,7 +1358,7 @@ janz_modinit(void)
 	int rv;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 1, 0)
-	printk(KERN_WARNING "sch_janz: kernel too old: will misfunction for locally originating packets, see README\n");
+	pr_warn("kernel too old: will misfunction for locally originating packets, see README\n");
 #endif
 
 	if (!(janz_debugfs_main = debugfs_create_dir("sch_janz", NULL)))
@@ -1364,7 +1366,7 @@ janz_modinit(void)
 	else
 		rv = PTR_ERR_OR_ZERO(janz_debugfs_main);
 	if (rv) {
-		printk(KERN_WARNING "sch_janz: debugfs initialisation error\n");
+		pr_warn("debugfs initialisation error\n");
 		goto e0;
 	}
 

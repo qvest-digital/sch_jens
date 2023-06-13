@@ -450,114 +450,14 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024)
 		q->drop_next = now + DROPCHK_INTERVAL;
 }
 
-static inline struct sk_buff *
-janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek, int *qidp)
-{
-	u64 now, rate = 0;
-	struct sk_buff *skb;
-	struct janz_skb *cb;
-	int qid;
-	u32 now1024, rs;
-	s32 drs;
-
-	*qidp = -1;
-	now = ktime_get_ns();
-	now1024 = ns_to_t1024(now);
-#ifdef SCH_JANZDBG
-	janz_record_wdog(q, now);
-#endif
-	rs = (u32)~(u32)0U;
-	janz_dropchk(sch, q, now, now1024);
-
-	if (now < q->notbefore) {
-		if (!is_peek) {
-			register u64 nextns;
-
-			nextns = min(q->notbefore, q->drop_next);
-#ifdef SCH_JANZDBG
-			q->wdogreason = 0x10;
-			q->wdognext = nextns;
-#endif
-			qdisc_watchdog_schedule_ns(&q->watchdog, nextns);
-		}
-		skb = NULL;
-		goto out;
-	}
-
-	/* we have reached notbefore, previous packet is fully sent */
-
-	if (!sch->q.qlen) {
-		/* nothing to send, start subsequent packet later */
- nothing_to_send:
-		q->crediting = 0;
-		skb = NULL;
-		goto out;
-	}
-
-#define try_qid(i) do {							\
-	qid = (i);							\
-	skb = q->q[qid].first;						\
-	if (skb) {							\
-		cb = get_janz_skb(skb);					\
-		if (is_peek)						\
-			return (skb);					\
-		drs = cmp1024(cb->ts_arrive, now1024);			\
-		if (drs <= 0)						\
-			goto got_skb;					\
-		/* ts_arrive > now: packet has not reached us yet */	\
-		if (/* > 0 */ (u32)drs < rs)				\
-			rs = (u32)drs;					\
-	}								\
-} while (/* CONSTCOND */ 0)
-
-	try_qid(0);
-	try_qid(1);
-	try_qid(2);
-
-	/* nothing to send, but we have to reschedule first */
-	/* if we end up here, rs was set above */
-	qdisc_watchdog_schedule_ns(&q->watchdog, now + t1024_to_ns(rs));
-#ifdef SCH_JANZDBG
-	q->wdognext = now + t1024_to_ns(rs);
-	q->wdogreason = 0x20;
-#endif
-	goto nothing_to_send;
-
- got_skb:
-	*qidp = qid;
-	if (!(q->q[qid].first = skb->next))
-		q->q[qid].last = NULL;
-	--sch->q.qlen;
-	q->memusage -= cb->truesz;
-	skb->next = NULL;
-	qdisc_qstats_backlog_dec(sch, skb);
-	qdisc_bstats_update(sch, skb);
-
-	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
-	q->notbefore = (q->crediting ? q->notbefore : now) +
-	    (rate * (u64)skb->len);
-	q->crediting = 1;
-	if (rate != q->lastknownrate)
-		goto force_rate_and_out;
-
- out:
-	if (now >= q->qsz_next) {
- force_rate_and_out:
-		janz_record_queuesz(sch, q, now, rate, 0);
-	}
-	return (skb);
-}
-
 static inline void
 janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
-    int qid)
+    struct janz_skb *cb, u64 now, u32 now1024, int qid)
 {
 	u64 qdelay;
-	u64 now = ktime_get_ns();
-	struct janz_skb *cb = get_janz_skb(skb);
 	u16 chance;
 
-	qdelay = t1024_to_ns((u32)cmp1024(ns_to_t1024(now), cb->ts_arrive));
+	qdelay = t1024_to_ns((u32)cmp1024(now1024, cb->ts_arrive));
 
 	/**
 	 * maths proof, by example:
@@ -998,10 +898,96 @@ janz_deq(struct Qdisc *sch)
 {
 	struct janz_priv *q = qdisc_priv(sch);
 	struct sk_buff *skb;
+	u64 now, rate = 0;
+	struct janz_skb *cb;
 	int qid;
+	u32 now1024, rs;
+	s32 drs;
 
-	if ((skb = janz_getnext(sch, q, false, &qid)))
-		janz_sendoff(sch, q, skb, qid);
+	qid = -1;
+	now = ktime_get_ns();
+	now1024 = ns_to_t1024(now);
+#ifdef SCH_JANZDBG
+	janz_record_wdog(q, now);
+#endif
+	rs = (u32)~(u32)0U;
+	janz_dropchk(sch, q, now, now1024);
+
+	if (now < q->notbefore) {
+		register u64 nextns;
+
+		nextns = min(q->notbefore, q->drop_next);
+#ifdef SCH_JANZDBG
+		q->wdogreason = 0x10;
+		q->wdognext = nextns;
+#endif
+		qdisc_watchdog_schedule_ns(&q->watchdog, nextns);
+		skb = NULL;
+		goto out;
+	}
+
+	/* we have reached notbefore, previous packet is fully sent */
+
+	if (!sch->q.qlen) {
+		/* nothing to send, start subsequent packet later */
+ nothing_to_send:
+		q->crediting = 0;
+		skb = NULL;
+		goto out;
+	}
+
+#define try_qid(i) do {							\
+	qid = (i);							\
+	skb = q->q[qid].first;						\
+	if (skb) {							\
+		cb = get_janz_skb(skb);					\
+		drs = cmp1024(cb->ts_arrive, now1024);			\
+		if (drs <= 0)						\
+			goto got_skb;					\
+		/* ts_arrive > now: packet has not reached us yet */	\
+		if (/* > 0 */ (u32)drs < rs)				\
+			rs = (u32)drs;					\
+	}								\
+} while (/* CONSTCOND */ 0)
+
+	try_qid(0);
+	try_qid(1);
+	try_qid(2);
+	qid = -1;
+
+	/* nothing to send, but we have to reschedule first */
+	/* if we end up here, rs was set above */
+	qdisc_watchdog_schedule_ns(&q->watchdog, now + t1024_to_ns(rs));
+#ifdef SCH_JANZDBG
+	q->wdognext = now + t1024_to_ns(rs);
+	q->wdogreason = 0x20;
+#endif
+	goto nothing_to_send;
+
+ got_skb:
+	if (!(q->q[qid].first = skb->next))
+		q->q[qid].last = NULL;
+	--sch->q.qlen;
+	q->memusage -= cb->truesz;
+	skb->next = NULL;
+	qdisc_qstats_backlog_dec(sch, skb);
+	qdisc_bstats_update(sch, skb);
+
+	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
+	q->notbefore = (q->crediting ? q->notbefore : now) +
+	    (rate * (u64)skb->len);
+	q->crediting = 1;
+	if (rate != q->lastknownrate)
+		goto force_rate_and_out;
+
+ out:
+	if (now >= q->qsz_next) {
+ force_rate_and_out:
+		janz_record_queuesz(sch, q, now, rate, 0);
+	}
+
+	if (skb)
+		janz_sendoff(sch, q, skb, cb, now, now1024, qid);
 	return (skb);
 }
 
@@ -1009,14 +995,13 @@ static struct sk_buff *
 janz_peek(struct Qdisc *sch)
 {
 	struct janz_priv *q = qdisc_priv(sch);
-	static bool warned_about_peek = false;
-	int qid;
 
-	if (!warned_about_peek) {
-		pr_warn(".peek called... why exactly?\n");
-		warned_about_peek = true;
-	}
-	return (janz_getnext(sch, q, true, &qid));
+	pr_warn(".peek called; this is not supported!\n");
+	dump_stack();
+	/* delay traffic noticeably, so the user knows to look */
+	q->notbefore = ktime_get_ns() + NSEC_PER_SEC;
+	/* hard reply no packet to now send */
+	return (NULL);
 }
 
 static inline void

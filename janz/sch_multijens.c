@@ -102,12 +102,19 @@ struct janz_fragcache_check {
 	    (offsetof(struct janz_fragcomp, sip) + 16) ? 1 : -1];
 };
 
+/* workaround to relay_close late using the global workqueue */
+struct janz_gwq_ovl {
+	struct delayed_work dwork;
+	u32 uenum;
+	struct rchan *record_chans[];
+};
+
 struct janz_skbfifo {
 	struct sk_buff *first;
 	struct sk_buff *last;
 };
 
-struct sjens_priv {
+struct sjanz_priv {
 	struct janz_skbfifo q[3];	/* TOS FIFOs */					//@16
 	struct rchan *record_chan;	/* relay to userspace */			//@16
 #define QSZ_INTERVAL nsmul(500, NSEC_PER_MSEC)
@@ -126,9 +133,9 @@ struct sjens_priv {
 	u8 crediting;									//@?
 };
 
-/* struct mjens_priv *q = qdisc_priv(sch); */
-struct mjens_priv {
-	struct sjens_priv *subqueues;	/* per-UE sch_janz data */			//@cacheline
+/* struct mjanz_priv *q = qdisc_priv(sch); */
+struct mjanz_priv {
+	struct sjanz_priv *subqueues;	/* per-UE sch_janz data */			//@cacheline
 	u32 uenum;			/* size of subqueues, ctldata */		//@  +8
 	u32 uecur;			/* round-robin pointer */			//@  +12
 	struct janz_fragcache *fragcache_used;						//@16
@@ -138,7 +145,7 @@ struct mjens_priv {
 	struct dentry *ctlfile;								//@16
 	u32 fragcache_aged;								//@  +8
 	u32 fragcache_num;								//@  +12
-	struct janz_ctlfile_pkt *ctldata;						//@16
+	struct janz_ctlfile_pkt *ctldata;	/* per-UE */				//@16
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
 	u32 nsubbufs;									//@?
 };
@@ -765,7 +772,40 @@ janz_peek(struct Qdisc *sch)
 	return (NULL);
 }
 
-//TODO: janz_reset
+static inline void
+janz_reset(struct Qdisc *sch)
+{
+	u32 ue;
+	struct mjanz_priv *q = qdisc_priv(sch);
+
+	ASSERT_RTNL();
+	if (sch->q.qlen) {
+		for (ue = 0; ue < q->uenum; ++ue) {
+			rtnl_kfree_skbs(q->subqueues[ue].q[0].first,
+			    q->subqueues[ue].q[0].last);
+			rtnl_kfree_skbs(q->subqueues[ue].q[1].first,
+			    q->subqueues[ue].q[1].last);
+			rtnl_kfree_skbs(q->subqueues[ue].q[2].first,
+			    q->subqueues[ue].q[2].last);
+		}
+		sch->q.qlen = 0;
+	}
+	for (ue = 0; ue < q->uenum; ++ue) {
+		q->subqueues[ue].q[0].first = NULL;
+		q->subqueues[ue].q[0].last = NULL;
+		q->subqueues[ue].q[1].first = NULL;
+		q->subqueues[ue].q[1].last = NULL;
+		q->subqueues[ue].q[2].first = NULL;
+		q->subqueues[ue].q[2].last = NULL;
+		q->subqueues[ue].memusage = 0;
+		q->subqueues[ue].notbefore = 0;
+		q->subqueues[ue].crediting = 0;
+		if (q->subqueues[ue].record_chan)
+			relay_flush(q->subqueues[ue].record_chan);
+	}
+	sch->qstats.backlog = 0;
+	sch->qstats.overlimits = 0;
+}
 
 static const struct nla_policy janz_nla_policy[TCA_JANZ_MAX + 1] = {
 	[TCA_JANZ_LIMIT]	= { .type = NLA_U32 },
@@ -780,8 +820,156 @@ static const struct nla_policy janz_nla_policy[TCA_JANZ_MAX + 1] = {
 	[TCA_MULTIJENS_UENUM]	= { .type = NLA_U32 },
 };
 
-//TODO: janz_chg
-//note check SIZE_MAX/sizeof(struct janz_ctlfile_pkt) > (size_t)q->uenum
+static inline int
+janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
+{
+	u32 ue;
+	struct mjanz_priv *q = qdisc_priv(sch);
+	struct nlattr *tb[TCA_JANZ_MAX + 1];
+	int err;
+	bool rate_changed = false;
+	bool handover_started = false;
+
+	if (!opt)
+		return (-EINVAL);
+
+	if ((err = nla_parse_nested_deprecated(tb, TCA_JANZ_MAX, opt,
+	    janz_nla_policy, extack)) < 0)
+		return (err);
+
+	/* anything that can throw first */
+
+	if (q->nsubbufs) {
+		/* only at load time */
+		if (tb[TCA_JANZ_SUBBUFS] || tb[TCA_JANZ_FRAGCACHE] ||
+		    tb[TCA_MULTIJENS_UENUM])
+			return (-EINVAL);
+	} else {
+		/* this is load time */
+		if (!(tb[TCA_MULTIJENS_UENUM]))
+			return (-EINVAL);
+		/* allocate sch_janz subqueues */
+		q->uenum = nla_get_u32(tb[TCA_MULTIJENS_UENUM]);
+		/* range-check uenum; the “arbitrary” max also protects fragcache_num */
+		if (q->uenum < 1U ||
+		    ((SIZE_MAX / sizeof(struct janz_ctlfile_pkt)) >= (size_t)q->uenum) ||
+		    (((SIZE_MAX - sizeof(struct janz_gwq_ovl)) / sizeof(struct rchan *)) >= (size_t)q->uenum) ||
+		    q->uenum > /* arbitrary */ 65535U) {
+			/* nothing has been allocated yet */
+			q->uenum = 0;
+			/* out of bounds */
+			return (-EDOM);
+		}
+		q->subqueues = kvcalloc(q->uenum,
+		    sizeof(struct sjanz_priv), GFP_KERNEL);
+		q->ctldata = kvcalloc(q->uenum,
+		    sizeof(struct janz_ctlfile_pkt), GFP_KERNEL);
+		if (!q->subqueues || !q->ctldata) {
+			if (q->subqueues)
+				kvfree(q->subqueues);
+			if (q->ctldata)
+				kvfree(q->ctldata)
+			q->uenum = 0;
+			return (-ENOMEM);
+		}
+		/* from here on, q->uenum holds good */
+		for (ue = 0; ue < q->uenum; ++ue) {
+			/* per-UE stuff from sch_janz janz_init() */
+			atomic64_set_release(&(q->subqueues[ue].ns_pro_byte),
+			    /* 10 Mbit/s */ 800);
+			q->subqueues[ue].lastknownrate = 800; /* same as above */
+			q->subqueues[ue].markfree = nsmul(4, NSEC_PER_MSEC);
+			q->subqueues[ue].markfull = nsmul(14, NSEC_PER_MSEC);
+			q->subqueues[ue].xlatency = 0;
+			q->subqueues[ue].qosmode = 0;
+			/* needed so janz_reset DTRT */
+			q->subqueues[ue].record_chan = NULL;
+			q->subqueues[ue].ctlfile = NULL;
+		}
+		janz_reset(sch);
+	}
+
+	/* now actual configuring */
+	sch_tree_lock(sch);
+	/* no memory allocation, returns, etc. now */
+
+	if (tb[TCA_JANZ_LIMIT])
+		sch->limit = nla_get_u32(tb[TCA_JANZ_LIMIT]) ? : 1;
+
+	if (tb[TCA_JANZ_RATE64]) {
+		u64 tmp = nla_get_u64(tb[TCA_JANZ_RATE64]);
+		u64 old;
+
+		tmp = div64_u64(NSEC_PER_SEC, tmp);
+		if (tmp < 1)
+			tmp = 1;
+		rate_changed = 0;
+		for (ue = 0; ue < q->uenum; ++ue) {
+			old = (u64)atomic64_read_acquire(&(q->subqueues[ue].ns_pro_byte));
+			atomic64_set_release(&(q->subqueues[ue].ns_pro_byte), (s64)tmp);
+			rate_changed |= old != tmp;
+		}
+	}
+
+	if (tb[TCA_JANZ_HANDOVER]) {
+		u64 tmp = nla_get_u32(tb[TCA_JANZ_HANDOVER]);
+
+		handover_started = tmp != 0;
+		tmp *= NSEC_PER_USEC;
+		tmp += ktime_get_ns();
+		/* implementation of handover */
+		for (ue = 0; ue < q->uenum; ++ue) {
+			q->subqueues[ue].notbefore =
+			    tmp < q->subqueues[ue].notbefore ?
+			    q->subqueues[ue].notbefore : tmp;
+			q->subqueues[ue].crediting = 0;
+		}
+	}
+
+	if (tb[TCA_JANZ_QOSMODE])
+		for (ue = 0; ue < q->uenum; ++ue)
+			q->subqueues[ue].qosmode = nla_get_u32(tb[TCA_JANZ_QOSMODE]);
+
+	if (tb[TCA_JANZ_MARKFREE])
+		for (ue = 0; ue < q->uenum; ++ue)
+			q->subqueues[ue].markfree = us_to_ns(nla_get_u32(tb[TCA_JANZ_MARKFREE]));
+
+	if (tb[TCA_JANZ_MARKFULL])
+		for (ue = 0; ue < q->uenum; ++ue)
+			q->subqueues[ue].markfull = us_to_ns(nla_get_u32(tb[TCA_JANZ_MARKFULL]));
+
+	if (tb[TCA_JANZ_SUBBUFS])
+		/* only at load time */
+		q->nsubbufs = nla_get_u32(tb[TCA_JANZ_SUBBUFS]);
+
+	if (tb[TCA_JANZ_FRAGCACHE])
+		/* only at load time */
+		q->fragcache_num = nla_get_u32(tb[TCA_JANZ_FRAGCACHE]);
+
+	if (tb[TCA_JANZ_XLATENCY])
+		for (ue = 0; ue < q->uenum; ++ue)
+			q->subqueues[ue].xlatency = us_to_ns(nla_get_u32(tb[TCA_JANZ_XLATENCY]));
+
+	/* assert: sch->q.qlen == 0 || q->record_chan != nil */
+	/* assert: sch->limit > 0 */
+	if (unlikely(sch->q.qlen > sch->limit)) {
+		u64 now = ktime_get_ns();
+
+		janz_drop_overlen(sch, q, now, ns_to_t1024(now), false);
+	}
+
+	if (q->subqueues[0].record_chan) for (ue = 0; ue < q->uenum; ++ue) {
+		/* report if rate changes or a handover starts */
+		if (rate_changed || handover_started)
+			janz_record_queuesz(sch, &q->subqueues[ue], ktime_get_ns(), 0, 1);
+		/* flush subbufs before handover */
+		if (handover_started)
+			relay_flush(q->subqueues[ue].record_chan);
+	}
+
+	sch_tree_unlock(sch);
+	return (0);
+}
 
 static struct dentry *janz_debugfs_main __read_mostly;
 
@@ -797,10 +985,121 @@ static const struct file_operations janz_ctlfile_fops = {
 	.llseek = no_llseek,
 };
 
-//TODO: janz_init
+static int
+janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
+{
+	struct mjanz_priv *q = qdisc_priv(sch);
+	int err;
+	char name[21];
+	u64 now;
+	u32 ue;
+	int i;
 
-//TODO: janz_gwq_* + janz_done
-//note check q->fragcache_base memory >= struct delayed_work + uenum*(struct rchan *)
+	/* config values’ defaults */
+	sch->limit = 10240;
+	q->nsubbufs = 0;
+	q->fragcache_num = 0;
+	/* qdisc state */
+	sch->q.qlen = 0;
+	q->uenum = 0;
+	qdisc_watchdog_init_clockid(&q->watchdog, sch, CLOCK_MONOTONIC);
+
+	if ((err = janz_chg(sch, opt, extack)))
+		goto init_fail;
+
+	if (q->nsubbufs < 4U || q->nsubbufs > 0x000FFFFFU)
+		q->nsubbufs = 1024;
+
+	if (q->fragcache_num < 16U || q->fragcache_num > 0x00FFFFFFU)
+		q->fragcache_num = 1024;
+
+	for (ue = 0; ue < q->uenum; ++ue) {
+		snprintf(name, sizeof(name), "%04X-%02X:", sch->handle >> 16, ue);
+		q->subqueues[ue].record_chan = relay_open(name, janz_debugfs_main,
+		    TC_JANZ_RELAY_SUBBUFSZ, q->nsubbufs,
+		    &janz_debugfs_relay_hooks, sch);
+		if (!q->subqueues[ue].record_chan) {
+			printk(KERN_WARNING "sch_janz: relay channel creation failed\n");
+			err = -ENOENT;
+			goto init_fail;
+		}
+		spin_lock_init(&q->subqueues[ue].record_lock);
+	}
+
+	snprintf(name, sizeof(name), "%04X:v" __stringify(JANZ_CTLFILE_VERSION),
+	    sch->handle >> 16);
+	q->ctlfile = debugfs_create_file(name, 0200, janz_debugfs_main,
+	    q, &janz_ctlfile_fops);
+	if (IS_ERR_OR_NULL(q->ctlfile)) {
+		err = q->ctlfile ? PTR_ERR(q->ctlfile) : -ENOENT;
+		q->ctlfile = NULL;
+		printk(KERN_WARNING "sch_janz: control channel creation failed\n");
+		goto init_fail;
+	}
+	d_inode(q->ctlfile)->i_size = sizeof(struct janz_ctlfile_pkt) * (size_t)q->uenum;
+
+	/* raise q->fragcache_base memory size until we can fit janz_gwq_* */
+	while (((size_t)q->fragcache_num * sizeof(struct janz_fragcache)) <
+	    (sizeof(struct janz_gwq_ovl) + (size_t)q->uenum * sizeof(struct rchan *)))
+		++q->fragcache_num;
+	/* allocate q->fragcache_base memory */
+	q->fragcache_base = kvcalloc(q->fragcache_num,
+	    sizeof(struct janz_fragcache), GFP_KERNEL);
+	if (!q->fragcache_base) {
+		err = -ENOMEM;
+		goto init_fail;
+	}
+	q->fragcache_used = NULL;
+	q->fragcache_last = NULL;
+	q->fragcache_free = &(q->fragcache_base[0]);
+	for (i = 1; i < q->fragcache_num; ++i)
+		q->fragcache_base[i - 1].next = &(q->fragcache_base[i]);
+	q->fragcache_base[q->fragcache_num - 1].next = NULL;
+	q->fragcache_aged = 0;
+
+	now = ktime_get_ns();
+	for (ue = 0; ue < q->uenum; ++ue) {
+		q->qsz_next = now + QSZ_INTERVAL;
+		q->drop_next = now + DROPCHK_INTERVAL;
+	}
+
+	sch->flags &= ~TCQ_F_CAN_BYPASS;
+	return (0);
+
+ init_fail:
+	if (q->ctlfile) {
+		debugfs_remove(q->ctlfile);
+		q->ctlfile = NULL;
+	}
+	if (q->uenum && q->subqueues[0].record_chan)
+		for (ue = 0; ue < q->uenum; ++ue)
+			if (q->subqueues[ue].record_chan) {
+				relay_close(q->subqueues[ue].record_chan);
+				q->subqueues[ue].record_chan = NULL;
+			}
+	if (q->uenum) {
+		kvfree(q->subqueues);
+		kvfree(q->ctldata)
+		q->uenum = 0;
+	}
+	return (err);
+}
+
+/* workaround to relay_close late using the global workqueue */
+
+static void
+janz_gwq_fn(struct work_struct *work)
+{
+	u32 ue;
+	struct janz_gwq_ovl *ovl = container_of(to_delayed_work(work),
+	    struct janz_gwq_ovl, dwork);
+
+	for (ue = 0; ue < ovl->uenum; ++ue)
+		relay_close(ovl->record_chan[ue]);
+	kvfree(ovl);
+}
+
+//TODO: janz_done
 
 static int
 janz_dump(struct Qdisc *sch, struct sk_buff *skb)

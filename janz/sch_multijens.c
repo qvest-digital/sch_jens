@@ -9,10 +9,12 @@
 
 #undef JANZ_IP_DECODER_DEBUG
 #if 1
-#define JANZ_IP_DECODER_DEBUG(...)	do { /* nothing */ } while (0)
+#define JANZ_IP_DECODER_DEBUG(fmt,...)	do { /* nothing */ } while (0)
 #else
-#define JANZ_IP_DECODER_DEBUG(...)	printk(__VA_ARGS__)
+#define JANZ_IP_DECODER_DEBUG(fmt,...)	printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
 #endif
+
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/version.h>
 #include <linux/module.h>
@@ -148,15 +150,28 @@ struct mjanz_priv {
 	struct janz_ctlfile_pkt *ctldata;	/* per-UE */				//@16
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
 	u32 nsubbufs;									//@?
+#ifdef notyet
+	/* both for retransmissions [0‥uenum[ plus global bypass FIFO */
+	struct janz_skbfifo *bypasses;	/* per-UE + 1 (global Y signal) */
+	u8 has_pkts_in_bypass;		/* visit bypasses[0‥uenum+1[ before subqueues? */
+#endif
 };
 
 /* struct janz_skb *cb = get_janz_skb(skb); */
 struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
 	u32 ts_begin;			/* real enqueue ts1024 */		//@8   :4
-	u32 ts_arrive;			/* adjusted by extralatency */		//@ +4 :4
-	unsigned int truesz;		/* memory usage */			//@ +8 :4
-
+	union {									//  +4 :8
+		struct {		/* up to and including janz_drop_pkt/janz_sendoff */
+			u32 ts_arrive;		/* adjusted by extralatency */	//@ +4 :4
+			unsigned int truesz;	/* memory usage */		//@ +8 :4
+		};
+		struct {		/* past these, just before janz_record_packet */
+			u32 qdelay1024;		/* janz_sendoff / -3/-2/-1 */	//@ +4 :4
+			u16 chance;		/* janz_sendoff / 0 */		//@ +8 :2
+			short qid;		/* -1/0/1/2 */			//@ +10:2
+		};
+	};									//… +4 :8
 	u16 srcport;								//@ +12:2
 	u16 dstport;								//@ +14:2
 	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@8   :1
@@ -232,17 +247,17 @@ janz_record_queuesz(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 
 static inline void
 janz_record_packet(struct sjanz_priv *q,
-    struct sk_buff *skb, struct janz_skb *cb, u64 now,
-    u32 queuedelay, u16 chance, int qid)
+    struct sk_buff *skb, struct janz_skb *cb, u64 now)
 {
 	struct tc_janz_relay r = {0};
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_SOJOURN;
-	r.d32 = queuedelay;
-	r.e16 = chance;
+	r.d32 = cb->qdelay1024;
+	r.e16 = cb->chance;
 	r.f8 = cb->record_flag;
-	r.z.zSOJOURN.psize = ((u32)(qid + 1)) << 30 | (skb->len & 0x3FFFFFFFU);
+	r.z.zSOJOURN.psize = ((u32)(cb->qid + 1)) << 30 |
+	    (skb->len & 0x3FFFFFFFU);
 	r.z.zSOJOURN.ipver = cb->ipver;
 	r.z.zSOJOURN.nexthdr = cb->nexthdr;
 	r.z.zSOJOURN.sport = cb->srcport;
@@ -331,7 +346,12 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024,
 		qd1024 = 0xFFFFFFFEUL;
 	else if (unlikely((qd1024 = now1024 - cb->ts_arrive) > 0xFFFFFFFDUL))
 		qd1024 = 0xFFFFFFFDUL;
-	janz_record_packet(q, skb, cb, now, qd1024, 0, qid);
+	/* cb->qdelay1024 overlays cb->ts_arrive, do not move up */
+	cb->qdelay1024 = qd1024;
+	/* these both overlay cb->truesz, do not move either */
+	cb->chance = 0;
+	cb->qid = qid;
+	janz_record_packet(q, skb, cb, now);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
 	kfree_skb(skb);
@@ -414,16 +434,14 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024)
 		q->drop_next = now + DROPCHK_INTERVAL;
 }
 
-static inline void
+static inline struct sk_buff *
 janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
-    int qid)
+    struct janz_skb *cb, u64 now, u32 now1024, int qid)
 {
 	u64 qdelay;
-	u64 now = ktime_get_ns();
-	struct janz_skb *cb = get_janz_skb(skb);
 	u16 chance;
 
-	qdelay = t1024_to_ns((u32)cmp1024(ns_to_t1024(now), cb->ts_arrive));
+	qdelay = t1024_to_ns((u32)cmp1024(now1024, cb->ts_arrive));
 
 	/**
 	 * maths proof, by example:
@@ -486,7 +504,11 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
-	janz_record_packet(q, skb, cb, now, ns_to_t1024(qdelay), chance, qid);
+	cb->qdelay1024 = ns_to_t1024(qdelay);
+	cb->chance = chance;
+	cb->qid = qid;
+	janz_record_packet(q, skb, cb, now);
+	return (skb);
 }
 
 static inline void
@@ -521,10 +543,10 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		ih4 = ip_hdr(skb);
 		hdrp = (void *)ih4;
 		if ((hdrp + sizeof(struct iphdr)) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv4 too short\n");
+			JANZ_IP_DECODER_DEBUG("IPv4 too short\n");
 			return;
 		}
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv4 %08X->%08X proto %u frag %d\n",
+		JANZ_IP_DECODER_DEBUG("IPv4 %08X->%08X proto %u frag %d\n",
 		    htonl(ih4->saddr), htonl(ih4->daddr), ih4->protocol, ip_is_fragment(ih4) ? 1 : 0);
 		cb->tosbyte = ih4->tos;
 		janz_init_record_flag(cb);
@@ -553,10 +575,10 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		ih6 = ipv6_hdr(skb);
 		hdrp = (void *)ih6;
 		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv6 too short\n");
+			JANZ_IP_DECODER_DEBUG("IPv6 too short\n");
 			return;
 		}
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv6 %02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X->%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X nexthdr %u\n",
+		JANZ_IP_DECODER_DEBUG("IPv6 %02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X->%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X nexthdr %u\n",
 		    ih6->saddr.s6_addr[0], ih6->saddr.s6_addr[1], ih6->saddr.s6_addr[2], ih6->saddr.s6_addr[3],
 		    ih6->saddr.s6_addr[4], ih6->saddr.s6_addr[5], ih6->saddr.s6_addr[6], ih6->saddr.s6_addr[7],
 		    ih6->saddr.s6_addr[8], ih6->saddr.s6_addr[9], ih6->saddr.s6_addr[10], ih6->saddr.s6_addr[11],
@@ -574,24 +596,24 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		break;
 	/* fake iptos for the rest */
 	case htons(ETH_P_ARP):
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: ARP packet\n");
+		JANZ_IP_DECODER_DEBUG("ARP packet\n");
 		cb->tosbyte = 0x10;	/* interactive/lodelay */
 		return;
 	case htons(ETH_P_RARP):
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: RARP packet\n");
+		JANZ_IP_DECODER_DEBUG("RARP packet\n");
 		cb->tosbyte = 0x10;
 		return;
 	case htons(ETH_P_PPP_DISC):
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: PPPoE discovery packet\n");
+		JANZ_IP_DECODER_DEBUG("PPPoE discovery packet\n");
 		cb->tosbyte = 0x10;
 		return;
 	case htons(ETH_P_LOOP):
 	case htons(ETH_P_LOOPBACK):
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: ethernet loopback packet\n");
+		JANZ_IP_DECODER_DEBUG("ethernet loopback packet\n");
 		cb->tosbyte = 0x08;	/* bulk */
 		return;
 	default:
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: unknown proto htons(0x%04X)\n", (unsigned)ntohs(skb->protocol));
+		JANZ_IP_DECODER_DEBUG("unknown proto htons(0x%04X)\n", (unsigned)ntohs(skb->protocol));
 		return;
 	}
 	/* we end here only if the packet is IPv4 or IPv6 */
@@ -602,7 +624,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 	case 17:	/* UDP */
 		/* both begin with src and dst ports in this order */
 		if ((hdrp + 4) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		cb->srcport = ((unsigned int)hdrp[0] << 8) | hdrp[1];
@@ -612,7 +634,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 	case 43:	/* IPv6 routing */
 	case 60:	/* IPv6 destination options */
 		if ((hdrp + 4) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		cb->nexthdr = hdrp[0];
@@ -620,15 +642,15 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		goto try_nexthdr;
 	case 44:	/* IPv6 fragment */
 		if ((hdrp + 8) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		if (fragoff != -1) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: two fragment headers\n");
+			JANZ_IP_DECODER_DEBUG("two fragment headers\n");
 			goto no_ports;
 		}
 		if (cb->ipver != 6) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: IPv6 fragment header in %d packet\n", cb->ipver);
+			JANZ_IP_DECODER_DEBUG("IPv6 fragment header in %d packet\n", cb->ipver);
 			goto no_ports;
 		}
 		memcpy(&fc.sip, ih6->saddr.s6_addr, 16);
@@ -639,7 +661,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		noportinfo = 44;
 		/* first fragment? */
 		fragoff = (((unsigned int)hdrp[2] << 8) | hdrp[3]) & 0xFFF8U;
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: frag, ofs %u, nexthdr %u\n", fragoff, hdrp[0]);
+		JANZ_IP_DECODER_DEBUG("frag, ofs %u, nexthdr %u\n", fragoff, hdrp[0]);
 		if (fragoff) {
 			/* nope */
 			goto higher_fragment;
@@ -649,7 +671,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		goto try_nexthdr;
 	case 51:	/* IPsec AH */
 		if ((hdrp + 4) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		cb->nexthdr = hdrp[0];
@@ -659,7 +681,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 	case 139:	/* Host Identity Protocol v2 */
 	case 140:	/* SHIM6: Site Multihoming by IPv6 Intermediation */
 		if ((hdrp + 4) > endoflineardata) {
-			JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: %u too short\n", cb->nexthdr);
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto done_addresses;
 		}
 		/* this kind of extension header has no payload normally */
@@ -669,7 +691,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		hdrp += ((unsigned int)hdrp[1] + 1U) * 8U;
 		goto try_nexthdr;
 	default:	/* any other L4 protocol, unknown extension headers */
-		JANZ_IP_DECODER_DEBUG(KERN_DEBUG "sch_janz: unknown exthdr %u\n", cb->nexthdr);
+		JANZ_IP_DECODER_DEBUG("unknown exthdr %u\n", cb->nexthdr);
 		break;
 	}
 	/* we end here if either nexthdr is TCP/UDP and ports are filled in */
@@ -682,7 +704,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		/* record for later packets */
 
 		if (unlikely(q->fragcache_free == NULL)) {
-			net_warn_ratelimited("sch_janz: no free fragment cache, please raise count\n");
+			net_warn_ratelimited("no free fragment cache, please raise count\n");
 			/* reuse last one */
 			fe = q->fragcache_used;
 			while (fe->next->next != NULL)
@@ -763,12 +785,24 @@ janz_subbuf_init(struct rchan_buf *buf, void *subbuf_,
 
 //TODO: janz_enq
 
-//TODO: janz_deq inlining janz_getnext
+//TODO: janz_deq
 
 static struct sk_buff *
 janz_peek(struct Qdisc *sch)
 {
-	net_warn_ratelimited("sch_multijens: .peek called... why exactly?\n");
+	u64 then;
+	u32 ue;
+	struct mjanz_priv *q = qdisc_priv(sch);
+
+	pr_warn(".peek called; this is not supported!\n");
+	dump_stack();
+	/* delay traffic noticeably, so the user knows to look */
+	then = ktime_get_ns() + NSEC_PER_SEC;
+	for (ue = 0; ue < q->uenum; ++ue) {
+		q->subqueues[ue].notbefore = then;
+		q->subqueues[ue].crediting = 0;
+	}
+	/* hard reply no packet to now send */
 	return (NULL);
 }
 
@@ -1019,7 +1053,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		    TC_JANZ_RELAY_SUBBUFSZ, q->nsubbufs,
 		    &janz_debugfs_relay_hooks, sch);
 		if (!q->subqueues[ue].record_chan) {
-			printk(KERN_WARNING "sch_janz: relay channel creation failed\n");
+			pr_warn("relay channel creation failed\n");
 			err = -ENOENT;
 			goto init_fail;
 		}
@@ -1033,7 +1067,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (IS_ERR_OR_NULL(q->ctlfile)) {
 		err = q->ctlfile ? PTR_ERR(q->ctlfile) : -ENOENT;
 		q->ctlfile = NULL;
-		printk(KERN_WARNING "sch_janz: control channel creation failed\n");
+		pr_warn("control channel creation failed\n");
 		goto init_fail;
 	}
 	d_inode(q->ctlfile)->i_size = sizeof(struct janz_ctlfile_pkt) * (size_t)q->uenum;
@@ -1099,7 +1133,49 @@ janz_gwq_fn(struct work_struct *work)
 	kvfree(ovl);
 }
 
-//TODO: janz_done
+static void
+janz_done(struct Qdisc *sch)
+{
+	u32 ue;
+	struct mjanz_priv *q = qdisc_priv(sch);
+	struct janz_gwq_ovl *ovl;
+
+	qdisc_watchdog_cancel(&q->watchdog);
+
+	if (q->ctlfile) {
+		debugfs_remove(q->ctlfile);
+		q->ctlfile = NULL;
+	}
+
+	if (!q->fragcache_base) {
+		/* all bets off… */
+		pr_alert("janz_done without fragcache_base memory, refusing to free; leaking resources!\n");
+		dump_stack();
+		return;
+	}
+
+	/*
+	 * we need to relay_flush() now but relay_close() later so that
+	 * userspace has a chance to actually read the information; for
+	 * that, deferred work can be used, but where to put the struct
+	 * for that? easy, reuse q->fragcache_base memory, free it last
+	 * inside the worker function (this is explicitly permitted) ;)
+	 */
+
+	ovl = (void *)q->fragcache_base;
+	INIT_DELAYED_WORK(&ovl->dwork, janz_gwq_fn);
+	ovl->uenum = q->uenum;
+	for (ue = 0; ue < q->uenum; ++ue) {
+		ovl->record_chans[ue] = q->subqueues[ue].record_chan;
+		relay_flush(q->subqueues[ue].record_chan);
+	}
+
+	/* free anything else first */
+	kvfree(q->subqueues);
+	kvfree(q->ctldata);
+
+	schedule_delayed_work(&ovl->dwork, msecs_to_jiffies(1000));
+}
 
 static int
 janz_dump(struct Qdisc *sch, struct sk_buff *skb)
@@ -1151,7 +1227,7 @@ janz_modinit(void)
 	int rv;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 1, 0)
-	printk(KERN_WARNING "sch_janz: kernel too old: will misfunction for locally originating packets, see README\n");
+	pr_warn("kernel too old: will misfunction for locally originating packets, see README\n");
 #endif
 
 	if (!(janz_debugfs_main = debugfs_create_dir("sch_janz", NULL)))
@@ -1159,7 +1235,7 @@ janz_modinit(void)
 	else
 		rv = PTR_ERR_OR_ZERO(janz_debugfs_main);
 	if (rv) {
-		printk(KERN_WARNING "sch_janz: debugfs initialisation error\n");
+		pr_warn("debugfs initialisation error\n");
 		goto e0;
 	}
 

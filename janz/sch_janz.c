@@ -1000,6 +1000,7 @@ janz_peek(struct Qdisc *sch)
 	dump_stack();
 	/* delay traffic noticeably, so the user knows to look */
 	q->notbefore = ktime_get_ns() + NSEC_PER_SEC;
+	q->crediting = 0;
 	/* hard reply no packet to now send */
 	return (NULL);
 }

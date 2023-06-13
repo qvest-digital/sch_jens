@@ -88,10 +88,10 @@ main(int argc, char *argv[])
 		if (ep == argv[2U + 2U * i + 1U] || *ep != '\0')
 			err(1, "%s%u %s: %s", "max", i, "invalid",
 			    argv[2U + 2U * i + 1U]);
-		if (xmax[i] < xmin[i])
+		if (xmax[i] < 1)
 			err(1, "%s%u %s: %s", "max", i, "too small",
 			    argv[2U + 2U * i + 1U]);
-		if (xmax[i] > 8000000ULL)
+		if (xmax[i] >= 8000000ULL)
 			err(1, "%s%u %s: %s", "max", i, "too large",
 			    argv[2U + 2U * i + 1U]);
 
@@ -99,6 +99,15 @@ main(int argc, char *argv[])
 		xmax[i] *= 1000;
 		pkt[i].bits_per_second = xmin[i];
 		direction[i] = 0;
+
+		if (xmin[i] > xmax[i]) {
+			__u64 tmp;
+
+			tmp = xmin[i];
+			xmin[i] = xmax[i];
+			xmax[i] = tmp;
+			direction[i] = 1;
+		}
 	}
 
 #define setup_signal(sig) \

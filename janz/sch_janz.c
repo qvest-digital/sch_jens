@@ -450,7 +450,7 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024)
 		q->drop_next = now + DROPCHK_INTERVAL;
 }
 
-static inline void
+static inline struct sk_buff *
 janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
     struct janz_skb *cb, u64 now, u32 now1024, int qid)
 {
@@ -524,6 +524,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
 	cb->chance = chance;
 	cb->qid = qid;
 	janz_record_packet(q, skb, cb, now);
+	return (skb);
 }
 
 static inline void
@@ -986,9 +987,9 @@ janz_deq(struct Qdisc *sch)
 		janz_record_queuesz(sch, q, now, rate, 0);
 	}
 
-	if (skb)
-		janz_sendoff(sch, q, skb, cb, now, now1024, qid);
-	return (skb);
+	if (!skb)
+		return (NULL);
+	return (janz_sendoff(sch, q, skb, cb, now, now1024, qid));
 }
 
 static struct sk_buff *

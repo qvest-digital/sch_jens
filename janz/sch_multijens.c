@@ -370,7 +370,7 @@ janz_drop_1pkt_whenold(struct Qdisc *sch, struct sjanz_priv *q,
 }
 
 static inline void
-janz_drop_1pkt_overlen(struct Qdisc *sch, struct janz_priv *q,
+janz_drop_1pkt_overlen(struct Qdisc *sch, struct sjanz_priv *q,
     u64 now, u32 now1024, bool resizing)
 {
 	if (q->q[2].first)
@@ -783,9 +783,211 @@ janz_subbuf_init(struct rchan_buf *buf, void *subbuf_,
 	return (1);
 }
 
-//TODO: janz_enq
+static int
+janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
+{
+	struct mjanz_priv *q = qdisc_priv(sch);
+	struct sjanz_priv *sq;
+	struct janz_skb *cb = get_janz_skb(skb);
+	u8 qid;
+	u32 prev_backlog = sch->qstats.backlog;
+	bool overlimit;
+	u64 now;
+	u32 now1024;
 
-//TODO: janz_deq
+	now = ktime_get_ns();
+	now1024 = ns_to_t1024(now);
+	sq = &(q->subqueues[(u32)skb->mark < q->uenum ? (u32)skb->mark : 0]);
+	janz_dropchk(sch, sq, now, now1024);
+
+	/* initialise values in cb */
+	cb->ts_begin = now1024;
+	cb->ts_arrive = ns_to_t1024(now + sq->xlatency);
+	cb->truesz = skb->truesize;
+	/* init values from before analysis */
+	cb->srcport = 0;
+	cb->dstport = 0;
+	cb->tosbyte = 0;
+	cb->ipver = 0;
+	cb->nexthdr = 0;
+	cb->record_flag = 0;
+	/* note ↑ struct order */
+
+	/* analyse skb determining tosbyte etc. */
+	janz_analyse(sch, q, skb, cb, now);
+
+	switch (sq->qosmode) {
+	case 0:
+	default:
+		qid = 1;
+		if (cb->tosbyte & 0x10)
+			--qid;
+		if (cb->tosbyte & 0x08)
+			++qid;
+		break;
+	case 1:
+		// IPv{4,6} traffic is not categorised
+		qid = 1;
+		if (skb->protocol != htons(ETH_P_IP) &&
+		    skb->protocol != htons(ETH_P_IPV6)) {
+			if (cb->tosbyte & 0x10)
+				--qid;
+			if (cb->tosbyte & 0x08)
+				++qid;
+		}
+		break;
+	case 2:
+		// IPv{4,6} traffic is categorised by ECT(1) or else only
+		qid = 1;
+		if (skb->protocol != htons(ETH_P_IP) &&
+		    skb->protocol != htons(ETH_P_IPV6)) {
+			if (cb->tosbyte & 0x10)
+				--qid;
+			if (cb->tosbyte & 0x08)
+				++qid;
+		} else {
+			if ((cb->record_flag & INET_ECN_MASK) == INET_ECN_ECT_1)
+				--qid;
+		}
+		break;
+	}
+
+	// assumption is 1 packet is passed
+	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?"))
+		skb->next = NULL;
+
+	sq->memusage += cb->truesz;
+	if (unlikely(overlimit = (++sch->q.qlen > sch->limit)))
+		janz_drop_overlen(sch, q, now, now1024, true);
+	if (!sq->q[qid].first) {
+		sq->q[qid].first = skb;
+		sq->q[qid].last = skb;
+	} else {
+		sq->q[qid].last->next = skb;
+		sq->q[qid].last = skb;
+	}
+	qdisc_qstats_backlog_inc(sch, skb);
+
+	if (now >= sq->qsz_next)
+		janz_record_queuesz(sch, sq, now, 0, 0);
+
+	if (unlikely(overlimit)) {
+		qdisc_qstats_overlimit(sch);
+		qdisc_tree_reduce_backlog(sch, 0,
+		    prev_backlog - sch->qstats.backlog);
+		return (NET_XMIT_CN);
+	}
+	return (NET_XMIT_SUCCESS);
+}
+
+static struct sk_buff *
+janz_deq(struct Qdisc *sch)
+{
+	struct mjanz_priv *q = qdisc_priv(sch);
+	struct sjanz_priv *sq;
+	struct sk_buff *skb;
+	u64 now, rate = 0;
+	u32 ue;
+	struct janz_skb *cb;
+	int qid;
+	u32 now1024, rs;
+	s32 drs;
+	u64 mnextns = (u64)~(u64)0;
+
+	qid = -1;
+	now = ktime_get_ns();
+	now1024 = ns_to_t1024(now);
+	rs = (u32)~(u32)0U;
+
+	ue = q->uecur;
+ find_subqueue_to_send:
+	sq = &(q->subqueues[ue]);
+	/* next UE for next loop or next time to send */
+	if (++ue == q->uenum)
+		ue = 0;
+
+	janz_dropchk(sch, sq, now, now1024);
+
+	if (now < sq->notbefore) {
+		register u64 nextns;
+
+		nextns = min(sq->notbefore, sq->drop_next);
+		mnextns = min(mnextns, nextns);
+		goto try_next_subqueue;
+	}
+
+	/* we have reached notbefore, previous packet is fully sent */
+
+	if (!sq->q[0].first && !sq->q[1].first && !sq->q[2].first) {
+		/* nothing to send, start subsequent packet later */
+ nothing_to_send:
+		sq->crediting = 0;
+		goto try_next_subqueue;
+	}
+
+#define try_qid(i) do {							\
+	qid = (i);							\
+	skb = sq->q[qid].first;						\
+	if (skb) {							\
+		cb = get_janz_skb(skb);					\
+		drs = cmp1024(cb->ts_arrive, now1024);			\
+		if (drs <= 0)						\
+			goto got_skb;					\
+		/* ts_arrive > now: packet has not reached us yet */	\
+		if (/* > 0 */ (u32)drs < rs)				\
+			rs = (u32)drs;					\
+	}								\
+} while (/* CONSTCOND */ 0)
+
+	try_qid(0);
+	try_qid(1);
+	try_qid(2);
+	qid = -1;
+
+	/* nothing to send, but we have to reschedule first */
+	/* if we end up here, rs was set above */
+	mnextns = min(mnextns, now + t1024_to_ns(rs));
+	goto nothing_to_send;
+
+ try_next_subqueue:
+	if (now >= sq->qsz_next)
+		janz_record_queuesz(sch, sq, now, rate, 0);
+	/* loop, only one full loop though */
+	if (ue != q->uecur)
+		goto find_subqueue_to_send;
+
+	/* nothing to send in all subqueues, drops/qsz_next checked etc. */
+	if (mnextns != (u64)~(u64)0)
+		qdisc_watchdog_schedule_ns(&q->watchdog, mnextns);
+	return (NULL);
+
+ got_skb:
+	/* try next subqueue next time */
+	q->uecur = ue;
+
+	/* process this skb */
+	if (!(sq->q[qid].first = skb->next))
+		sq->q[qid].last = NULL;
+	--sch->q.qlen;
+	sq->memusage -= cb->truesz;
+	skb->next = NULL;
+	qdisc_qstats_backlog_dec(sch, skb);
+	qdisc_bstats_update(sch, skb);
+
+	rate = (u64)atomic64_read_acquire(&(sq->ns_pro_byte));
+	sq->notbefore = (sq->crediting ? sq->notbefore : now) +
+	    (rate * (u64)skb->len);
+	sq->crediting = 1;
+	if (rate != sq->lastknownrate)
+		goto force_rate_and_out;
+
+	if (now >= sq->qsz_next) {
+ force_rate_and_out:
+		janz_record_queuesz(sch, sq, now, rate, 0);
+	}
+
+	return (janz_sendoff(sch, sq, skb, cb, now, now1024, qid));
+}
 
 static struct sk_buff *
 janz_peek(struct Qdisc *sch)
@@ -902,7 +1104,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 			if (q->subqueues)
 				kvfree(q->subqueues);
 			if (q->ctldata)
-				kvfree(q->ctldata)
+				kvfree(q->ctldata);
 			q->uenum = 0;
 			return (-ENOMEM);
 		}
@@ -918,8 +1120,8 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 			q->subqueues[ue].qosmode = 0;
 			/* needed so janz_reset DTRT */
 			q->subqueues[ue].record_chan = NULL;
-			q->subqueues[ue].ctlfile = NULL;
 		}
+		q->ctlfile = NULL;
 		janz_reset(sch);
 	}
 
@@ -1093,8 +1295,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	now = ktime_get_ns();
 	for (ue = 0; ue < q->uenum; ++ue) {
-		q->qsz_next = now + QSZ_INTERVAL;
-		q->drop_next = now + DROPCHK_INTERVAL;
+		q->subqueues[ue].qsz_next = now + QSZ_INTERVAL;
+		q->subqueues[ue].drop_next = now + DROPCHK_INTERVAL;
 	}
 
 	sch->flags &= ~TCQ_F_CAN_BYPASS;
@@ -1113,7 +1315,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 			}
 	if (q->uenum) {
 		kvfree(q->subqueues);
-		kvfree(q->ctldata)
+		kvfree(q->ctldata);
 		q->uenum = 0;
 	}
 	return (err);
@@ -1129,7 +1331,7 @@ janz_gwq_fn(struct work_struct *work)
 	    struct janz_gwq_ovl, dwork);
 
 	for (ue = 0; ue < ovl->uenum; ++ue)
-		relay_close(ovl->record_chan[ue]);
+		relay_close(ovl->record_chans[ue]);
 	kvfree(ovl);
 }
 

@@ -1088,8 +1088,8 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		q->uenum = nla_get_u32(tb[TCA_MULTIJENS_UENUM]);
 		/* range-check uenum; the “arbitrary” max also protects fragcache_num */
 		if (q->uenum < 1U ||
-		    ((SIZE_MAX / sizeof(struct janz_ctlfile_pkt)) >= (size_t)q->uenum) ||
-		    (((SIZE_MAX - sizeof(struct janz_gwq_ovl)) / sizeof(struct rchan *)) >= (size_t)q->uenum) ||
+		    ((SIZE_MAX / sizeof(struct janz_ctlfile_pkt)) < (size_t)q->uenum) ||
+		    (((SIZE_MAX - sizeof(struct janz_gwq_ovl)) / sizeof(struct rchan *)) < (size_t)q->uenum) ||
 		    q->uenum > /* arbitrary */ 65535U) {
 			/* nothing has been allocated yet */
 			q->uenum = 0;

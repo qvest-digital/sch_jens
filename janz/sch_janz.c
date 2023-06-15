@@ -1182,11 +1182,13 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	/* qdisc state */
 	sch->q.qlen = 0;
-	/* needed so janz_reset DTRT */
-	q->record_chan = NULL;
+	q->fragcache_base = NULL;
 	q->ctlfile = NULL;
-	janz_reset(sch);
 	qdisc_watchdog_init_clockid(&q->watchdog, sch, CLOCK_MONOTONIC);
+
+	/* needed so janz_reset and janz_done DTRT */
+	q->record_chan = NULL;
+	janz_reset(sch);
 
 	if (opt && (err = janz_chg(sch, opt, extack)))
 		goto init_fail;

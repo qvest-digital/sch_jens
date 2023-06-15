@@ -1118,10 +1118,9 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 			q->subqueues[ue].markfull = nsmul(14, NSEC_PER_MSEC);
 			q->subqueues[ue].xlatency = 0;
 			q->subqueues[ue].qosmode = 0;
-			/* needed so janz_reset DTRT */
+			/* needed so janz_reset and janz_done DTRT */
 			q->subqueues[ue].record_chan = NULL;
 		}
-		q->ctlfile = NULL;
 		janz_reset(sch);
 	}
 
@@ -1238,6 +1237,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	/* qdisc state */
 	sch->q.qlen = 0;
 	q->uenum = 0;
+	q->fragcache_base = NULL;
+	q->ctlfile = NULL;
 	qdisc_watchdog_init_clockid(&q->watchdog, sch, CLOCK_MONOTONIC);
 
 	if ((err = janz_chg(sch, opt, extack)))
@@ -1350,6 +1351,10 @@ janz_done(struct Qdisc *sch)
 	}
 
 	if (!q->fragcache_base) {
+		if (!q->uenum) {
+			/* janz_done after failed janz_init, presumably */
+			return;
+		}
 		/* all bets off… */
 		pr_alert("janz_done without fragcache_base memory, refusing to free; leaking resources!\n");
 		dump_stack();

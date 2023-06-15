@@ -1432,7 +1432,7 @@ janz_modinit(void)
 	pr_warn("kernel too old: will misfunction for locally originating packets, see README\n");
 #endif
 
-	if (!(janz_debugfs_main = debugfs_create_dir("sch_janz", NULL)))
+	if (!(janz_debugfs_main = debugfs_create_dir(KBUILD_MODNAME, NULL)))
 		rv = -ENOSYS;
 	else
 		rv = PTR_ERR_OR_ZERO(janz_debugfs_main);

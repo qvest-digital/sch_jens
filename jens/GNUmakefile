@@ -93,7 +93,7 @@ rundemo: ratedemo
 	sudo ./ratedemo /sys/kernel/debug/sch_janz/0001:v1
 
 runmdemo: mratedemo
-	sudo ./mratedemo /sys/kernel/debug/sch_janz/0001:v1
+	sudo ./mratedemo /sys/kernel/debug/sch_multijens/0001:v1
 
 jd= #-t
 rundump: jensdmp

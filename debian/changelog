@@ -1,8 +1,10 @@
 iproute2 (5.10.0-4jens20) UNRELEASED; urgency=medium
 
   * Install qdisc operation documentation
+  * Add experimental sch_multijens qdisc and mratedemo
+  * Improve documentation
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 27 Mar 2023 23:06:14 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 15 Jun 2023 17:35:57 +0200
 
 iproute2 (5.10.0-4jens19) tarent; urgency=medium
 

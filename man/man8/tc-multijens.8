@@ -18,7 +18,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd June 12, 2023
+.Dd June 19, 2023
 .Dt TC\-MULTIJENS 8
 .Os Linux
 .Sh NAME
@@ -144,6 +144,11 @@ adds artificial network-side
 .Pq before Nm janz
 latency.
 Default: 0\ ms
+.It Ic uenum
+sets the number of UEs to simulate; this is currently limited to 2\(en256.
+This parameter can only be set at load time because memory has to be allocated.
+It is a mandatory parameter to
+.Ic tc qdisc add .
 .El
 .Sh STATISTICS
 This qdisc reports extensively via relayfs over debugfs; therefore, regular

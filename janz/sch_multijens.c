@@ -1087,10 +1087,11 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		/* allocate sch_janz subqueues */
 		q->uenum = nla_get_u32(tb[TCA_MULTIJENS_UENUM]);
 		/* range-check uenum; the “arbitrary” max also protects fragcache_num */
-		if (q->uenum < 1U ||
+		/* and if too much, OOM killing ensues (already at 384 for me) */
+		if (q->uenum < 2U ||
 		    ((SIZE_MAX / sizeof(struct janz_ctlfile_pkt)) < (size_t)q->uenum) ||
 		    (((SIZE_MAX - sizeof(struct janz_gwq_ovl)) / sizeof(struct rchan *)) < (size_t)q->uenum) ||
-		    q->uenum > /* arbitrary */ 65535U) {
+		    q->uenum > /* arbitrary */ 256U) {
 			/* nothing has been allocated yet */
 			q->uenum = 0;
 			/* out of bounds */

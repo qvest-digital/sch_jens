@@ -319,6 +319,7 @@ tsv_header(void)
 	    ",\"flow|-|-\""
 	    ",\"PKTLEN|-|-\""
 	    );
+	fflush(NULL);
 }
 
 static const char ecnidx[5][5] = {

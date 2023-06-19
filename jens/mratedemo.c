@@ -95,8 +95,8 @@ main(int argc, char *argv[])
 			err(1, "%s%u %s: %s", "max", i, "too large",
 			    argv[2U + 2U * i + 1U]);
 
-		xmin[i] *= 1000;
-		xmax[i] *= 1000;
+		xmin[i] *= 1000U;
+		xmax[i] *= 1000U;
 		pkt[i].bits_per_second = xmin[i];
 		direction[i] = 0;
 
@@ -108,6 +108,11 @@ main(int argc, char *argv[])
 			xmax[i] = tmp;
 			direction[i] = 1;
 		}
+		printf("UE#%02X start at %llu %swards, %llu-%llu kbps\n",
+		    i, (unsigned long long)(pkt[i].bits_per_second / 1000U),
+		    direction[i] ? "down" : "up",
+		    (unsigned long long)(xmin[i] / 1000U),
+		    (unsigned long long)(xmax[i] / 1000U));
 	}
 
 #define setup_signal(sig) \
@@ -162,15 +167,18 @@ main(int argc, char *argv[])
 	for (i = 0; i < UENUM; ++i)
 		if (direction[i]) {
 			/* going down */
-			pkt[i].bits_per_second -= 9000;
-			/* minimum 5 Mbit/s */
-			if (pkt[i].bits_per_second < xmin[i])
-				direction[i] = 1;
+			if (pkt[i].bits_per_second < 9128)
+				pkt[i].bits_per_second = xmin[i];
+			else
+				pkt[i].bits_per_second -= 9000;
+			/* minimum */
+			if (pkt[i].bits_per_second <= xmin[i])
+				direction[i] = 0;
 		} else {
 			/* going up */
 			pkt[i].bits_per_second += 9000;
-			/* maximum 15 Mbit/s */
-			if (pkt[i].bits_per_second > xmax[i])
+			/* maximum */
+			if (pkt[i].bits_per_second >= xmax[i])
 				direction[i] = 1;
 		}
 

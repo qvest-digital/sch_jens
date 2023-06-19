@@ -52,9 +52,11 @@ if [[ $1 = 1 ]]; then
 	sudo ip6tables -t mangle -A OUTPUT -o $dev -p tcp -j MARK --set-mark 1
 	sudo ip6tables -t mangle -A OUTPUT -o $dev -p udp -j MARK --set-mark 1
 	sudo tc qdisc add dev $dev root handle 1: multijens uenum 8 rate ${rate}kbit
-	screen -t UE#0 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_multijens/0001-00:0
-	screen -t UE#1 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_multijens/0001-01:0
-	screen -t UE#2 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_multijens/0001-02:0
+	if [[ -n $STY ]]; then
+		screen -t UE#0 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_multijens/0001-00:0
+		screen -t UE#1 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_multijens/0001-01:0
+		screen -t UE#2 sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_multijens/0001-02:0
+	fi
 elif [[ $1 = 0 ]]; then
 	sudo tc qdisc del dev $dev root
 	sudo ip6tables -t mangle -D OUTPUT -o $dev -p udp -j MARK --set-mark 1

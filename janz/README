@@ -26,7 +26,21 @@ See the tc-janz(8) manual page and qdisc.md for details.
 sch_multijens Linux kernel module
 ─────────────────────────────────
 
-tbd
+This qdisc simulates having one sch_janz queue per UE, for
+multiple UEs (2 up to, in theory, 256, but 8 is a realistic
+number to have). It splits traffic into UEs by reading the
+“nfmark” (the MARK target in netfilter); traffic marked with
+numbers from 0 to #UEs-1 goes into the respective subqueue,
+anything else into the subqueue 0 (first). The pathnames
+/sys/kernel/debug/sch_janz below need the sch_janz changed
+to sch_multijens.
+
+Each sub-qdisc uses its own relayfs/debugfs reporting channel
+but the bandwidth configuration channel is shared. All other
+qdisc parameters are currently identical due to lack of a
+specific configuration interface; this is a prototype.
+
+See the tc-multijens(8) manual page and qdisc.md for details.
 
 
 Live measurement
@@ -205,6 +219,9 @@ The members are:
 
 Only write control packets when you really have to change something;
 do not, for example, send the same bandwidth rate over and over again.
+
+For sch_multijens, write uenum consecutive janz_ctlfile_pkt structures
+at once, UE#00 first, UE#01 second, etc.
 
 For other control operations such as starting a handover, you will
 still need tc change.

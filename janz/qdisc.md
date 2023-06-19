@@ -383,6 +383,9 @@ anyway.
 
 This qdisc for the Linux kernel implements the simulation of a
 fixed number of L4S slices, each for one UE, each operating as
-documented for `sch_janz` above.
+documented for `sch_janz` above. The bypass (not yet implemented)
+is global and normally reported in UE#0.
 
-…tbd…
+The packets leave the bypass and “`sch_janz` subqueues” in a
+simple round-robin skipping empty queues until their next turn.
+This may possibly be changed in the future.

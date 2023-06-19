@@ -23,7 +23,7 @@
 .Os Linux
 .Sh NAME
 .Nm tc\-multijens
-.Nd bespoke egress traffic scheduler for the JENS network simulator
+.Nd bespoke egress traffic scheduler for JENS
 .Sh SYNOPSIS
 .Nm tc
 .Ic qdisc ...\& Nm multijens
@@ -172,14 +172,14 @@ Specifically, drops accounting in the gnet stats is not done.
 .Sh EXAMPLES
 Set up a queue with standard parameters and display its statistics:
 .Bd -literal -offset 4n
-XXX tbd
-$ \fBsudo tc qdisc add dev eth0 root handle 1: janz\fR\fC
+$ \fBsudo tc qdisc add dev eth0 root handle 1: multijens uenum 8\fR\fC
 $ \fBsudo tc \-s qdisc show dev eth0\fR\fC
-qdisc janz 1: root refcnt 2 limit 10240 rate 10000kbit \e
+qdisc multijens 1: root refcnt 2 limit 10240 rate 10000kbit \e
     qosmode 0 markfree 4ms markfull 14ms \e
-    subbufs 1024 fragcache 1024 extralatency 0us
- Sent 2012 bytes 12 pkt (dropped 0, overlimits 0, requeues 0)
+    subbufs 1024 fragcache 1024 extralatency 0us uenum 8
+ Sent 1196 bytes 2 pkt (dropped 0, overlimits 0, requeues 0)
  backlog 0b 0p
+$ \fBsudo tc qdisc del dev eth0 root\fR\fC
 .Ed
 .Sh SEE ALSO
 .Xr tc 8 ,

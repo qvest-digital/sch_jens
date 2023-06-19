@@ -1,10 +1,11 @@
-iproute2 (5.10.0-4jens20) UNRELEASED; urgency=medium
+iproute2 (5.10.0-4jens20) tarent; urgency=low
 
   * Install qdisc operation documentation
   * Add experimental sch_multijens qdisc and mratedemo
   * Improve documentation
+  * Small reliability improvement in initialisation code
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 15 Jun 2023 17:35:57 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 19 Jun 2023 21:15:48 +0200
 
 iproute2 (5.10.0-4jens19) tarent; urgency=medium
 

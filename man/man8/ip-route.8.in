@@ -181,7 +181,7 @@ throw " | " unreachable " | " prohibit " | " blackhole " | " nat " ]"
 
 .ti -8
 .IR FEATURES " := [ "
-.BR ecn " | ]"
+.BR ecn " | " ecn_low " ] "
 
 .ti -8
 .IR PREF " := [ "
@@ -525,15 +525,24 @@ The default value is zero, meaning to use Slow Start value.
 
 .TP
 .BI features " FEATURES " (Linux 3.18+ only)
-Enable or disable per-route features. Only available feature at this
-time is
-.B ecn
-to enable explicit congestion notification when initiating connections to the
+Enable or disable per-route features. Available features include:
+
+.BI ecn
+- to enable explicit congestion notification when initiating connections to the
 given destination network.
 When responding to a connection request from the given network, ecn will
 also be used even if the
 .B net.ipv4.tcp_ecn
 sysctl is set to 0.
+
+.BI ecn_low
+- to indicate that the given destination network is a low-latency ECN
+environment, meaning both that ECN CE marks are applied by the network using a
+low-latency marking threshold and also that TCP endpoints provide precise
+per-data-segment ECN feedback in ACKs (where the ACK ECE flag echoes the
+received CE status of all newly-acknowledged data segments). This ecn_low
+feature indication can be used by congestion control algorithms to decide how
+to interpret ECN signals over the given destination network (Linux 6.7+ only).
 
 .TP
 .BI quickack " BOOL " "(Linux 3.11+ only)"

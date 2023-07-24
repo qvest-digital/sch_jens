@@ -860,6 +860,7 @@ struct tcpstat {
 	bool		    has_sack_opt;
 	bool		    has_ecn_opt;
 	bool		    has_ecnseen_opt;
+	bool		    has_ecn_low_opt;
 	bool		    has_fastopen_opt;
 	bool		    has_wscale_opt;
 	bool		    app_limited;
@@ -2532,6 +2533,8 @@ static void tcp_stats_print(struct tcpstat *s)
 		out(" ecn");
 	if (s->has_ecnseen_opt)
 		out(" ecnseen");
+	if (s->has_ecn_low_opt)
+		out(" ecn_low");
 	if (s->has_fastopen_opt)
 		out(" fastopen");
 	if (s->cong_alg[0])
@@ -3035,6 +3038,7 @@ static void tcp_show_info(const struct nlmsghdr *nlh, struct inet_diag_msg *r,
 			s.has_sack_opt	   = TCPI_HAS_OPT(info, TCPI_OPT_SACK);
 			s.has_ecn_opt	   = TCPI_HAS_OPT(info, TCPI_OPT_ECN);
 			s.has_ecnseen_opt  = TCPI_HAS_OPT(info, TCPI_OPT_ECN_SEEN);
+			s.has_ecn_low_opt  = TCPI_HAS_OPT(info, TCPI_OPT_ECN_LOW);
 			s.has_fastopen_opt = TCPI_HAS_OPT(info, TCPI_OPT_SYN_DATA);
 		}
 

@@ -36,6 +36,7 @@
 #include <net/pkt_cls.h>
 
 #include "janz_uapi.h"
+#include "gru32b.h"
 
 #define nsmul(val, fac) ((u64)((u64)(val) * (u64)(fac)))
 
@@ -598,7 +599,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
 		 * therefore we need a random number in [0; tmax'[ then
 		 * ECN CE mark if the number is smaller than t'
 		 */
-		if (prandom_u32_max(tmax) < t) {
+		if (get_random_u32_below(tmax) < t) {
  domark:
 			cb->record_flag |= TC_JANZ_RELAY_SOJOURN_MARK;
 			if (INET_ECN_set_ce(skb))

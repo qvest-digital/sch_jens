@@ -18,7 +18,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd March 3, 2023
+.Dd August 7, 2023
 .Dt TC\-JANZ 8
 .Os Linux
 .Sh NAME
@@ -131,7 +131,7 @@ If
 is (additionally) set, the packet moves down one priority, that is,
 to the normal or bulk FIFO.
 .It Ic 1
-Any IPv6 and IPv4 traffic is sorted into the normal FIFO.
+Any IPv6 and IPv4 traffic goes to the normal FIFO like in the RAN.
 .It Ic 2
 IP packets with
 .Li "ECT(1)"
@@ -270,16 +270,34 @@ It is applied before enqueueing but does not affect sojourn time.
 Basically, it simulates extra latency on the network in front of
 the JENS node.
 .Pp
-The RAN does not use the IPTOS QoS bits to categorise traffic.
-To better simulate it, or if your traffic uses DSCP classification
-instead, use the
-.Ic qosmode
-option to configure classification of IP and Legacy IP traffic.
-.Pp
-When using
-.Ic qosmode 2 ,
+JENS uses the IPTOS QoS bits to categorise traffic by default.
+If your traffic uses DSCP classification instead, use the
+.Ic qosmode 2
+option; however,
 mind that packets that were ECN
 .Li CE Ns -marked
 before arrival are priorised even if they were not
 .Li "ECT(1)"
 originally.
+.Pp
+The RAN does not use the QoS bits to categorise traffic.
+For best simulation results, use the
+.Ic qosmode 1
+option to disable classification of IP and Legacy IP traffic.
+.Pp
+Classification of traffic and splitting it into three separate FISOs
+was originally meant as a debugging aid: to stop locking one's
+.Xr ssh 1
+session out (interactive SSH is in the lodelay class), and to perhaps move
+.Dq dirt traffic
+into the bulk FIFO so it does not impact the traffic of interest.
+However, field tests have shown that, for paced traffic of interest,
+even bulk traffic can still cause delays as it is sent out in between
+normal traffic packets.
+Since
+.Xr tc\-multijens 8
+is now available, it's
+.Em highly
+recommended to instead use it to separate
+.Dq uninteresting
+traffic into UE#0 and traffic under test into UE#1 and up.

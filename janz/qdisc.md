@@ -125,9 +125,16 @@ the configued `qosmode`:
   by all involved parties but not as default mode of operation.
   For DSCP networks, please choose one of the other `qosmode` options.
 
+  Note: bulk traffic can still negatively impact normal traffic.
+  Therefore it is highly recommended that separation between traffic
+  of interest and “uninteresting” traffic, SSH or “dirt traffic”, be
+  done using the `sch_multijens` qdisc instead.
+
 - 1: this mode is the closest to the 5G RAN operation. IP traffic is
   routed to the **N**ormal FIFO ignoring the QoS byte (similarly to
   how the RAN does not reorder packets currently).
+
+  Note: this mode is **highly** recommended.
 
 - 2: this mode is provided to ease setting up testbeds. IP traffic
   marked as `ECT(1)` (L4S-capable opt-in) or `CE` is sorted into the
@@ -138,6 +145,9 @@ the configued `qosmode`:
   high because they cannot be distinguished between `ECT(0)` and
   `ECT(1)` at that point. For testbeds, this would not happen as
   packets originate from the ingress interface’s LAN.
+
+  Note: for the same reasons as outlined above, this mode should
+  be avoided, in favour of `sch_multijens`.
 
 Note: nōn-IP traffic still sorts by the (synthetic) QoS byte as it
 is assumed that it is not traffic of interest to L4S test scenarios.

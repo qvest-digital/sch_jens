@@ -887,7 +887,7 @@ janz_deq(struct Qdisc *sch)
 	struct mjanz_priv *q = qdisc_priv(sch);
 	struct sjanz_priv *sq;
 	struct sk_buff *skb;
-	u64 now, rate = 0;
+	u64 now, rate;
 	u32 ue;
 	struct janz_skb *cb;
 	int qid;
@@ -952,7 +952,7 @@ janz_deq(struct Qdisc *sch)
 
  try_next_subqueue:
 	if (now >= sq->qsz_next)
-		janz_record_queuesz(sch, sq, now, rate, 0);
+		janz_record_queuesz(sch, sq, now, 0, 0);
 	/* loop, only one full loop though */
 	if (ue != q->uecur)
 		goto find_subqueue_to_send;
@@ -1064,7 +1064,6 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	struct mjanz_priv *q = qdisc_priv(sch);
 	struct nlattr *tb[TCA_JANZ_MAX + 1];
 	int err;
-	bool rate_changed = false;
 	bool handover_started = false;
 
 	if (!opt)
@@ -1139,16 +1138,12 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	if (tb[TCA_JANZ_RATE64]) {
 		u64 tmp = nla_get_u64(tb[TCA_JANZ_RATE64]);
-		u64 old;
 
 		tmp = div64_u64(NSEC_PER_SEC, tmp);
 		if (tmp < 1)
 			tmp = 1;
-		rate_changed = 0;
 		for (ue = 0; ue < q->uenum; ++ue) {
-			old = (u64)atomic64_read_acquire(&(q->subqueues[ue].ns_pro_byte));
 			atomic64_set_release(&(q->subqueues[ue].ns_pro_byte), (s64)tmp);
-			rate_changed |= old != tmp;
 		}
 	}
 
@@ -1199,13 +1194,15 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		janz_drop_overlen(sch, q, now, ns_to_t1024(now), false);
 	}
 
-	if (q->subqueues[0].record_chan) for (ue = 0; ue < q->uenum; ++ue) {
-		/* report if rate changes or a handover starts */
-		if (rate_changed || handover_started)
-			janz_record_queuesz(sch, &q->subqueues[ue], ktime_get_ns(), 0, 1);
-		/* flush subbufs before handover */
-		if (handover_started)
+	/* report if a handover starts */
+	if (unlikely(handover_started) && likely(q->subqueues[0].record_chan)) {
+		u64 now = ktime_get_ns();
+
+		for (ue = 0; ue < q->uenum; ++ue) {
+			janz_record_queuesz(sch, &q->subqueues[ue], now, 0, 1);
+			/* flush subbufs before handover */
 			relay_flush(q->subqueues[ue].record_chan);
+		}
 	}
 
 	sch_tree_unlock(sch);
@@ -1302,7 +1299,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	now = ktime_get_ns();
 	for (ue = 0; ue < q->uenum; ++ue) {
-		q->subqueues[ue].qsz_next = now + QSZ_INTERVAL;
+		q->subqueues[ue].qsz_next = now;
 		q->subqueues[ue].drop_next = now + DROPCHK_INTERVAL;
 	}
 

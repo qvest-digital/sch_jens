@@ -1071,8 +1071,10 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	if (q->nsubbufs) {
 		/* only at load time */
-		if (tb[TCA_JANZ_SUBBUFS] || tb[TCA_JANZ_FRAGCACHE])
+		if (tb[TCA_JANZ_SUBBUFS] || tb[TCA_JANZ_FRAGCACHE]) {
+			NL_SET_ERR_MSG_MOD(extack, "subbufs and fragcache can only be set at initialisation");
 			return (-EINVAL);
+		}
 	}
 
 	/* now actual configuring */
@@ -1204,7 +1206,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	    TC_JANZ_RELAY_SUBBUFSZ, q->nsubbufs,
 	    &janz_debugfs_relay_hooks, sch);
 	if (!q->record_chan) {
-		pr_warn("relay channel creation failed\n");
+		NL_SET_ERR_MSG_MOD(extack, "relay channel creation failed");
 		err = -ENOENT;
 		goto init_fail;
 	}
@@ -1217,7 +1219,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (IS_ERR_OR_NULL(q->ctlfile)) {
 		err = q->ctlfile ? PTR_ERR(q->ctlfile) : -ENOENT;
 		q->ctlfile = NULL;
-		pr_warn("control channel creation failed\n");
+		NL_SET_ERR_MSG_MOD(extack, "control channel creation failed");
 		goto init_fail;
 	}
 	d_inode(q->ctlfile)->i_size = sizeof(struct janz_ctlfile_pkt);

@@ -3,7 +3,7 @@ JENS Linux kernel modules
 
 These modules are intended to be used with Debian 11 “bullseye”,
 with the stock Linux kernel 5.10. Newer Linux kernels up to
-about 6.0 should also work even though the iproute2 package’s
+about 6.4 should also work even though the iproute2 package’s
 base version should match the kernel version for other qdiscs.
 
 

@@ -1134,11 +1134,12 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	}
 
 	/* report if a handover starts */
-	if (likely(q->record_chan) && unlikely(handover_started)) {
-		janz_record_queuesz(sch, q, ktime_get_ns(), 0, 1);
+	if (unlikely(handover_started) && likely(q->record_chan)) {
+		u64 now = ktime_get_ns();
+
+		janz_record_queuesz(sch, q, now, 0, 1);
 		/* flush subbufs before handover */
-		if (handover_started)
-			relay_flush(q->record_chan);
+		relay_flush(q->record_chan);
 	}
 
 	sch_tree_unlock(sch);

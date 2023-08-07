@@ -18,7 +18,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd June 19, 2023
+.Dd August 7, 2023
 .Dt TC\-MULTIJENS 8
 .Os Linux
 .Sh NAME
@@ -114,7 +114,7 @@ If
 is (additionally) set, the packet moves down one priority, that is,
 to the normal or bulk FIFO.
 .It Ic 1
-Any IPv6 and IPv4 traffic is sorted into the normal FIFO.
+Any IPv6 and IPv4 traffic goes to the normal FIFO like in the RAN.
 .It Ic 2
 IP packets with
 .Li "ECT(1)"
@@ -181,6 +181,11 @@ qdisc multijens 1: root refcnt 2 limit 10240 rate 10000kbit \e
  backlog 0b 0p
 $ \fBsudo tc qdisc del dev eth0 root\fR\fC
 .Ed
+.Pp
+.Em Note:
+it is highly recommended to switch to
+.Ic qosmode 1
+.Pq see below .
 .Sh SEE ALSO
 .Xr tc 8 ,
 .Xr tc\-janz 8
@@ -197,10 +202,10 @@ This qdisc is only supported as the root egress qdisc on a device.
 This qdisc considers handles to be global, not per interface.
 .Pp
 The default queue limit is much too large, might want to adjust it,
-unless you have many UEs.
-When you have many UEs, however, the memory needed for
+accounting for the number of UEs.
+With many UEs, however, the
 .Ic subbufs
-increases proportionally; the default sizing allows for 8 UEs at
+memory increases proportionally; the default sizing allows for 8 UEs at
 the same memory usage of a
 .Nm tc\-janz
 in its default configuration.
@@ -227,15 +232,12 @@ Basically, it simulates extra latency on the network in front of
 the JENS node.
 .Pp
 The RAN does not use the IPTOS QoS bits to categorise traffic.
-To better simulate it, or if your traffic uses DSCP classification
-instead, use the
+.Em \&Do not
+use
+.Nm
+with any
 .Ic qosmode
-option to configure classification of IP and Legacy IP traffic.
-.Pp
-When using
-.Ic qosmode 2 ,
-mind that packets that were ECN
-.Li CE Ns -marked
-before arrival are not priorised even if they were
-.Li "ECT(1)"
-originally.
+setting other than 1 (see
+.Xr tc\-janz 8
+.Sx CAVEATS
+for a longer explanation).

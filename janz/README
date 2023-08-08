@@ -226,3 +226,10 @@ may possibly be warranted.
 
 In our experiments, however, use of a -rt kernel *increased*
 latency and jitter both, so do not use them.
+
+For Linux kernels with CONFIG_PREEMPT_DYNAMIC this means to
+please add “preempt=none” to the kernel command line (e.g. in
+/etc/default/grub to the GRUB_CMDLINE_LINUX_DEFAULT option).
+The Debian bullseye kernel, according to `uname -a`, has it:
+| Linux … 6.1.0-10-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.1.38-2 (2023-07-27) x86_64 GNU/Linux
+`-------------------------------^^^^^^^^^^^^^^^

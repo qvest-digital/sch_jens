@@ -221,7 +221,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now,
 	r.d32 = q->memusage;
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
 	r.f8 = f;
-	r.x64[0] = div64_u64(NSEC_PER_SEC, rate) * 8ULL;
+	r.x64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate), 1ULL);
 	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
 	janz_record_write(&r, q);
 
@@ -1328,7 +1328,7 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
-	      div64_u64(NSEC_PER_SEC, rate), TCA_JANZ_PAD64) ||
+	      max(div64_u64(NSEC_PER_SEC, rate), 1ULL), TCA_JANZ_PAD64) ||
 	    nla_put_u32(skb, TCA_JANZ_QOSMODE, q->qosmode) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFREE, ns_to_us(q->markfree)) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFULL, ns_to_us(q->markfull)) ||

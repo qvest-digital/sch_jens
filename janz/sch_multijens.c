@@ -976,7 +976,8 @@ janz_deq(struct Qdisc *sch)
 	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(sq->ns_pro_byte));
-	sq->notbefore = (sq->crediting ? sq->notbefore : now) +
+	sq->notbefore = (sq->crediting ?
+	    max(sq->notbefore, t1024_to_ns(cb->ts_arrive)) : now) +
 	    (rate * (u64)skb->len);
 	sq->crediting = 1;
 	if (rate != sq->lastknownrate)

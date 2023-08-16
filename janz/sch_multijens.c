@@ -165,17 +165,16 @@ struct mjanz_priv {
 /* struct janz_skb *cb = get_janz_skb(skb); */
 struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
-	u32 ts_begin;			/* real enqueue ts1024 */		//@8   :4
-	union {									//  +4 :4
+	u64 ts_enq;			/* real enqueue timestamp */		//@8   :8
+	union {									//@8   :4
 		struct {		/* up to and including janz_drop_pkt/janz_sendoff */
-			u32 pktxlatency;	/* ts_begin adjustment */	//@ +4 :4
+			u32 pktxlatency;	/* ts_enq adjustment */		//@8   :4
 		};
 		struct {		/* past these, just before janz_record_packet */
-			u16 chance;		/* janz_sendoff / 0 */		//@ +4 :2
-			short qid;		/* -1/0/1/2 */			//@ +6 :2
+			u16 chance;		/* janz_sendoff / 0 */		//@8   :2
+			short qid;		/* -1/0/1/2 */			//@ +2 :2
 		};
-	};									//… +4 :4
-	unsigned int truesz_unused;	/* memory usage */			//@8   :4
+	};									//…8   :4
 	u16 srcport;								//@ +4 :2
 	u16 dstport;								//@ +6 :2
 	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@8   :1
@@ -284,8 +283,7 @@ janz_record_packet(struct sjanz_priv *q,
 	    }
 	}
 
-	r.z.zSOJOURN.real_owd = (u32)cmp1024(ns_to_t1024(ktime_get_ns()),
-	    cb->ts_begin);
+	r.z.zSOJOURN.real_owd = ns_to_t1024(ktime_get_ns() - cb->ts_enq);
 	janz_record_write(&r, q);
 }
 
@@ -344,7 +342,7 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024,
 	q->pktlensum -= qdisc_pkt_len(skb);
 	qdisc_qstats_backlog_dec(sch, skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
-	ts_arrive = cb->ts_begin + ns_to_t1024(cb->pktxlatency);
+	ts_arrive = ns_to_t1024(cb->ts_enq + cb->pktxlatency);
 	if (resizing)
 		qd1024 = 0xFFFFFFFFUL;
 	else if (unlikely(cmp1024(ts_arrive, now1024) > 0))
@@ -407,7 +405,7 @@ janz_qheadolder(struct sjanz_priv *q, u64 ots, int qid)
 	if (unlikely(!q->q[qid].first))
 		return (false);
 	cb = get_janz_skb(q->q[qid].first);
-	ts_arrive = t1024_to_ns(cb->ts_begin) + cb->pktxlatency;
+	ts_arrive = cb->ts_enq + cb->pktxlatency;
 	return ((unlikely(ts_arrive < ots)) ? true : false);
 }
 
@@ -446,7 +444,7 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 	u64 qdelay;
 	u16 chance;
 
-	u32 ts_arrive = cb->ts_begin + ns_to_t1024(cb->pktxlatency); //XXX
+	u32 ts_arrive = ns_to_t1024(cb->ts_enq + cb->pktxlatency); //XXX
 	qdelay = t1024_to_ns((u32)cmp1024(now1024, ts_arrive));
 
 	/**
@@ -724,7 +722,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		}
 		memcpy(&(fe->c), &fc, sizeof(struct janz_fragcomp));
 		fe->nexthdr = cb->nexthdr;
-		fe->ts = cb->ts_begin;
+		fe->ts = ns_to_t1024(cb->ts_enq);
 		fe->sport = cb->srcport;
 		fe->dport = cb->dstport;
 		fe->next = q->fragcache_used;
@@ -806,7 +804,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	janz_dropchk(sch, sq, now, now1024);
 
 	/* initialise values in cb */
-	cb->ts_begin = now1024;
+	cb->ts_enq = now;
 	cb->pktxlatency = sq->xlatency;
 	/* init values from before analysis */
 	cb->srcport = 0;
@@ -935,7 +933,7 @@ janz_deq(struct Qdisc *sch)
 	if (skb) {							\
 		u32 ts_arrive; /*XXX*/					\
 		cb = get_janz_skb(skb);					\
-		ts_arrive = cb->ts_begin + ns_to_t1024(cb->pktxlatency); /*XXX*/ \
+		ts_arrive = ns_to_t1024(cb->ts_enq + cb->pktxlatency); /*XXX*/ \
 		drs = cmp1024(ts_arrive, now1024);			\
 		if (drs <= 0)						\
 			goto got_skb;					\
@@ -984,7 +982,7 @@ janz_deq(struct Qdisc *sch)
 	if (sq->crediting) {
 		u64 ts_arrive;
 
-		ts_arrive = t1024_to_ns(cb->ts_begin) + cb->pktxlatency;
+		ts_arrive = cb->ts_enq + cb->pktxlatency;
 		sq->notbefore = max(sq->notbefore, ts_arrive) +
 		    (rate * (u64)qdisc_pkt_len(skb));
 	} else

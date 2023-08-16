@@ -45,18 +45,6 @@
 
 #define nsmul(val, fac) ((u64)((u64)(val) * (u64)(fac)))
 
-static inline u32
-ns_to_t1024(u64 ns)
-{
-	return ((u32)(ns >> TC_JANZ_TIMESHIFT));
-}
-
-static inline u64
-ns_to_t1024_notrunc(u64 ns)
-{
-	return ((u64)(ns >> TC_JANZ_TIMESHIFT));
-}
-
 static inline u64
 us_to_ns(u32 us)
 {
@@ -170,24 +158,32 @@ get_janz_skb(const struct sk_buff *skb)
 }
 
 static inline u32
-qdelay_encode(struct janz_skb *cb, u64 now, u64 *qdelayp, bool resizing)
+delay_encode(u64 now, u64 base, u64 *qdelayp)
 {
 	u64 qdelay;
 
-	if (unlikely(resizing))
-		return (0xFFFFFFFFUL);
-	if (unlikely(cb->ts_enq + cb->pktxlatency > now)) {
+	if (unlikely(base > now)) {
 		if (qdelayp)
 			*qdelayp = 0;
 		return (0xFFFFFFFEUL);
 	}
-	qdelay = now - (cb->ts_enq + cb->pktxlatency);
+
+	qdelay = now - base;
 	if (qdelayp)
 		*qdelayp = qdelay;
-	qdelay = ns_to_t1024_notrunc(qdelay);
+
+	qdelay >>= TC_JANZ_TIMESHIFT;
 	if (unlikely(qdelay > 0xFFFFFFFDUL))
 		return (0xFFFFFFFDUL);
 	return ((u32)qdelay);
+}
+
+static inline u32
+qdelay_encode(struct janz_skb *cb, u64 now, u64 *qdelayp, bool resizing)
+{
+	if (unlikely(resizing))
+		return (0xFFFFFFFFUL);
+	return (delay_encode(now, cb->ts_enq + cb->pktxlatency, qdelayp));
 }
 
 static inline ssize_t
@@ -317,7 +313,7 @@ janz_record_packet(struct janz_priv *q,
 	    }
 	}
 
-	r.z.zSOJOURN.real_owd = ns_to_t1024(ktime_get_ns() - cb->ts_enq);
+	r.z.zSOJOURN.real_owd = delay_encode(ktime_get_ns(), cb->ts_enq, NULL);
 	janz_record_write(&r, q);
 }
 

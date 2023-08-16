@@ -168,7 +168,7 @@ struct janz_skb {
 	u32 ts_begin;			/* real enqueue ts1024 */		//@8   :4
 	union {									//  +4 :8
 		struct {		/* up to and including janz_drop_pkt/janz_sendoff */
-			u32 ts_arrive;		/* adjusted by extralatency */	//@ +4 :4
+			u32 pktxlatency;	/* ts_begin adjustment */	//@ +4 :4
 			unsigned int truesz;	/* memory usage */		//@ +8 :4
 		};
 		struct {		/* past these, just before janz_record_packet */
@@ -335,7 +335,7 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024,
 {
 	struct sk_buff *skb;
 	struct janz_skb *cb;
-	u32 qd1024;
+	u32 qd1024, ts_arrive;
 
 	skb = q->q[qid].first;
 	if (!(q->q[qid].first = skb->next))
@@ -345,13 +345,14 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024,
 	q->memusage -= cb->truesz;
 	qdisc_qstats_backlog_dec(sch, skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
+	ts_arrive = cb->ts_begin + ns_to_t1024(cb->pktxlatency);
 	if (resizing)
 		qd1024 = 0xFFFFFFFFUL;
-	else if (unlikely(cmp1024(cb->ts_arrive, now1024) > 0))
+	else if (unlikely(cmp1024(ts_arrive, now1024) > 0))
 		qd1024 = 0xFFFFFFFEUL;
-	else if (unlikely((qd1024 = now1024 - cb->ts_arrive) > 0xFFFFFFFDUL))
+	else if (unlikely((qd1024 = now1024 - ts_arrive) > 0xFFFFFFFDUL))
 		qd1024 = 0xFFFFFFFDUL;
-	/* cb->qdelay1024 overlays cb->ts_arrive, do not move up */
+	/* cb->qdelay1024 overlays cb->pktxlatency, do not move up */
 	cb->qdelay1024 = qd1024;
 	/* these both overlay cb->truesz, do not move either */
 	cb->chance = 0;
@@ -401,34 +402,36 @@ janz_drop_overlen(struct Qdisc *sch, struct mjanz_priv *q, u64 now, u32 now1024,
 }
 
 static inline bool
-janz_qheadolder(struct sjanz_priv *q, u32 ots, int qid)
+janz_qheadolder(struct sjanz_priv *q, u64 ots, int qid)
 {
 	struct janz_skb *cb;
+	u64 ts_arrive;
 
 	if (unlikely(!q->q[qid].first))
 		return (false);
 	cb = get_janz_skb(q->q[qid].first);
-	return ((unlikely(cmp1024(cb->ts_arrive, ots) < 0)) ? true : false);
+	ts_arrive = t1024_to_ns(cb->ts_begin) + cb->pktxlatency;
+	return ((unlikely(ts_arrive < ots)) ? true : false);
 }
 
 static inline void
 janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024)
 {
-	u32 ots;
+	u64 ots;
 	int qid;
 
 	if (now < q->drop_next)
 		return;
 
 	/* drop one packet if one or more packets are older than 100 ms */
-	ots = ns_to_t1024(now - nsmul(100, NSEC_PER_MSEC));
+	ots = now - nsmul(100, NSEC_PER_MSEC);
 	if (janz_qheadolder(q, ots, 0) ||
 	    janz_qheadolder(q, ots, 1) ||
 	    janz_qheadolder(q, ots, 2))
 		janz_drop_1pkt_whenold(sch, q, now, now1024, false);
 
 	/* drop all packets older than 500 ms */
-	ots = ns_to_t1024(now - nsmul(500, NSEC_PER_MSEC));
+	ots = now - nsmul(500, NSEC_PER_MSEC);
 	for (qid = 0; qid <= 2; ++qid)
 		while (janz_qheadolder(q, ots, qid))
 			janz_drop_pkt(sch, q, now, now1024, qid, false);
@@ -446,7 +449,8 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 	u64 qdelay;
 	u16 chance;
 
-	qdelay = t1024_to_ns((u32)cmp1024(now1024, cb->ts_arrive));
+	u32 ts_arrive = cb->ts_begin + ns_to_t1024(cb->pktxlatency); //XXX
+	qdelay = t1024_to_ns((u32)cmp1024(now1024, ts_arrive));
 
 	/**
 	 * maths proof, by example:
@@ -807,7 +811,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 
 	/* initialise values in cb */
 	cb->ts_begin = now1024;
-	cb->ts_arrive = ns_to_t1024(now + sq->xlatency);
+	cb->pktxlatency = sq->xlatency;
 	cb->truesz = skb->truesize;
 	/* init values from before analysis */
 	cb->srcport = 0;
@@ -934,8 +938,10 @@ janz_deq(struct Qdisc *sch)
 	qid = (i);							\
 	skb = sq->q[qid].first;						\
 	if (skb) {							\
+		u32 ts_arrive; /*XXX*/					\
 		cb = get_janz_skb(skb);					\
-		drs = cmp1024(cb->ts_arrive, now1024);			\
+		ts_arrive = cb->ts_begin + ns_to_t1024(cb->pktxlatency); /*XXX*/ \
+		drs = cmp1024(ts_arrive, now1024);			\
 		if (drs <= 0)						\
 			goto got_skb;					\
 		/* ts_arrive > now: packet has not reached us yet */	\
@@ -980,9 +986,14 @@ janz_deq(struct Qdisc *sch)
 	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(sq->ns_pro_byte));
-	sq->notbefore = (sq->crediting ?
-	    max(sq->notbefore, t1024_to_ns(cb->ts_arrive)) : now) +
-	    (rate * (u64)skb->len);
+	if (sq->crediting) {
+		u64 ts_arrive;
+
+		ts_arrive = t1024_to_ns(cb->ts_begin) + cb->pktxlatency;
+		sq->notbefore = max(sq->notbefore, ts_arrive) +
+		    (rate * (u64)skb->len);
+	} else
+		sq->notbefore = now + (rate * (u64)skb->len);
 	sq->crediting = 1;
 	if (rate != sq->lastknownrate)
 		goto force_rate_and_out;

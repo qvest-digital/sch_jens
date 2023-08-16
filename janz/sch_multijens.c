@@ -340,7 +340,7 @@ janz_fragcache_maint(struct mjanz_priv *q, u64 now)
 }
 
 static inline void
-janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024,
+janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
     int qid, bool resizing)
 {
 	struct sk_buff *skb;
@@ -367,30 +367,30 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024,
 
 static inline void
 janz_drop_1pkt_whenold(struct Qdisc *sch, struct sjanz_priv *q,
-    u64 now, u32 now1024, bool resizing)
+    u64 now, bool resizing)
 {
 	if (q->q[0].first)
-		janz_drop_pkt(sch, q, now, now1024, 0, resizing);
+		janz_drop_pkt(sch, q, now, 0, resizing);
 	else if (likely(q->q[1].first))
-		janz_drop_pkt(sch, q, now, now1024, 1, resizing);
+		janz_drop_pkt(sch, q, now, 1, resizing);
 	else if (likely(q->q[2].first))
-		janz_drop_pkt(sch, q, now, now1024, 2, resizing);
+		janz_drop_pkt(sch, q, now, 2, resizing);
 }
 
 static inline void
 janz_drop_1pkt_overlen(struct Qdisc *sch, struct sjanz_priv *q,
-    u64 now, u32 now1024, bool resizing)
+    u64 now, bool resizing)
 {
 	if (q->q[2].first)
-		janz_drop_pkt(sch, q, now, now1024, 2, resizing);
+		janz_drop_pkt(sch, q, now, 2, resizing);
 	else if (q->q[1].first)
-		janz_drop_pkt(sch, q, now, now1024, 1, resizing);
+		janz_drop_pkt(sch, q, now, 1, resizing);
 	else if (q->q[0].first)
-		janz_drop_pkt(sch, q, now, now1024, 0, resizing);
+		janz_drop_pkt(sch, q, now, 0, resizing);
 }
 
 static inline void
-janz_drop_overlen(struct Qdisc *sch, struct mjanz_priv *q, u64 now, u32 now1024,
+janz_drop_overlen(struct Qdisc *sch, struct mjanz_priv *q, u64 now,
     bool isenq)
 {
 	goto into_the_loop;
@@ -399,7 +399,7 @@ janz_drop_overlen(struct Qdisc *sch, struct mjanz_priv *q, u64 now, u32 now1024,
 			q->uecur = 0;
  into_the_loop:
 		janz_drop_1pkt_overlen(sch, &q->subqueues[q->uecur],
-		    now, now1024, !isenq);
+		    now, !isenq);
 	} while (unlikely(sch->q.qlen > sch->limit));
 }
 
@@ -415,7 +415,7 @@ janz_qheadolder(struct sjanz_priv *q, u64 ots, int qid)
 }
 
 static inline void
-janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024)
+janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 {
 	u64 ots;
 	int qid;
@@ -428,13 +428,13 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024)
 	if (janz_qheadolder(q, ots, 0) ||
 	    janz_qheadolder(q, ots, 1) ||
 	    janz_qheadolder(q, ots, 2))
-		janz_drop_1pkt_whenold(sch, q, now, now1024, false);
+		janz_drop_1pkt_whenold(sch, q, now, false);
 
 	/* drop all packets older than 500 ms */
 	ots = now - nsmul(500, NSEC_PER_MSEC);
 	for (qid = 0; qid <= 2; ++qid)
 		while (janz_qheadolder(q, ots, qid))
-			janz_drop_pkt(sch, q, now, now1024, qid, false);
+			janz_drop_pkt(sch, q, now, qid, false);
 
 	q->drop_next += DROPCHK_INTERVAL;
 	now = ktime_get_ns();
@@ -444,7 +444,7 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now, u32 now1024)
 
 static inline struct sk_buff *
 janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
-    struct janz_skb *cb, u64 now, u32 now1024, int qid)
+    struct janz_skb *cb, u64 now, int qid)
 {
 	u64 qdelay;
 	u16 chance;
@@ -801,12 +801,10 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	u32 prev_backlog = sch->qstats.backlog;
 	bool overlimit;
 	u64 now;
-	u32 now1024;
 
 	now = ktime_get_ns();
-	now1024 = ns_to_t1024(now);
 	sq = &(q->subqueues[(u32)skb->mark < q->uenum ? (u32)skb->mark : 0]);
-	janz_dropchk(sch, sq, now, now1024);
+	janz_dropchk(sch, sq, now);
 
 	/* initialise values in cb */
 	cb->ts_enq = now;
@@ -865,7 +863,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 
 	sq->pktlensum += qdisc_pkt_len(skb);
 	if (unlikely(overlimit = (++sch->q.qlen > sch->limit)))
-		janz_drop_overlen(sch, q, now, now1024, true);
+		janz_drop_overlen(sch, q, now, true);
 	if (!sq->q[qid].first) {
 		sq->q[qid].first = skb;
 		sq->q[qid].last = skb;
@@ -897,12 +895,10 @@ janz_deq(struct Qdisc *sch)
 	u32 ue;
 	struct janz_skb *cb;
 	int qid;
-	u32 now1024;
 	u64 mnextns = (u64)~(u64)0;
 
 	qid = -1;
 	now = ktime_get_ns();
-	now1024 = ns_to_t1024(now);
 	rs = (u64)~(u64)0U;
 
 	ue = q->uecur;
@@ -912,7 +908,7 @@ janz_deq(struct Qdisc *sch)
 	if (++ue == q->uenum)
 		ue = 0;
 
-	janz_dropchk(sch, sq, now, now1024);
+	janz_dropchk(sch, sq, now);
 
 	if (now < sq->notbefore) {
 		register u64 nextns;
@@ -992,7 +988,7 @@ janz_deq(struct Qdisc *sch)
 		janz_record_queuesz(sch, sq, now, rate, 0);
 	}
 
-	return (janz_sendoff(sch, sq, skb, cb, now, now1024, qid));
+	return (janz_sendoff(sch, sq, skb, cb, now, qid));
 }
 
 static struct sk_buff *
@@ -1214,7 +1210,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (unlikely(sch->q.qlen > sch->limit)) {
 		u64 now = ktime_get_ns();
 
-		janz_drop_overlen(sch, q, now, ns_to_t1024(now), false);
+		janz_drop_overlen(sch, q, now, false);
 	}
 
 	/* report if a handover starts */

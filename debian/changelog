@@ -5,8 +5,15 @@ iproute2 (5.10.0-4jens21) UNRELEASED; urgency=medium
   * Improve qosmode-related documentation, incorporating field xp
   * Better error reporting at configure time
   * Improve qsz reporting scheduling
+  * On PREEMPT_DYNAMIC kernels suggest preempt=none for boot cmdline
+  * Don’t backdate packets to before they arrived
+  * Fix some bw rate conversions
+  * Limit extralatency to 2 seconds
+  * Return to full nanosecond precision internally
+  * Use qdisc_pkt_len to guess at wire size
+  * Change TC_JANZ_RELAY_QUEUESZ.d32 to qdisc length in (wire) octets
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 07 Aug 2023 21:04:15 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 16 Aug 2023 22:06:59 +0200
 
 iproute2 (5.10.0-4jens20) tarent; urgency=low
 

@@ -52,6 +52,12 @@ ns_to_t1024(u64 ns)
 }
 
 static inline u64
+ns_to_t1024_notrunc(u64 ns)
+{
+	return ((u64)(ns >> TC_JANZ_TIMESHIFT));
+}
+
+static inline u64
 t1024_to_ns(u32 ts1024)
 {
 	return ((u64)ts1024 << TC_JANZ_TIMESHIFT);
@@ -175,6 +181,29 @@ get_janz_skb(const struct sk_buff *skb)
 {
 	qdisc_cb_private_validate(skb, sizeof(struct janz_skb));
 	return ((struct janz_skb *)qdisc_skb_cb(skb)->data);
+}
+
+static inline u32
+qdelay_encode(struct janz_skb *cb, u64 now, u64 *qdelayp, bool resizing)
+{
+	u64 qdelay;
+	u64 ts_arrive;
+
+	if (unlikely(resizing))
+		return (0xFFFFFFFFUL);
+	ts_arrive = cb->ts_enq + cb->pktxlatency;
+	if (unlikely(ts_arrive > now)) {
+		if (qdelayp)
+			*qdelayp = 0;
+		return (0xFFFFFFFEUL);
+	}
+	qdelay = now - ts_arrive;
+	if (qdelayp)
+		*qdelayp = qdelay;
+	qdelay = ns_to_t1024_notrunc(qdelay);
+	if (unlikely(qdelay > 0xFFFFFFFDUL))
+		return (0xFFFFFFFDUL);
+	return ((u32)qdelay);
 }
 
 static inline ssize_t
@@ -353,7 +382,7 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024,
 {
 	struct sk_buff *skb;
 	struct janz_skb *cb;
-	u32 qd1024, ts_arrive;
+	u32 qd1024;
 
 	skb = q->q[qid].first;
 	if (!(q->q[qid].first = skb->next))
@@ -363,13 +392,7 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024,
 	q->pktlensum -= qdisc_pkt_len(skb);
 	qdisc_qstats_backlog_dec(sch, skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
-	ts_arrive = ns_to_t1024(cb->ts_enq + cb->pktxlatency);
-	if (resizing)
-		qd1024 = 0xFFFFFFFFUL;
-	else if (unlikely(cmp1024(ts_arrive, now1024) > 0))
-		qd1024 = 0xFFFFFFFEUL;
-	else if (unlikely((qd1024 = now1024 - ts_arrive) > 0xFFFFFFFDUL))
-		qd1024 = 0xFFFFFFFDUL;
+	qd1024 = qdelay_encode(cb, now, NULL, resizing);
 	/* these both overlay cb->pktxlatency, do not move up */
 	cb->chance = 0;
 	cb->qid = qid;
@@ -459,9 +482,9 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
 {
 	u64 qdelay;
 	u16 chance;
+	u32 qd1024;
 
-	u32 ts_arrive = ns_to_t1024(cb->ts_enq + cb->pktxlatency); //XXX
-	qdelay = t1024_to_ns((u32)cmp1024(now1024, ts_arrive));
+	qd1024 = qdelay_encode(cb, now, &qdelay, false);
 
 	/**
 	 * maths proof, by example:
@@ -526,7 +549,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
 	}
 	cb->chance = chance;
 	cb->qid = qid;
-	janz_record_packet(q, skb, cb, ns_to_t1024(qdelay), now);
+	janz_record_packet(q, skb, cb, qd1024, now);
 	return (skb);
 }
 

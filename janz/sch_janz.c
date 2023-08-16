@@ -162,7 +162,7 @@ struct janz_skb {
 			short qid;		/* -1/0/1/2 */			//@ +6 :2
 		};
 	};									//… +4 :4
-	unsigned int truesz;		/* memory usage */			//@8   :4
+	unsigned int truesz_unused;	/* memory usage */			//@8   :4
 	u16 srcport;								//@ +4 :2
 	u16 dstport;								//@ +6 :2
 	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@8   :1
@@ -822,7 +822,6 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	/* initialise values in cb */
 	cb->ts_begin = now1024;
 	cb->pktxlatency = q->xlatency;
-	cb->truesz = skb->truesize;
 	/* init values from before analysis */
 	cb->srcport = 0;
 	cb->dstport = 0;

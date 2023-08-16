@@ -187,17 +187,15 @@ static inline u32
 qdelay_encode(struct janz_skb *cb, u64 now, u64 *qdelayp, bool resizing)
 {
 	u64 qdelay;
-	u64 ts_arrive;
 
 	if (unlikely(resizing))
 		return (0xFFFFFFFFUL);
-	ts_arrive = cb->ts_enq + cb->pktxlatency;
-	if (unlikely(ts_arrive > now)) {
+	if (unlikely(cb->ts_enq + cb->pktxlatency > now)) {
 		if (qdelayp)
 			*qdelayp = 0;
 		return (0xFFFFFFFEUL);
 	}
-	qdelay = now - ts_arrive;
+	qdelay = now - (cb->ts_enq + cb->pktxlatency);
 	if (qdelayp)
 		*qdelayp = qdelay;
 	qdelay = ns_to_t1024_notrunc(qdelay);
@@ -439,13 +437,11 @@ static inline bool
 janz_qheadolder(struct janz_priv *q, u64 ots, int qid)
 {
 	struct janz_skb *cb;
-	u64 ts_arrive;
 
 	if (unlikely(!q->q[qid].first))
 		return (false);
 	cb = get_janz_skb(q->q[qid].first);
-	ts_arrive = cb->ts_enq + cb->pktxlatency;
-	return ((unlikely(ts_arrive < ots)) ? true : false);
+	return ((unlikely(cb->ts_enq + cb->pktxlatency < ots)) ? true : false);
 }
 
 static inline void
@@ -998,14 +994,9 @@ janz_deq(struct Qdisc *sch)
 	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
-	if (q->crediting) {
-		u64 ts_arrive;
-
-		ts_arrive = cb->ts_enq + cb->pktxlatency;
-		q->notbefore = max(q->notbefore, ts_arrive) +
-		    (rate * (u64)qdisc_pkt_len(skb));
-	} else
-		q->notbefore = now + (rate * (u64)qdisc_pkt_len(skb));
+	q->notbefore = (q->crediting ?
+	    max(q->notbefore, cb->ts_enq + cb->pktxlatency) : now) +
+	    (rate * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
 	if (rate != q->lastknownrate)
 		goto force_rate_and_out;

@@ -58,20 +58,6 @@ ns_to_t1024_notrunc(u64 ns)
 }
 
 static inline u64
-t1024_to_ns(u32 ts1024)
-{
-	return ((u64)ts1024 << TC_JANZ_TIMESHIFT);
-}
-
-static inline s32
-cmp1024(u32 lhs, u32 rhs)
-{
-	u32 delta = (0U + lhs) - (0U + rhs);
-
-	return ((s32)delta); /* guaranteed in Linux */
-}
-
-static inline u64
 us_to_ns(u32 us)
 {
 	return (nsmul(us, NSEC_PER_USEC));

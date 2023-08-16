@@ -40,6 +40,9 @@
 #include "janz_uapi.h"
 #include "gru32b.h"
 
+/* constant must fit 32 bits; 2'000'000'000 will do */
+#define MAXXLATENCY nsmul(2, NSEC_PER_SEC)
+
 #define nsmul(val, fac) ((u64)((u64)(val) * (u64)(fac)))
 
 static inline u32
@@ -103,6 +106,7 @@ struct janz_fragcache_check {
 	    (offsetof(struct tc_janz_relay, xip) + 16) ? 1 : -1];
 	int s_d[offsetof(struct janz_fragcomp, dip) ==
 	    (offsetof(struct janz_fragcomp, sip) + 16) ? 1 : -1];
+	int maxxlatency_ok[(MAXXLATENCY <= 0xFFFFFFFFULL) ? 1 : -1];
 };
 
 struct janz_skbfifo {
@@ -122,27 +126,27 @@ struct janz_priv {
 	atomic64_t ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@16
 	u64 markfree;									//@  +8
 	u64 markfull;									//@16
-	u64 xlatency;			/* extra artificial pre-enqueue latency */	//@  +8
-	struct janz_fragcache *fragcache_used;						//@16
-	struct janz_fragcache *fragcache_last; /* last used element */			//@  +8
-	struct janz_fragcache *fragcache_free;						//@16
-	struct janz_fragcache *fragcache_base;						//@  +8
-	u32 fragcache_aged;								//@16
-	u32 fragcache_num;								//@  +4
-	u32 nsubbufs;									//@  +8
-	u32 memusage;			/* enqueued packet truesize */			//@  +12
-	struct dentry *ctlfile;								//@16
-	u64 lastknownrate;								//@  +8
-	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
+	struct janz_fragcache *fragcache_used;						//@  +8
+	struct janz_fragcache *fragcache_last; /* last used element */			//@16
+	struct janz_fragcache *fragcache_free;						//@  +8
+	struct janz_fragcache *fragcache_base;						//@16
+	u32 fragcache_aged;								//@  +8
+	u32 fragcache_num;								//@  +12
+	u32 nsubbufs;									//@16
+	u32 memusage;			/* enqueued packet truesize */			//@  +4
+	struct dentry *ctlfile;								//@  +8
+	u64 lastknownrate;								//@16
+	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u8 crediting;
+	u8 qosmode;
 #ifdef SCH_JANZDBG
 	u8 wdogreason;			/* 10=notbefore 20=nothingtosend */
 	u16 wdogearly;
 	u64 wdogtimers[4];		/* <50us <1000us <4000us >=4ms */
 	u64 wdognext;
 #endif
-	unsigned int qosmode;
+	u32 xlatency;			/* extra artificial pre-enqueue latency */	//@ 4
 };
 
 /* struct janz_skb *cb = get_janz_skb(skb); */
@@ -1061,6 +1065,8 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	struct nlattr *tb[TCA_JANZ_MAX + 1];
 	int err;
 	bool handover_started = false;
+	u32 newqosmode;
+	u64 newxlatency;
 
 	if (!opt)
 		return (-EINVAL);
@@ -1070,6 +1076,22 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		return (err);
 
 	/* anything that can throw first */
+
+	if (tb[TCA_JANZ_QOSMODE]) {
+		newqosmode = nla_get_u32(tb[TCA_JANZ_QOSMODE]);
+		if (newqosmode > 2) {
+			NL_SET_ERR_MSG_MOD(extack, "invalid qosmode");
+			return (-EINVAL);
+		}
+	}
+
+	if (tb[TCA_JANZ_XLATENCY]) {
+		newxlatency = us_to_ns(nla_get_u32(tb[TCA_JANZ_XLATENCY]));
+		if (newxlatency > MAXXLATENCY) {
+			NL_SET_ERR_MSG_MOD(extack, "xlatency too large");
+			return (-EINVAL);
+		}
+	}
 
 	if (q->nsubbufs) {
 		/* only at load time */
@@ -1107,7 +1129,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	}
 
 	if (tb[TCA_JANZ_QOSMODE])
-		q->qosmode = nla_get_u32(tb[TCA_JANZ_QOSMODE]);
+		q->qosmode = newqosmode;
 
 	if (tb[TCA_JANZ_MARKFREE])
 		q->markfree = us_to_ns(nla_get_u32(tb[TCA_JANZ_MARKFREE]));
@@ -1124,7 +1146,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		q->fragcache_num = nla_get_u32(tb[TCA_JANZ_FRAGCACHE]);
 
 	if (tb[TCA_JANZ_XLATENCY])
-		q->xlatency = us_to_ns(nla_get_u32(tb[TCA_JANZ_XLATENCY]));
+		q->xlatency = newxlatency;
 
 	/* assert: sch->q.qlen == 0 || q->record_chan != nil */
 	/* assert: sch->limit > 0 */

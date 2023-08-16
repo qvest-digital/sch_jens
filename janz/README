@@ -139,7 +139,7 @@ Record types define the following data members:
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
 • TC_JANZ_RELAY_QUEUESZ:
-  – d32 memory usage (bytes), including Linux structural overhead
+  – d32 queue length (bytes)
   – e16 queue length (packets), capped at 0xFFFF
   – f8 bitfield
     ‣   0 handover started

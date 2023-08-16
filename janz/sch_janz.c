@@ -133,7 +133,7 @@ struct janz_priv {
 	u32 fragcache_aged;								//@  +8
 	u32 fragcache_num;								//@  +12
 	u32 nsubbufs;									//@16
-	u32 memusage;			/* enqueued packet truesize */			//@  +4
+	u32 pktlensum;			/* amount of bytes queued up */			//@  +4
 	struct dentry *ctlfile;								//@  +8
 	u64 lastknownrate;								//@16
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
@@ -221,7 +221,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now,
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_QUEUESZ;
-	r.d32 = q->memusage;
+	r.d32 = q->pktlensum;
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
 	r.f8 = f;
 	r.x64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate), 1ULL);
@@ -362,7 +362,7 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024,
 		q->q[qid].last = NULL;
 	--sch->q.qlen;
 	cb = get_janz_skb(skb);
-	q->memusage -= cb->truesz;
+	q->pktlensum -= qdisc_pkt_len(skb);
 	qdisc_qstats_backlog_dec(sch, skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	ts_arrive = cb->ts_begin + ns_to_t1024(cb->pktxlatency);
@@ -875,7 +875,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?"))
 		skb->next = NULL;
 
-	q->memusage += cb->truesz;
+	q->pktlensum += qdisc_pkt_len(skb);
 	if (unlikely(overlimit = (++sch->q.qlen > sch->limit)))
 		janz_drop_overlen(sch, q, now, now1024, true);
 	if (!q->q[qid].first) {
@@ -976,7 +976,7 @@ janz_deq(struct Qdisc *sch)
 	if (!(q->q[qid].first = skb->next))
 		q->q[qid].last = NULL;
 	--sch->q.qlen;
-	q->memusage -= cb->truesz;
+	q->pktlensum -= qdisc_pkt_len(skb);
 	skb->next = NULL;
 	qdisc_qstats_backlog_dec(sch, skb);
 	qdisc_bstats_update(sch, skb);
@@ -1035,7 +1035,7 @@ janz_reset(struct Qdisc *sch)
 	q->q[0].first = NULL; q->q[0].last = NULL;
 	q->q[1].first = NULL; q->q[1].last = NULL;
 	q->q[2].first = NULL; q->q[2].last = NULL;
-	q->memusage = 0;
+	q->pktlensum = 0;
 	sch->qstats.backlog = 0;
 	sch->qstats.overlimits = 0;
 	q->notbefore = 0;

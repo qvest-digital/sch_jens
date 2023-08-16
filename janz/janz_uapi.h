@@ -88,7 +88,7 @@ enum {
 	__TC_JANZ_RELAY_OLDVER4,
 
 	/* report length of queue periodically */
-	/* d32 = memory usage in bytes */
+	/* d32 = amount of bytes queued up */
 	/* e16 = amount of packets in FIFO, 0xFFFF if more */
 	/* f8 = bitfield: 0=handover started */
 	/* x64[0] = current rate in bits/s */

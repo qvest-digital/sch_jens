@@ -269,7 +269,8 @@ janz_record_packet(struct janz_priv *q,
 	r.d32 = queuedelay;
 	r.e16 = chance;
 	r.f8 = cb->record_flag;
-	r.z.zSOJOURN.psize = ((u32)(qid + 1)) << 30 | (skb->len & 0x3FFFFFFFU);
+	r.z.zSOJOURN.psize = ((u32)(qid + 1)) << 30 |
+	    (qdisc_pkt_len(skb) & 0x3FFFFFFFU);
 	r.z.zSOJOURN.ipver = cb->ipver;
 	r.z.zSOJOURN.nexthdr = cb->nexthdr;
 	r.z.zSOJOURN.sport = cb->srcport;
@@ -522,7 +523,7 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek, int *qidp)
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	q->notbefore = (q->crediting ?
 	    max(q->notbefore, t1024_to_ns(cb->ts_arrive)) : now) +
-	    (rate * (u64)skb->len);
+	    (rate * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
 	if (rate != q->lastknownrate)
 		goto force_rate_and_out;

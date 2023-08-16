@@ -911,18 +911,17 @@ janz_deq(struct Qdisc *sch)
 	struct mjanz_priv *q = qdisc_priv(sch);
 	struct sjanz_priv *sq;
 	struct sk_buff *skb;
-	u64 now, rate;
+	u64 now, rate, rs;
 	u32 ue;
 	struct janz_skb *cb;
 	int qid;
-	u32 now1024, rs;
-	s32 drs;
+	u32 now1024;
 	u64 mnextns = (u64)~(u64)0;
 
 	qid = -1;
 	now = ktime_get_ns();
 	now1024 = ns_to_t1024(now);
-	rs = (u32)~(u32)0U;
+	rs = (u64)~(u64)0U;
 
 	ue = q->uecur;
  find_subqueue_to_send:
@@ -954,15 +953,12 @@ janz_deq(struct Qdisc *sch)
 	qid = (i);							\
 	skb = sq->q[qid].first;						\
 	if (skb) {							\
-		u32 ts_arrive; /*XXX*/					\
 		cb = get_janz_skb(skb);					\
-		ts_arrive = ns_to_t1024(cb->ts_enq + cb->pktxlatency); /*XXX*/ \
-		drs = cmp1024(ts_arrive, now1024);			\
-		if (drs <= 0)						\
+		if (cb->ts_enq + cb->pktxlatency <= now)		\
 			goto got_skb;					\
 		/* ts_arrive > now: packet has not reached us yet */	\
-		if (/* > 0 */ (u32)drs < rs)				\
-			rs = (u32)drs;					\
+		if (cb->ts_enq + cb->pktxlatency < rs)			\
+			rs = cb->ts_enq + cb->pktxlatency;		\
 	}								\
 } while (/* CONSTCOND */ 0)
 
@@ -973,7 +969,7 @@ janz_deq(struct Qdisc *sch)
 
 	/* nothing to send, but we have to reschedule first */
 	/* if we end up here, rs was set above */
-	mnextns = min(mnextns, now + t1024_to_ns(rs));
+	mnextns = min(mnextns, rs);
 	goto nothing_to_send;
 
  try_next_subqueue:

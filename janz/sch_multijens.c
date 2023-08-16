@@ -93,18 +93,18 @@ struct janz_fragcomp {
 struct janz_fragcache {
 	struct janz_fragcomp c;			//@0
 	u8 nexthdr;				//@ +37 :1
-	u8 _pad[2];				//@ +38 :2
-	u32 ts;					//@ +40 :4
+	u8 _pad[6];				//@ +38 :6
 	u16 sport;				//@ +44 :2
 	u16 dport;				//@ +46 :2
-	struct janz_fragcache *next;		//@16   :ptr
+	u64 ts;					//@16   :8
+	struct janz_fragcache *next;		//@  +8 :ptr
 } __attribute__((__packed__));
 
 /* compile-time assertion */
 struct janz_fragcache_check {
 	int hasatomic64[sizeof(atomic64_t) == 8 ? 1 : -1];
 	int cmp[sizeof(struct janz_fragcomp) == 37 ? 1 : -1];
-	int cac[sizeof(struct janz_fragcache) == (48 + sizeof(void *)) ? 1 : -1];
+	int cac[sizeof(struct janz_fragcache) == (56 + sizeof(void *)) ? 1 : -1];
 	int tot[sizeof(struct janz_fragcache) <= 64 ? 1 : -1];
 	int xip[sizeof_field(struct tc_janz_relay, xip) == 16 ? 1 : -1];
 	int yip[sizeof_field(struct tc_janz_relay, yip) == 16 ? 1 : -1];
@@ -156,11 +156,11 @@ struct mjanz_priv {
 	struct janz_fragcache *fragcache_free;						//@16
 	struct janz_fragcache *fragcache_base;						//@  +8
 	struct dentry *ctlfile;								//@16
-	u32 fragcache_aged;								//@  +8
-	u32 fragcache_num;								//@  +12
-	struct janz_ctlfile_pkt *ctldata;	/* per-UE */				//@16
-	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
-	u32 nsubbufs;									//@?
+	u64 fragcache_aged;								//@  +8
+	u32 fragcache_num;								//@16
+	u32 nsubbufs;									//   +4
+	struct janz_ctlfile_pkt *ctldata;	/* per-UE */				//@  +8
+	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 #ifdef notyet
 	/* both for retransmissions [0‥uenum[ plus global bypass FIFO */
 	struct janz_skbfifo *bypasses;	/* per-UE + 1 (global Y signal) */
@@ -317,7 +317,7 @@ janz_record_packet(struct sjanz_priv *q,
 static inline void
 janz_fragcache_maint(struct mjanz_priv *q, u64 now)
 {
-	u32 old;
+	u64 old;
 	struct janz_fragcache *lastnew;
 	struct janz_fragcache *firstold;
 	struct janz_fragcache *lastold;
@@ -325,14 +325,14 @@ janz_fragcache_maint(struct mjanz_priv *q, u64 now)
 	if (!q->fragcache_used)
 		return;
 
-	old = ns_to_t1024(now - nsmul(60, NSEC_PER_SEC));
+	old = now - nsmul(60, NSEC_PER_SEC);
 
-	if (cmp1024(old, q->fragcache_aged) <= 0)
+	if (old <= q->fragcache_aged)
 		return;
 
-	if (cmp1024(old, q->fragcache_used->ts) <= 0) {
+	if (old <= q->fragcache_used->ts) {
 		lastnew = q->fragcache_used;
-		while (lastnew->next && (cmp1024(old, lastnew->next->ts) <= 0))
+		while (lastnew->next && old <= lastnew->next->ts)
 			lastnew = lastnew->next;
 		q->fragcache_aged = lastnew->ts;
 		if (!lastnew->next) {
@@ -741,7 +741,7 @@ janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
 		}
 		memcpy(&(fe->c), &fc, sizeof(struct janz_fragcomp));
 		fe->nexthdr = cb->nexthdr;
-		fe->ts = ns_to_t1024(cb->ts_enq);
+		fe->ts = cb->ts_enq;
 		fe->sport = cb->srcport;
 		fe->dport = cb->dstport;
 		fe->next = q->fragcache_used;

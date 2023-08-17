@@ -1,4 +1,4 @@
-iproute2 (5.10.0-4jens21) UNRELEASED; urgency=medium
+iproute2 (5.10.0-4jens21) tarent; urgency=medium
 
   * Improve quality of stochastics
   * Make LKMs compatible with Linux 6.4
@@ -13,7 +13,7 @@ iproute2 (5.10.0-4jens21) UNRELEASED; urgency=medium
   * Use qdisc_pkt_len to guess at wire size
   * Change TC_JANZ_RELAY_QUEUESZ.d32 to qdisc length in (wire) octets
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 16 Aug 2023 22:06:59 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 17 Aug 2023 17:16:50 +0200
 
 iproute2 (5.10.0-4jens20) tarent; urgency=low
 

@@ -1,3 +1,4 @@
 janz/Kbuild usr/src/sch-jens-DEB_VERSION_UPSTREAM/
+janz/gru32b.h usr/src/sch-jens-DEB_VERSION_UPSTREAM/
 janz/janz*.h usr/src/sch-jens-DEB_VERSION_UPSTREAM/
 janz/sch_*.c usr/src/sch-jens-DEB_VERSION_UPSTREAM/

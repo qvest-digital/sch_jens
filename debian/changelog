@@ -1,3 +1,9 @@
+iproute2 (5.10.0-4jens22) tarent; urgency=medium
+
+  * Fix installation compiling from package
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 17 Aug 2023 17:33:29 +0200
+
 iproute2 (5.10.0-4jens21) tarent; urgency=medium
 
   * Improve quality of stochastics

@@ -18,7 +18,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../iproute2.templates:1001
+#: ../iproute2-jens.templates:1001
 msgid "Allow ordinary users to run ip vrf exec using capabilities?"
 msgstr ""
 "Normalen Benutzern die Ausführung von »ip vrf exec« mittels Capabilities "
@@ -26,7 +26,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../iproute2.templates:1001
+#: ../iproute2-jens.templates:1001
 msgid ""
 "iproute2 can be used to configure and use Virtual Routing and Forwarding "
 "(VRF) functionality in the  kernel. This normally requires root permissions, "
@@ -43,7 +43,7 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../iproute2.templates:1001
+#: ../iproute2-jens.templates:1001
 msgid ""
 "The ip command supports dropping capabilities, making an exception for ip "
 "vrf exec. The drawback of setting the permissions is that if in the unlikely "
@@ -65,11 +65,10 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../iproute2.templates:1001
+#: ../iproute2-jens.templates:1001
 msgid ""
 "More information about VRF can be found at: https://www.kernel.org/doc/"
 "Documentation/networking/vrf.txt"
 msgstr ""
 "Weitere Informationen über VRF können unter folgender Adresse gefunden "
 "werden: https://www.kernel.org/doc/Documentation/networking/vrf.txt"
-

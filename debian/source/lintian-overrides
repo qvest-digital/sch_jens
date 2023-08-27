@@ -1,5 +1,5 @@
 # right but not a problem for a private package
-iproute2 source: not-binnmuable-all-depends-any sch-jens-dkms -> iproute2
+iproute2 source: not-binnmuable-all-depends-any sch-jens-dkms -> iproute2-jens
 iproute2 source: vcs-field-uses-not-recommended-uri-format
 
 # we unfortunately don’t have one for this project (yet)

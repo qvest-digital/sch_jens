@@ -1,0 +1,5 @@
+# right but actually correct for a private package
+iproute2-jens-doc: bugs-field-does-not-refer-to-debian-infrastructure
+
+# inherited issues from the Debian bullseye package
+iproute2-jens-doc: conflicts-with-version

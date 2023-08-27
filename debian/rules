@@ -44,7 +44,7 @@ execute_after_dh_auto_build:
 
 override_dh_shlibdeps:
 	dh_shlibdeps -a -Xq_atm.so -Xm_xt.so -Xm_ipt.so
-	dh_shlibdeps -a -- -pipmods -dRecommends -e debian/iproute2/usr/lib/tc/m_xt.so -e debian/iproute2/usr/lib/tc/q_atm.so -xlibc6
+	dh_shlibdeps -a -- -pipmods -dRecommends -e debian/iproute2-jens/usr/lib/tc/m_xt.so -e debian/iproute2-jens/usr/lib/tc/q_atm.so -xlibc6
 
 override_dh_auto_test:
 	# upstream test suite needs root and leaves machine unclean, skip it

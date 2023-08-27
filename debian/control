@@ -27,40 +27,43 @@ Build-Depends: bison,
                po-debconf,
                zlib1g-dev,
 
-Package: iproute2
+Package: iproute2-jens
 Priority: important
 Architecture: linux-any
-Provides: arpd, iproute-janz
-Conflicts: arpd, iproute (<< 20130000-1)
-Replaces: iproute
+Provides: arpd, iproute2 (= ${binary:Version}), iproute-janz
+Conflicts: arpd, iproute (<< 20130000-1), iproute2
+Replaces: iproute, iproute2
 Depends: ${misc:Depends}, ${shlibs:Depends}, libcap2-bin,
-Recommends: iproute2-doc, ${ipmods:Recommends}
+Recommends: iproute2-jens-doc, sch-jens-dkms, ${ipmods:Recommends}
 Multi-Arch: foreign
-Description: networking and traffic control tools
+Description: networking and traffic control tools for JENS
  The iproute2 suite is a collection of utilities for networking and
  traffic control.
  .
  These tools communicate with the Linux kernel via the (rt)netlink
  interface, providing advanced features not available through the
  legacy net-tools commands 'ifconfig' and 'route'.
+ .
+ This is the patched iproute2 package, for JENS by Deutsche Telekom.
 
-Package: iproute2-doc
+Package: iproute2-jens-doc
 Section: doc
 Architecture: all
-Conflicts: iproute-doc (<< 20130000-1)
-Replaces: iproute-doc
+Provides: iproute2-doc (= ${binary:Version})
+Conflicts: iproute-doc (<< 20130000-1), iproute2-doc
+Replaces: iproute-doc, iproute2-doc
 Depends: ${misc:Depends}
 Multi-Arch: foreign
 Description: networking and traffic control tools - documentation
  The iproute2 suite is a collection of utilities for networking and
  traffic control.
  .
- This package contains the documentation for iproute.
+ This package contains the documentation for iproute2-jens.
 
 Package: sch-jens-dkms
 Architecture: all
 Section: kernel
-Depends: ${misc:Depends}, iproute2 (= ${binary:Version})
+Depends: ${misc:Depends}, iproute2-jens (>= ${binary:Version})
 Provides: sch-jens
 Description: JENS network packet scheduler, kernel module source
  This is a bundle of kernel modules needed for JENS by DTAG LLCTO.

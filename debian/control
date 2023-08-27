@@ -64,7 +64,7 @@ Description: networking and traffic control tools - documentation
 Package: sch-jens-dkms
 Architecture: all
 Section: kernel
-Depends: ${misc:Depends}, iproute2-jens (>= ${binary:Version})
+Depends: ${misc:Depends}, iproute2-jens (= ${binary:Version})
 Provides: sch-jens
 Description: JENS network packet scheduler, kernel module source
  This is a bundle of kernel modules needed for JENS by DTAG LLCTO.

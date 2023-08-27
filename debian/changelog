@@ -7,7 +7,7 @@ iproute2 (5.10.0-4jens23) tarent; urgency=low
   * Distinguish bullseye/focal builds via Pre-Depends
   * Version iproute-janz Provides on ${source:Version}
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Sun, 27 Aug 2023 18:12:55 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Sun, 27 Aug 2023 18:21:32 +0200
 
 iproute2 (5.10.0-4jens22) tarent; urgency=medium
 

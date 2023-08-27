@@ -33,13 +33,13 @@ export NETNS_RUN_DIR=/run/netns
 distrel := $(shell lsb_release --codename --short)
 
 ifeq (bullseye,${distrel})
-vdeps := base-files (>= 11.1+deb11u1), base-files (<< 11.1+deb12)
-else ifeq (bookworm,${distrel})
-vdeps := base-files (>= 12.4+deb12u1), base-files (<< 12.4+deb13)
+vdeps := base-files (>= 11.1+deb11u1), \
+	 base-files (<< 11.1+deb12) | base-files (>= 12.4+deb12u1), \
+	 base-files (<< 12.4+deb13)
 else ifeq (focal,${distrel})
-vdeps := base-files (>= 11ubuntu5), base-files (<< 11ubuntu6)
-else ifeq (jammy,${distrel})
-vdeps := base-files (>= 12ubuntu4), base-files (<< 12ubuntu5)
+vdeps := base-files (>= 11ubuntu5),  \
+	 base-files (<< 11ubuntu6) | base-files (>= 12ubuntu4), \
+	 base-files (<< 12ubuntu5)
 else
 $(error cannot build for distribution/release ${distrel})
 endif

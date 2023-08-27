@@ -29,16 +29,3 @@ $ sudo java JensReaderDemo eth0 /sys/kernel/debug/sch_janz/0001:0
 $ sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_janz/0001:0
 
 This assumes tc-janz(8) with handle 1: running on eth0.
-
-
-Requiring a specific version of iproute2-jens
----------------------------------------------
-
-To require version 5.10.0-4jens23 for example, use:
-
-Depends: iproute2-jens, iproute-janz (= 5.10.0-4jens23)
-
-This is because while iproute2-jens is the binary package,
-its version differs between bullseye, bookworm and *buntu
-builds, whereas iproute-janz is a virtual package Provides
-versioned by the source package.

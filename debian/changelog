@@ -6,8 +6,9 @@ iproute2 (5.10.0-4jens23) tarent; urgency=low
   * iproute2-jens Recommends sch-jens-dkms
   * bookworm/kinetic need B-D: dh-dkms (explicitly)
   * Distinguish bullseye/bookworm/focal/jammy builds with Pre-Depends
+  * Version iproute-janz Provides on ${source:Version}, for jens-cli
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Sun, 27 Aug 2023 17:38:27 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Sun, 27 Aug 2023 17:47:52 +0200
 
 iproute2 (5.10.0-4jens22) tarent; urgency=medium
 

@@ -32,7 +32,12 @@ Build-Depends: bison,
 Package: iproute2-jens
 Priority: important
 Architecture: linux-any
-Provides: arpd, iproute2 (= ${binary:Version}), iproute-janz
+# note that ${binary:Version} differs, so both iproute2 and iproute2-jens
+# are unsuitable to specify exact sch_* versions because they adapt for
+# builds for different releases (especially in PPA), so use iproute-janz
+# to demand a JENS release instead
+Provides: arpd, iproute2 (= ${binary:Version}),
+ iproute-janz (= ${source:Version})
 Conflicts: arpd, iproute (<< 20130000-1), iproute2
 Replaces: iproute, iproute2
 Pre-Depends: ${misc:Pre-Depends}, ${jens:prereq}

@@ -72,3 +72,7 @@ override_dh_install:
 # work around #736803
 override_dh_dkms:
 	exec dh_dkms -V ${DEB_VERSION_UPSTREAM}
+
+# ensure uniform compression, avoiding *buntu Sonderweg
+override_dh_builddeb:
+	dh_builddeb -- -Zxz -z6 -Sextreme --uniform-compression

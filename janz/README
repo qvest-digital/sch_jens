@@ -6,6 +6,17 @@ with the stock Linux kernel 5.10. Newer Linux kernels up to
 about 6.4 should also work even though the iproute2 package’s
 base version should match the kernel version for other qdiscs.
 
+The current builds are supplied for the following releases:
+
+• Debian: 11 (bullseye) recommended, tested
+  +       12 (bookworm): uses the package for 11 and needs
+          libbpf0 from bullseye; “should work”, as-is
+• Ubuntu: 20.04 LTS (focal) in use at a partner, works
+  +       22.04 LTS (jammy): uses same package, untested
+
+For bookworm (and some *buntu) kernels, please read the note
+regarding PREEMPT/PREEMPT_DYNAMIC at the end of this file.
+
 
 sch_janz Linux kernel module
 ────────────────────────────

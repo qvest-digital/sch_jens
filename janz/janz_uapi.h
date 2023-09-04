@@ -100,8 +100,8 @@ enum {
 		  -2 = drop before enqueue with extralatency applied) */
 	/* e16 = ECN marking range/percentage */
 	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
-		3:4=ECN bits on dequeue, TC_JANZ_RELAY_SOJOURN_xxxx,
-		TC_JANZ_RELAY_SOJOURN_MARK, TC_JANZ_RELAY_SOJOURN_DROP */
+		3:4=ECN bits on dequeue, 5=TC_JANZ_RELAY_SOJOURN_xxxx,
+		6=TC_JANZ_RELAY_SOJOURN_MARK, 7=TC_JANZ_RELAY_SOJOURN_DROP */
 	/* x8 = source IP, y8 = destination IP */
 	/* z.zSOJOURN = packet size, IP version (4, 6, 0 for not IP) */
 	/* + if IP: L4 proto, if TCP/UDP also src/dst port */

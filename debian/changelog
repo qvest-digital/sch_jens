@@ -1,3 +1,15 @@
+iproute2 (5.10.0-4jens24) UNRELEASED; urgency=medium
+
+  * Incorporate BBRv3 patches for convenience:
+    - patch "ss" tool to output congestion control state for BBRv3
+    - patch "ip" tool to support ecn_low per-route feature
+    - patch "ss" tool to show "ecn_low" state in TCP socket
+    Note these are only useful on a BBRv3-enabled Linux kernel!
+  * Change qosmode=2 behaviour: treat incoming CE-marked packets also
+    as L4S, for consistency with LLD (i.e. L4S-enabled DOCSIS)
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 13 Sep 2023 17:29:32 +0200
+
 iproute2 (5.10.0-4jens23) tarent; urgency=low
 
   * Rename package to iproute2-jens and iproute2-jens-doc

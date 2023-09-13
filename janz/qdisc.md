@@ -137,12 +137,12 @@ the configued `qosmode`:
   Note: this mode is **highly** recommended.
 
 - 2: this mode is provided to ease setting up testbeds. IP traffic
-  marked as `ECT(1)` (L4S-capable opt-in) is sorted into the
+  marked as `ECT(1)` (L4S-capable opt-in) or `CE` is sorted into the
   **L**owdelay FIFO and other IP traffic in the **N**ormal one.
 
   Note: outside of testbeds, this may not be desirable as packets
   that were already marked ECN `CE` before arriving will sort as
-  normal because they cannot be distinguished between `ECT(0)` and
+  high because they cannot be distinguished between `ECT(0)` and
   `ECT(1)` at that point. For testbeds, this would not happen as
   packets originate from the ingress interface’s LAN.
 

@@ -18,7 +18,7 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd August 7, 2023
+.Dd September 13, 2023
 .Dt TC\-JANZ 8
 .Os Linux
 .Sh NAME
@@ -135,6 +135,9 @@ Any IPv6 and IPv4 traffic goes to the normal FIFO like in the RAN.
 .It Ic 2
 IP packets with
 .Li "ECT(1)"
+or a
+.Pq pre-existing
+.Li \&CE
 marking are sorted into the lodelay FIFO,
 all other IP traffic into the normal FIFO.
 .El
@@ -273,7 +276,7 @@ If your traffic uses DSCP classification instead, use the
 option; however,
 mind that packets that were ECN
 .Li CE Ns -marked
-before arrival are not priorised even if they were
+before arrival are priorised even if they were not
 .Li "ECT(1)"
 originally.
 .Pp

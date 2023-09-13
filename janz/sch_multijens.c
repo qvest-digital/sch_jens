@@ -847,7 +847,8 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 			if (cb->tosbyte & 0x08)
 				++qid;
 		} else {
-			if ((cb->record_flag & INET_ECN_MASK) == INET_ECN_ECT_1)
+			if (((cb->record_flag & INET_ECN_MASK) == INET_ECN_ECT_1) ||
+			    ((cb->record_flag & INET_ECN_MASK) == INET_ECN_CE))
 				--qid;
 		}
 		break;

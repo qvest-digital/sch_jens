@@ -100,7 +100,7 @@ static void usage(void)
 		"PREF := [ low | medium | high ]\n"
 		"TIME := NUMBER[s|ms]\n"
 		"BOOL := [1|0]\n"
-		"FEATURES := ecn\n"
+		"FEATURES := [ ecn | ecn_low ]\n"
 		"ENCAPTYPE := [ mpls | ip | ip6 | seg6 | seg6local | rpl ]\n"
 		"ENCAPHDR := [ MPLSLABEL | SEG6HDR ]\n"
 		"SEG6HDR := [ mode SEGMODE ] segs ADDR1,ADDRi,ADDRn [hmac HMACKEYID] [cleanup]\n"
@@ -342,6 +342,10 @@ static void print_rtax_features(FILE *fp, unsigned int features)
 	if (features & RTAX_FEATURE_ECN) {
 		print_null(PRINT_ANY, "ecn", "ecn ", NULL);
 		features &= ~RTAX_FEATURE_ECN;
+	}
+	if (features & RTAX_FEATURE_ECN_LOW) {
+		print_null(PRINT_ANY, "ecn_low", "ecn_low ", NULL);
+		features &= ~RTAX_FEATURE_ECN_LOW;
 	}
 
 	if (features)
@@ -1324,6 +1328,8 @@ static int iproute_modify(int cmd, unsigned int flags, int argc, char **argv)
 
 				if (strcmp(*argv, "ecn") == 0)
 					features |= RTAX_FEATURE_ECN;
+				else if (strcmp(*argv, "ecn_low") == 0)
+					features |= RTAX_FEATURE_ECN_LOW;
 				else
 					invarg("\"features\" value not valid\n", *argv);
 				break;

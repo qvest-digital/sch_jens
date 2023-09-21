@@ -321,7 +321,6 @@ public final class JensReaderLib {
          * <li>{@link #tsOffset}</li>
          * <li>{@link #sojournTime}</li>
          * <li>{@link #realOWD}</li>
-         * <li>{@link #chance}</li>
          * <li>{@link #ecnIn}</li>
          * <li>{@link #ecnOut}</li>
          * <li>{@link #ecnValid}</li>
@@ -433,20 +432,6 @@ public final class JensReaderLib {
             @UsedByJNI
             public @Positive(max = 0x3FFFFFFFC00L) long realOWD;
             /**
-             * <p>Chance in [0, 1] that this packet is to be ECN CE marked,
-             * based on {@code markfull} and {@code markfree}.</p>
-             *
-             * <p>Mind that rounding occurred by the time this value is filled.</p>
-             *
-             * <p>Note: {@link #markJENS} indicates whether the packet was actually
-             * marked (or would be if it was ECN-capable), based on the random number
-             * retrieved from the kernel.</p>
-             *
-             * <p>{@link #handlePacket(Record[], int)} only.</p>
-             */
-            @UsedByJNI
-            public double chance;
-            /**
              * <p>ECN bits of the packet when arriving, if any (see {@link #ecnValid}).</p>
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
@@ -474,7 +459,7 @@ public final class JensReaderLib {
             /**
              * <p>Whether the packet was ECN CE marked due to the JENS algorithm,
              * based on {@code markfull} and {@code markfree} as well as the
-             * {@link #chance} and the actual random value from the kernel.</p>
+             * chance and the actual random value from the kernel.</p>
              *
              * <p>Note that this flag can be set even if the packet was not ECN-capable.
              * The packet is neither marked nor dropped in that case.</p>

@@ -98,7 +98,7 @@ enum {
 	/* d32 = sojourn time in 1024 ns units
 	         (-1 = drop on queue resize,
 		  -2 = drop before enqueue with extralatency applied) */
-	/* e16 = ECN marking range/percentage */
+	/* e16 = xxxx reassigned soon */
 	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
 		3:4=ECN bits on dequeue, 5=TC_JANZ_RELAY_SOJOURN_xxxx,
 		6=TC_JANZ_RELAY_SOJOURN_MARK, 7=TC_JANZ_RELAY_SOJOURN_DROP */
@@ -127,9 +127,6 @@ enum {
 
 /* convert d32 to nanoseconds as __u64 */
 #define TC_JANZ_RELAY_SOJOURN_TO_NS(d32) ((__u64)(d32) << TC_JANZ_TIMESHIFT)
-
-/* divide e16 by this (and multiply with 100.0) to get a percentage */
-#define TC_JANZ_RELAY_SOJOURN_PCTDIV ((double)65535)
 
 /* flags in f8 */
 /*efine TC_JANZ_RELAY_SOJOURN_xxxx (1U << 5)	-- (currently unused) */

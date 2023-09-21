@@ -230,10 +230,9 @@ consume(size_t idx)
 #endif
 
 	case TC_JANZ_RELAY_SOJOURN:
-		printf("<pkt ts=\"%llX\" time=\"%X\" chance=\"%.7f\""
+		printf("<pkt ts=\"%llX\" time=\"%X\""
 		    " ecn-in=\"%d%d\" ecn-out=\"%d%d\"",
 		    (unsigned long long)rbuf[idx].ts, rbuf[idx].d32,
-		    (double)rbuf[idx].e16 / TC_JANZ_RELAY_SOJOURN_PCTDIV,
 		    !!(rbuf[idx].f8 & BIT(1)), !!(rbuf[idx].f8 & BIT(0)),
 		    !!(rbuf[idx].f8 & BIT(4)), !!(rbuf[idx].f8 & BIT(3)));
 		//if (rbuf[idx].f8 & TC_JANZ_RELAY_SOJOURN_SLOW)
@@ -310,7 +309,7 @@ tsv_header(void)
 	    ",\"TS.\""
 	    ",\"OWD.|MEMBYTES|wdogscheduled?\""
 	    ",\"QDELAY.|NPKTS|NTOOEARLY\""
-	    ",\"CHANCE|handover?|N50US\""
+	    ",\"-|handover?|N50US\""
 	    ",\"ecnin|BWLIM|N1MS\""
 	    ",\"ecnout|TSOFS.|N4MS\""
 	    ",\"bit5?|-|NLATER\""
@@ -374,11 +373,10 @@ tsv_show(size_t idx)
 		ul1 <<= 10;
 		u3 = ul1 / 1000000000UL;
 		u4 = ul1 % 1000000000UL;
-		printf("\"p\"\t%llu.%09u\t%u.%09u\t%u.%09u\t%u\t%s\t%s\t%u\t%u\t%u\t\"%s\"\t%u\n",
+		printf("\"p\"\t%llu.%09u\t%u.%09u\t%u.%09u\t0\t%s\t%s\t%u\t%u\t%u\t\"%s\"\t%u\n",
 		    t1, t2,
 		    u3, u4,
 		    u1, u2,
-		    (unsigned int)rbuf[idx].e16,
 		    ecnidx[!(rbuf[idx].f8 & BIT(2)) ? 4 : ((unsigned int)rbuf[idx].f8 & 3U)],
 		    ecnidx[!(rbuf[idx].f8 & BIT(2)) ? 4 : (((unsigned int)rbuf[idx].f8 >> 3) & 3U)],
 		    !!(rbuf[idx].f8 & BIT(5)),

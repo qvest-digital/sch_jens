@@ -92,7 +92,7 @@ public final class JensReaderDemo {
                 // note both of the following can indicate marking even for nōn-ECN packets
                 // in that case, they aren’t marked (obviously)
                 // but JENS is designed to operate only with ECN-capable AML/L4S traffic
-                System.out.printf("; JENS %7.3f%% (%s)", r[i].chance * 100.0,
+                System.out.printf("; JENS (%s)",
                   r[i].markJENS ? "marked: CE" : "not marked");
                 //if (r[i].markCoDel) {
                 //    System.out.print("; CoDel marked");

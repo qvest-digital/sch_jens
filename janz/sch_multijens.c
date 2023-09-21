@@ -151,7 +151,7 @@ struct janz_skb {
 			u32 pktxlatency;	/* ts_enq adjustment */		//@8   :4
 		};
 		struct {		/* past these, just before janz_record_packet */
-			u16 chance;		/* janz_sendoff / 0 */		//@8   :2
+			u16 curunused;		/* janz_sendoff / 0 */		//@8   :2
 			short qid;		/* -1/0/1/2 */			//@ +2 :2
 		};
 	};									//…8   :4
@@ -266,7 +266,7 @@ janz_record_packet(struct sjanz_priv *q,
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_SOJOURN;
 	r.d32 = qdelay1024;
-	r.e16 = cb->chance;
+	r.e16 = 0;
 	r.f8 = cb->record_flag;
 	r.z.zSOJOURN.psize = ((u32)(cb->qid + 1)) << 30 |
 	    (qdisc_pkt_len(skb) & 0x3FFFFFFFU);
@@ -353,7 +353,7 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	qd1024 = qdelay_encode(cb, now, NULL, resizing);
 	/* these both overlay cb->pktxlatency, do not move up */
-	cb->chance = 0;
+	cb->curunused = 0;
 	cb->qid = qid;
 	janz_record_packet(q, skb, cb, qd1024, now);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
@@ -509,7 +509,6 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
-	cb->chance = chance;
 	cb->qid = qid;
 	janz_record_packet(q, skb, cb, qd1024, now);
 	return (skb);

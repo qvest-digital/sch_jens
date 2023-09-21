@@ -7,8 +7,9 @@ iproute2 (5.10.0-4jens24) UNRELEASED; urgency=medium
     Note these are only useful on a BBRv3-enabled Linux kernel!
   * Change qosmode=2 behaviour: treat incoming CE-marked packets also
     as L4S, for consistency with LLD (i.e. L4S-enabled DOCSIS)
+  * Drop e16 (chance) from packet reporting
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 13 Sep 2023 17:29:32 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 21 Sep 2023 18:26:58 +0200
 
 iproute2 (5.10.0-4jens23) tarent; urgency=low
 

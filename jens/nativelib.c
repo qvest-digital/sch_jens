@@ -105,7 +105,6 @@ static jfieldID o_REC_bwLimit;		// long (s64)
 static jfieldID o_REC_handoverStarting;	// bool
 // packet
 static jfieldID o_REC_sojournTime;	// long (s64)
-static jfieldID o_REC_chance;		// double
 static jfieldID o_REC_ecnIn;		// int
 static jfieldID o_REC_ecnOut;		// int
 static jfieldID o_REC_ecnValid;		// bool
@@ -252,7 +251,6 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getfield(REC, bwLimit, "J");
 	getfield(REC, handoverStarting, "Z");
 	getfield(REC, sojournTime, "J");
-	getfield(REC, chance, "D");
 	getfield(REC, ecnIn, "I");
 	getfield(REC, ecnOut, "I");
 	getfield(REC, ecnValid, "Z");
@@ -485,8 +483,6 @@ nativeRead(JNIEnv *env, jobject obj)
 			(*env)->SetLongField(env, to, o_REC_timestamp, U64.s);
 			(*env)->SetLongField(env, to, o_REC_sojournTime,
 			    (jlong)(1024ULL * (unsigned long long)buf->d32));
-			(*env)->SetDoubleField(env, to, o_REC_chance,
-			    (jdouble)((double)buf->e16 / TC_JANZ_RELAY_SOJOURN_PCTDIV));
 			(*env)->SetIntField(env, to, o_REC_ecnIn,
 			    (jint)((0U + buf->f8) & 0x03U));
 			(*env)->SetIntField(env, to, o_REC_ecnOut,

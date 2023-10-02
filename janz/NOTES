@@ -84,3 +84,5 @@ Document that:
   (basically: bypass or middle FIFO)
 • qosmode 2: nōn-IP traffic isn’t eligible for bumping
   to lodelay FIFO any more (only bypass)
+• drops accounting in gnet stats are now pathetic enq
+  case of no room left to drop anything

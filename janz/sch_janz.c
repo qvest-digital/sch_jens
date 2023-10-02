@@ -206,7 +206,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	cb->xmittot = 0;
 	cb->xmitnum = 0;
 	janz_dropchk(sch, q, now);
-	return (jq_enq(sch, q, q, dstfifo, skb, now, prev_backlog));
+	return (jq_enq(sch, q, q, dstfifo, skb, now, to_free, prev_backlog));
 }
 
 static struct sk_buff *

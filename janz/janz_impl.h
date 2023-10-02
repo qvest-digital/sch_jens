@@ -189,7 +189,7 @@ q_enq(struct Qdisc *sch, Sjanz *sq, struct janz_skbfifo *q, struct sk_buff *skb)
 
 static inline int
 jq_enq(struct Qdisc *sch, Mjanz *mq, Sjanz *sq, struct janz_skbfifo *q,
-    struct sk_buff *skb, u64 now, u32 prev_backlog)
+    struct sk_buff *skb, u64 now, struct sk_buff **to_free, u32 prev_backlog)
 {
 	bool overlimit;
 
@@ -198,6 +198,23 @@ jq_enq(struct Qdisc *sch, Mjanz *mq, Sjanz *sq, struct janz_skbfifo *q,
 		skb->next = NULL;
 
 	overlimit = sch->q.qlen >= sch->limit;
+
+	if (unlikely(overlimit) && unlikely(!sq->q[1].first) &&
+	    unlikely(!sq->q[0].first) && unlikely(!sq->q[2].first)) {
+		struct janz_skb *cb;
+
+		/*
+		 * pathetic case: this sch_janz has no other packets
+		 * left to drop (all are in bypass or retransmission
+		 * or in sch_multijens in other sch_janz queues), so
+		 * drop the incoming one conveying ENOBUFS to sender
+		 */
+		cb = get_janz_skb(skb);
+		cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
+		cb->qdelay1024 = 0xFFFFFFFEUL; // dropped before enq
+		janz_record_packet(sq, skb, cb, now);
+		return (qdisc_drop(skb, sch, to_free));
+	}
 
 	skb_orphan(skb);
 	q_enq(sch, sq, q, skb);

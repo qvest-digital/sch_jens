@@ -123,7 +123,12 @@ Record types define the following data members:
 
 • TC_JANZ_RELAY_SOJOURN:
   – d32 packet sojourn time in 1024 ns units
-  – e16 currently unused, reassigned soon
+  – e16 bitfield
+    ‣ 0:2 total number of retransmissions for this packet
+          (0=none, 1/2/3/4/5=retransmitted)
+    ‣ 3:5 “this” number of transmission (0=first, 1=second, …, 5=sixth)
+          or 7 (not retransmitted but held up by preceding rexmitted pkt)
+    ‣ rest currently unused
   – f8 bitfield
     ‣ 0:1 ECN bits on enqueue
     ‣   2 ECN bits are valid (0 if they could not be determined)

@@ -144,9 +144,9 @@ struct janz_skb {
 	u16 srcport;								//@ +4 :2
 	u16 dstport;								//@ +6 :2
 	union {									//@8   :1
-		/* up to (skb->next == NULL) check in enqueue */
+		/* early within enq */
 		u8 tosbyte;		/* from IPv4/IPv6 header or faked */
-		/* generally after that, in dequeue/rexmit mostly */
+		/* from (skb->next != NULL) check on */
 		struct {
 			u8 xqid:2;	/* qid (1/2/3) or 0=unknown or bypass */
 			u8 xunused:6;	/* reserved for retransmissions */
@@ -378,7 +378,6 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now,
 	q->pktlensum -= qdisc_pkt_len(skb);
 	qdisc_qstats_backlog_dec(sch, skb);
 	cb = get_janz_skb(skb);
-	cb->xqid = qid + 1;
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	qd1024 = qdelay_encode(cb, now, NULL, resizing);
 	janz_record_packet(q, skb, cb, qd1024, now);
@@ -858,6 +857,8 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		}
 		break;
 	}
+	/* from here, cb->tosbyte is no longer valid */
+	cb->xqid = qid + 1;
 
 	// assumption is 1 packet is passed
 	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?"))
@@ -962,7 +963,6 @@ janz_deq(struct Qdisc *sch)
 	skb->next = NULL;
 	qdisc_qstats_backlog_dec(sch, skb);
 	qdisc_bstats_update(sch, skb);
-	cb->xqid = qid + 1;
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	q->notbefore = (q->crediting ?

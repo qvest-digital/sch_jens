@@ -125,7 +125,7 @@ struct janz_priv {
 	u8 crediting;
 	u8 qosmode;
 #ifdef SCH_JANZDBG
-	u8 wdogreason;			/* 10=notbefore 20=nothingtosend */
+	u8 wdogreason;			/* 10=notbefore 20=nothingtosend 40=rexmit-delay */
 	u16 wdogearly;
 	u64 wdogtimers[4];		/* <50us <1000us <4000us >=4ms */
 	u64 wdognext;

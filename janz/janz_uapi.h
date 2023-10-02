@@ -119,7 +119,7 @@ enum {
 
 	/* watchdog performance debugging */
 	/* f8 = 0 (not scheduled because of watchdog) or bitfield: */
-	/*	0x10=notbefore 0x20=nothingtosend */
+	/*	0x10=notbefore 0x20=nothingtosend 0x40=rexmit-delay */
 	/*	0x01=now>=wdognext 0x02=now<wdognext */
 	/* e16 = amount of times it was called too early */
 	/* d32 = ns delay of this, if f8≠0 */

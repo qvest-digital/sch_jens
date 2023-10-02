@@ -77,6 +77,7 @@ struct mjanz_priv {
 	u32 fragcache_num;								//@16
 	u32 nsubbufs;									//   +4
 	struct janz_ctlfile_pkt *ctldata;	/* per-UE */				//@  +8
+	struct janz_skbfifo yfifo; /* for now (cf. sch_janz), see notyet later */	//@16
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 #ifdef notyet
 	/* both for retransmissions [0‥uenum[ plus global bypass FIFO */
@@ -207,12 +208,23 @@ janz_deq(struct Qdisc *sch)
 	u32 ue;
 	struct janz_skb *cb;
 	int qid;
-	u64 mnextns = (u64)~(u64)0;
+	u64 mnextns;
 
-	qid = -1;
 	now = ktime_get_ns();
-	rs = (u64)~(u64)0U;
 
+	/* check bypass at first */
+	if (q->yfifo.first) {
+		skb = q_deq(sch, &(q->subqueues[0]), &(q->yfifo));
+		cb = get_janz_skb(skb);
+		cb->xqid = 0;
+		qdisc_bstats_update(sch, skb);
+		/* from janz_sendoff */
+		qdelay_encode(cb, now, NULL, false);
+		janz_record_packet(&(q->subqueues[0]), skb, cb, now);
+		return (skb);
+	}
+
+	mnextns = (u64)~(u64)0;
 	ue = q->uecur;
  find_subqueue_to_send:
 	sq = &(q->subqueues[ue]);
@@ -251,6 +263,7 @@ janz_deq(struct Qdisc *sch)
 	}								\
 } while (/* CONSTCOND */ 0)
 
+	rs = (u64)~(u64)0U;
 	try_qid(0);
 	try_qid(1);
 	try_qid(2);
@@ -335,6 +348,7 @@ janz_reset(struct Qdisc *sch)
 			rtnl_kfree_skbs(q->subqueues[ue].q[2].first,
 			    q->subqueues[ue].q[2].last);
 		}
+		rtnl_kfree_skbs(q->yfifo.first, q->yfifo.last);
 		sch->q.qlen = 0;
 	}
 	for (ue = 0; ue < q->uenum; ++ue) {
@@ -350,6 +364,7 @@ janz_reset(struct Qdisc *sch)
 		if (q->subqueues[ue].record_chan)
 			relay_flush(q->subqueues[ue].record_chan);
 	}
+	q->yfifo.first = NULL; q->yfifo.last = NULL;
 	sch->qstats.backlog = 0;
 	sch->qstats.overlimits = 0;
 }

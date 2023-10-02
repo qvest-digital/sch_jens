@@ -71,3 +71,8 @@ data to put on ice for retransmissions
 vs data we do NOT need any more
 - pktxlatency (already overlaid by qdelay1024)
 - tosbyte (already overlaid by { xqid, xmitnum, xmittot })
+
+other
+-----
+
+cb->pktxlatency := 0 for bypass

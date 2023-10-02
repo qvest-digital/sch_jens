@@ -60,6 +60,7 @@ struct janz_priv {
 	u32 pktlensum;			/* amount of bytes queued up */			//@  +12
 	struct dentry *ctlfile;								//@16
 	u64 lastknownrate;								//@  +8
+	struct janz_skbfifo yfifo;	/* bypass */					//@16
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u8 crediting;
@@ -220,13 +221,29 @@ janz_deq(struct Qdisc *sch)
 	struct janz_skb *cb;
 	int qid;
 
-	qid = -1;
 	now = ktime_get_ns();
 #ifdef SCH_JANZDBG
 	janz_record_wdog(q, now);
 #endif
-	rs = (u64)~(u64)0U;
 	janz_dropchk(sch, q, now);
+
+	/* check bypass at first */
+	if (q->yfifo.first) {
+		skb = q_deq(sch, q, &(q->yfifo));
+		cb = get_janz_skb(skb);
+		cb->xqid = 0;
+		qdisc_bstats_update(sch, skb);
+#if 0 /* we can’t do this in sch_multijens at all, so for consistency… */
+		if (now >= q->qsz_next) {
+			janz_record_queuesz(sch, q, now, 0, 0);
+			++now;
+		}
+#endif
+		/* from janz_sendoff */
+		qdelay_encode(cb, now, NULL, false);
+		janz_record_packet(q, skb, cb, now);
+		return (skb);
+	}
 
 	if (now < q->notbefore) {
 		register u64 nextns;
@@ -263,6 +280,7 @@ janz_deq(struct Qdisc *sch)
 	}								\
 } while (/* CONSTCOND */ 0)
 
+	rs = (u64)~(u64)0U;
 	try_qid(0);
 	try_qid(1);
 	try_qid(2);
@@ -327,11 +345,13 @@ janz_reset(struct Qdisc *sch)
 		rtnl_kfree_skbs(q->q[0].first, q->q[0].last);
 		rtnl_kfree_skbs(q->q[1].first, q->q[1].last);
 		rtnl_kfree_skbs(q->q[2].first, q->q[2].last);
+		rtnl_kfree_skbs(q->yfifo.first, q->yfifo.last);
 		sch->q.qlen = 0;
 	}
 	q->q[0].first = NULL; q->q[0].last = NULL;
 	q->q[1].first = NULL; q->q[1].last = NULL;
 	q->q[2].first = NULL; q->q[2].last = NULL;
+	q->yfifo.first = NULL; q->yfifo.last = NULL;
 	q->pktlensum = 0;
 	sch->qstats.backlog = 0;
 	sch->qstats.overlimits = 0;

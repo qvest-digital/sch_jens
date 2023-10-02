@@ -193,10 +193,11 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		}
 		break;
 	}
+	dstfifo = &(sq->q[qid]);
 	/* from here, cb->tosbyte is no longer valid */
 	cb->xqid = qid + 1;
-	dstfifo = &(sq->q[qid]);
-
+	cb->xmittot = 0;
+	cb->xmitnum = 0;
 	return (jq_enq(sch, q, sq, dstfifo, skb, now, prev_backlog));
 }
 

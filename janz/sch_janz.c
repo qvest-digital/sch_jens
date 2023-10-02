@@ -544,8 +544,8 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	u8 noportinfo = 59;
 	int fragoff = -1;
 	struct janz_fragcomp fc;
-	struct ipv6hdr *ih6;
-	struct iphdr *ih4;
+	struct ipv6hdr *ih6 = NULL;
+	struct iphdr *ih4 = NULL;
 
 	/* addresses */
 	switch (skb->protocol) {
@@ -1049,8 +1049,8 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	struct nlattr *tb[TCA_JANZ_MAX + 1];
 	int err;
 	bool handover_started = false;
-	u32 newqosmode;
-	u64 newxlatency;
+	u32 newqosmode = 0;
+	u64 newxlatency = 0;
 
 	if (!opt)
 		return (-EINVAL);

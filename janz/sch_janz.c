@@ -219,6 +219,7 @@ janz_deq(struct Qdisc *sch)
 	struct janz_skb *cb;
 	int qid;
 
+ redo_deq:
 	now = ktime_get_ns();
 #ifdef SCH_JANZDBG
 	janz_record_wdog(q, now);
@@ -316,7 +317,10 @@ janz_deq(struct Qdisc *sch)
 
 	if (!skb)
 		return (NULL);
-	return (janz_sendoff(sch, q, skb, cb, now));
+	if (janz_sendoff(sch, q, skb, cb, now))
+		/* sent to retransmission; fastpath recalling */
+		goto redo_deq;
+	return (skb);
 }
 
 static struct sk_buff *

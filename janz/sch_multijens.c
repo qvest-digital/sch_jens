@@ -208,6 +208,7 @@ janz_deq(struct Qdisc *sch)
 	int qid;
 	u64 mnextns;
 
+ redo_deq:
 	now = ktime_get_ns();
 
 	/* check bypass at first */
@@ -306,7 +307,10 @@ janz_deq(struct Qdisc *sch)
 		++now;
 	}
 
-	return (janz_sendoff(sch, sq, skb, cb, now));
+	if (janz_sendoff(sch, sq, skb, cb, now))
+		/* sent to retransmission loop; fastpath recalling */
+		goto redo_deq;
+	return (skb);
 }
 
 static struct sk_buff *

@@ -311,7 +311,7 @@ janz_dropchk(struct Qdisc *sch, Sjanz *q, u64 now)
 		q->drop_next = now + DROPCHK_INTERVAL;
 }
 
-static inline struct sk_buff *
+static inline bool
 janz_sendoff(struct Qdisc *sch, Sjanz *q, struct sk_buff *skb,
     struct janz_skb *cb, u64 now)
 {
@@ -370,7 +370,7 @@ janz_sendoff(struct Qdisc *sch, Sjanz *q, struct sk_buff *skb,
 		}
 	}
 	janz_record_packet(q, skb, cb, now);
-	return (skb);
+	return (false);
 }
 
 static inline void

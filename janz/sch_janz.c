@@ -149,8 +149,8 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	struct janz_skb *cb = get_janz_skb(skb);
 	u8 qid;
 	u32 prev_backlog = sch->qstats.backlog;
-	bool overlimit;
 	u64 now;
+	struct janz_skbfifo *dstfifo;
 
 	now = ktime_get_ns();
 	janz_dropchk(sch, q, now);
@@ -206,34 +206,9 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		}
 		break;
 	}
+	dstfifo = &(q->q[qid]);
 
-	// assumption is 1 packet is passed
-	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?"))
-		skb->next = NULL;
-	skb_orphan(skb);
-
-	q->pktlensum += qdisc_pkt_len(skb);
-	if (unlikely(overlimit = (++sch->q.qlen > sch->limit)))
-		janz_drop_overlen(sch, q, now, true);
-	if (!q->q[qid].first) {
-		q->q[qid].first = skb;
-		q->q[qid].last = skb;
-	} else {
-		q->q[qid].last->next = skb;
-		q->q[qid].last = skb;
-	}
-	qdisc_qstats_backlog_inc(sch, skb);
-
-	if (now >= q->qsz_next)
-		janz_record_queuesz(sch, q, now, 0, 0);
-
-	if (unlikely(overlimit)) {
-		qdisc_qstats_overlimit(sch);
-		qdisc_tree_reduce_backlog(sch, 0,
-		    prev_backlog - sch->qstats.backlog);
-		return (NET_XMIT_CN);
-	}
-	return (NET_XMIT_SUCCESS);
+	return (jq_enq(sch, q, q, dstfifo, skb, now, prev_backlog));
 }
 
 static struct sk_buff *
@@ -278,9 +253,8 @@ janz_deq(struct Qdisc *sch)
 
 #define try_qid(i) do {							\
 	qid = (i);							\
-	skb = q->q[qid].first;						\
-	if (skb) {							\
-		cb = get_janz_skb(skb);					\
+	if (q->q[qid].first) {						\
+		cb = get_janz_skb(q->q[qid].first);			\
 		if (cb->ts_enq + cb->pktxlatency <= now)		\
 			goto got_skb;					\
 		/* ts_arrive > now: packet has not reached us yet */	\
@@ -304,14 +278,10 @@ janz_deq(struct Qdisc *sch)
 	goto nothing_to_send;
 
  got_skb:
-	if (!(q->q[qid].first = skb->next))
-		q->q[qid].last = NULL;
-	--sch->q.qlen;
-	q->pktlensum -= qdisc_pkt_len(skb);
-	skb->next = NULL;
-	qdisc_qstats_backlog_dec(sch, skb);
-	qdisc_bstats_update(sch, skb);
+	skb = q_deq(sch, q, &(q->q[qid]));
+	cb = get_janz_skb(skb);
 	cb->xqid = qid + 1;
+	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	q->notbefore = (q->crediting ?

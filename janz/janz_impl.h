@@ -10,6 +10,8 @@
 #ifndef __NET_SCHED_JANZ_IMPL_H
 #define __NET_SCHED_JANZ_IMPL_H
 
+static inline void janz_drop_overlen(struct Qdisc *, Mjanz *, u64, bool);
+
 static inline u32
 delay_encode(u64 now, u64 base, u64 *qdelayp)
 {
@@ -153,6 +155,63 @@ janz_fragcache_maint(Mjanz *q, u64 now)
 	}
 }
 
+static inline struct sk_buff *
+q_deq(struct Qdisc *sch, Sjanz *sq, struct janz_skbfifo *q)
+{
+	struct sk_buff *skb;
+
+	skb = q->first;
+	if (likely(skb)) {
+		qdisc_qstats_backlog_dec(sch, skb);
+		--sch->q.qlen;
+		sq->pktlensum -= qdisc_pkt_len(skb);
+		if (!(q->first = skb->next))
+			q->last = NULL;
+		skb->next = NULL;
+	}
+	return (skb);
+}
+
+static inline void
+q_enq(struct Qdisc *sch, Sjanz *sq, struct janz_skbfifo *q, struct sk_buff *skb)
+{
+	if (!q->first) {
+		q->first = skb;
+		q->last = skb;
+	} else {
+		q->last->next = skb;
+		q->last = skb;
+	}
+	sq->pktlensum += qdisc_pkt_len(skb);
+	++sch->q.qlen;
+	qdisc_qstats_backlog_inc(sch, skb);
+}
+
+static inline int
+jq_enq(struct Qdisc *sch, Mjanz *mq, Sjanz *sq, struct janz_skbfifo *q,
+    struct sk_buff *skb, u64 now, u32 prev_backlog)
+{
+	bool overlimit;
+
+	// assumption is exactly 1 packet is passed
+	if (WARN(skb->next != NULL, "jq_enq passed multiple packets?"))
+		skb->next = NULL;
+	skb_orphan(skb);
+	q_enq(sch, sq, q, skb);
+
+	overlimit = sch->q.qlen > sch->limit;
+	if (unlikely(overlimit)) {
+		janz_drop_overlen(sch, mq, now, true);
+		qdisc_qstats_overlimit(sch);
+		qdisc_tree_reduce_backlog(sch, 0,
+		    prev_backlog - sch->qstats.backlog);
+	}
+
+	if (now >= sq->qsz_next)
+		janz_record_queuesz(sch, sq, now, 0, 0);
+	return (unlikely(overlimit) ? NET_XMIT_CN : NET_XMIT_SUCCESS);
+}
+
 static inline void
 janz_drop_pkt(struct Qdisc *sch, Sjanz *q, u64 now,
     int qid, bool resizing)
@@ -160,12 +219,7 @@ janz_drop_pkt(struct Qdisc *sch, Sjanz *q, u64 now,
 	struct sk_buff *skb;
 	struct janz_skb *cb;
 
-	skb = q->q[qid].first;
-	if (!(q->q[qid].first = skb->next))
-		q->q[qid].last = NULL;
-	--sch->q.qlen;
-	q->pktlensum -= qdisc_pkt_len(skb);
-	qdisc_qstats_backlog_dec(sch, skb);
+	skb = q_deq(sch, q, &(q->q[qid]));
 	cb = get_janz_skb(skb);
 	cb->xqid = qid + 1;
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
@@ -572,5 +626,8 @@ janz_subbuf_init(struct rchan_buf *buf, void *subbuf_,
 
 	return (1);
 }
+
+#undef Mjanz
+#undef Sjanz
 
 #endif /* !__NET_SCHED_JANZ_IMPL_H */

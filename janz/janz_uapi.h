@@ -62,7 +62,7 @@ struct tc_janz_relay {
 	union {
 		__u8 z8[16];	/* 128 bits of structured extra data */
 		struct {
-			__u32 psize;	/* bit30‥31: FIFO# (1, 2 or 3) */
+			__u32 psize;	/* bit30‥31: FIFO# (1, 2 or 3; 0=bypass) */
 			__u8 ipver;
 			__u8 nexthdr;
 			__u16 sport;	/* host byteorder */

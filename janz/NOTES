@@ -79,3 +79,7 @@ Document that:
 • the bypass is now implemented, and what is sent there
 • sch_multijens: the bypass is loosely attached to UE#0
   but w̲i̲l̲l̲ ignore capacity there
+• qosmode 1: traffic is not categorised at all any more
+  (basically: bypass or middle FIFO)
+• qosmode 2: nōn-IP traffic isn’t eligible for bumping
+  to lodelay FIFO any more (only bypass)

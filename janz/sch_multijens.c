@@ -175,26 +175,14 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 			++qid;
 		break;
 	case 1:
-		// IPv{4,6} traffic is not categorised
+		// traffic is not categorised
 		qid = 1;
-		if (skb->protocol != htons(ETH_P_IP) &&
-		    skb->protocol != htons(ETH_P_IPV6)) {
-			if (cb->tosbyte & 0x10)
-				--qid;
-			if (cb->tosbyte & 0x08)
-				++qid;
-		}
 		break;
 	case 2:
-		// IPv{4,6} traffic is categorised by ECT(1) or else only
+		// traffic is categorised by ECT(1) or else only
 		qid = 1;
-		if (skb->protocol != htons(ETH_P_IP) &&
-		    skb->protocol != htons(ETH_P_IPV6)) {
-			if (cb->tosbyte & 0x10)
-				--qid;
-			if (cb->tosbyte & 0x08)
-				++qid;
-		} else {
+		if (skb->protocol == htons(ETH_P_IP) ||
+		    skb->protocol == htons(ETH_P_IPV6)) {
 			if (((cb->record_flag & INET_ECN_MASK) == INET_ECN_ECT_1) ||
 			    ((cb->record_flag & INET_ECN_MASK) == INET_ECN_CE))
 				--qid;

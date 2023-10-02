@@ -35,6 +35,7 @@
 #include "gru32b.h"
 #define Sjanz struct sjanz_priv
 #define Mjanz struct mjanz_priv
+#define lacks_retransmissions
 #include "janz_defs.h"
 
 /* workaround to relay_close late using the global workqueue */

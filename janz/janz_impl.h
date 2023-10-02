@@ -316,6 +316,7 @@ janz_sendoff(struct Qdisc *sch, Sjanz *q, struct sk_buff *skb,
     struct janz_skb *cb, u64 now)
 {
 	u64 qdelay;
+	u32 rexmit_chance;
 
 	qdelay_encode(cb, now, &qdelay, false);
 
@@ -370,8 +371,27 @@ janz_sendoff(struct Qdisc *sch, Sjanz *q, struct sk_buff *skb,
 		}
 	}
 
+	rexmit_chance = get_random_u32_below(100000U);
+	cb->xmittot = rexmit_chance < 1U ? 5 :
+	    rexmit_chance < 10U ? 4 :
+	    rexmit_chance < 100U ? 3 :
+	    rexmit_chance < 1000U ? 2 :
+	    rexmit_chance < 10000U ? 1 : 0;
+#ifndef lacks_retransmissions
+	if (cb->xmittot) {
+		/* ulong; jens_defs.h, CTA on64bitsystem, ensures fit */
+		skb->dev_scratch = now;
+		/* report as sent-but-retransmitted */
+		janz_record_packet(q, skb, cb, now);
+		/* enter retransmission loop */
+		++cb->xmitnum;
+		q_enq(sch, q, &(q->rexmit), skb);
+		return (true);
+	}
+#endif
+
 	/* not retransmitted packet but held up? */
-	if (!cb->xmittot && unlikely(q->rexmit.first)) {
+	if (unlikely(q->rexmit.first)) {
 		/* signal this fact */
 		cb->xmitnum = 7;
 		/* append to nōn-reorder retransmission loop */

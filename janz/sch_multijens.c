@@ -985,6 +985,7 @@ janz_deq(struct Qdisc *sch)
 	if (now >= sq->qsz_next) {
  force_rate_and_out:
 		janz_record_queuesz(sch, sq, now, rate, 0);
+		++now;
 	}
 
 	return (janz_sendoff(sch, sq, skb, cb, now, qid));

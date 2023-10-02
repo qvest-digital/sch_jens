@@ -75,4 +75,7 @@ vs data we do NOT need any more
 other
 -----
 
-(nothing atm)
+Document that:
+• the bypass is now implemented, and what is sent there
+• sch_multijens: the bypass is loosely attached to UE#0
+  but w̲i̲l̲l̲ ignore capacity there

@@ -75,5 +75,4 @@ vs data we do NOT need any more
 other
 -----
 
-cb->pktxlatency := 0 for bypass
-cb->xqid = 0; for bypass
+(nothing atm)

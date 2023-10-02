@@ -139,12 +139,10 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	struct janz_skbfifo *dstfifo;
 
 	now = ktime_get_ns();
-	sq = &(q->subqueues[(u32)skb->mark < q->uenum ? (u32)skb->mark : 0]);
-	janz_dropchk(sch, sq, now);
 
 	/* initialise values in cb */
 	cb->ts_enq = now;
-	cb->pktxlatency = sq->xlatency;
+	/* cb->pktxlatency below */
 	/* init values from before analysis */
 	cb->srcport = 0;
 	cb->dstport = 0;
@@ -154,8 +152,18 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	cb->record_flag = 0;
 	/* note ↑ struct order */
 
-	/* analyse skb determining tosbyte etc. */
-	janz_analyse(sch, q, skb, cb, now);
+	/* analyse skb determining tosbyte, etc. */
+	if (janz_analyse(sch, q, skb, cb, now)) {
+		/* use the bypass; cb->tosbyte isn’t valid */
+		dstfifo = &(q->yfifo);
+		sq = &(q->subqueues[0]);
+		cb->pktxlatency = 0;
+		cb->xqid = 0;
+		goto enq_bypass;
+	}
+
+	sq = &(q->subqueues[(u32)skb->mark < q->uenum ? (u32)skb->mark : 0]);
+	cb->pktxlatency = sq->xlatency;
 
 	switch (sq->qosmode) {
 	case 0:
@@ -196,8 +204,10 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	dstfifo = &(sq->q[qid]);
 	/* from here, cb->tosbyte is no longer valid */
 	cb->xqid = qid + 1;
+ enq_bypass:
 	cb->xmittot = 0;
 	cb->xmitnum = 0;
+	janz_dropchk(sch, sq, now);
 	return (jq_enq(sch, q, sq, dstfifo, skb, now, prev_backlog));
 }
 

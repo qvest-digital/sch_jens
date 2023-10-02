@@ -367,7 +367,7 @@ janz_init_record_flag(struct janz_skb *cb)
 	cb->record_flag = ecnbits;
 }
 
-static inline void
+static inline bool
 janz_analyse(struct Qdisc *sch, Mjanz *q,
     struct sk_buff *skb, struct janz_skb *cb, u64 now)
 {
@@ -387,7 +387,7 @@ janz_analyse(struct Qdisc *sch, Mjanz *q,
 		hdrp = (void *)ih4;
 		if ((hdrp + sizeof(struct iphdr)) > endoflineardata) {
 			JANZ_IP_DECODER_DEBUG("IPv4 too short\n");
-			return;
+			return (false);
 		}
 		JANZ_IP_DECODER_DEBUG("IPv4 %08X->%08X proto %u frag %d\n",
 		    htonl(ih4->saddr), htonl(ih4->daddr), ih4->protocol, ip_is_fragment(ih4) ? 1 : 0);
@@ -419,7 +419,7 @@ janz_analyse(struct Qdisc *sch, Mjanz *q,
 		hdrp = (void *)ih6;
 		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata) {
 			JANZ_IP_DECODER_DEBUG("IPv6 too short\n");
-			return;
+			return (false);
 		}
 		JANZ_IP_DECODER_DEBUG("IPv6 %02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X->%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X nexthdr %u\n",
 		    ih6->saddr.s6_addr[0], ih6->saddr.s6_addr[1], ih6->saddr.s6_addr[2], ih6->saddr.s6_addr[3],
@@ -437,32 +437,56 @@ janz_analyse(struct Qdisc *sch, Mjanz *q,
 		cb->nexthdr = ih6->nexthdr;
 		hdrp += 40;
 		break;
-	/* fake iptos for the rest */
+	/* ARP/RARP bypass */
 	case htons(ETH_P_ARP):
 		JANZ_IP_DECODER_DEBUG("ARP packet\n");
-		cb->tosbyte = 0x10;	/* interactive/lodelay */
-		return;
+		return (true);
 	case htons(ETH_P_RARP):
 		JANZ_IP_DECODER_DEBUG("RARP packet\n");
-		cb->tosbyte = 0x10;
-		return;
+		return (true);
+	/* fake iptos for the rest */
 	case htons(ETH_P_PPP_DISC):
 		JANZ_IP_DECODER_DEBUG("PPPoE discovery packet\n");
-		cb->tosbyte = 0x10;
-		return;
+		cb->tosbyte = 0x10;	/* interactive/lodelay */
+		return (false);
 	case htons(ETH_P_LOOP):
 	case htons(ETH_P_LOOPBACK):
 		JANZ_IP_DECODER_DEBUG("ethernet loopback packet\n");
 		cb->tosbyte = 0x08;	/* bulk */
-		return;
+		return (false);
 	default:
 		JANZ_IP_DECODER_DEBUG("unknown proto htons(0x%04X)\n", (unsigned)ntohs(skb->protocol));
-		return;
+		return (false);
 	}
 	/* we end here only if the packet is IPv4 or IPv6 */
 
  try_nexthdr:
 	switch (cb->nexthdr) {
+	case 1:		/* ICMP */
+		if (cb->ipver != 4) {
+			JANZ_IP_DECODER_DEBUG("%s in %d packet\n",
+			    "ICMP", cb->ipver);
+			goto no_ports;
+		}
+		if ((hdrp + 4) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto no_ports;
+		}
+		switch (/* Type */ hdrp[0]) {
+		case 3: /* Destination Unreachable */
+		case 5: /* Redirect */
+		case 9: /* Router Advertisement */
+		case 10: /* Router Solicitation */
+		case 11: /* Time Exceeded */
+		case 12: /* Parameter Problem: Bad IP header */
+		case 13: /* Timestamp (like NTP) */
+		case 14: /* Timestamp Reply */
+			/*XXX here could validate legacy ICMP checksum */
+			/* into the bypass */
+			return (true);
+		default:
+			return (false);
+		}
 	case 6:		/* TCP */
 	case 17:	/* UDP */
 		/* both begin with src and dst ports in this order */
@@ -473,9 +497,46 @@ janz_analyse(struct Qdisc *sch, Mjanz *q,
 		cb->srcport = ((unsigned int)hdrp[0] << 8) | hdrp[1];
 		cb->dstport = ((unsigned int)hdrp[2] << 8) | hdrp[3];
 		break;
+	case 58:	/* ICMPv6 */
+		if (cb->ipver != 6) {
+			JANZ_IP_DECODER_DEBUG("%s in %d packet\n",
+			    "ICMPv6", cb->ipver);
+			goto no_ports;
+		}
+		if ((hdrp + 4) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto no_ports;
+		}
+		switch (/* Type */ hdrp[0]) {
+		case 1: /* Destination unreachable */
+		case 2: /* Packet too big */
+		case 3: /* Time exceeded */
+		case 4: /* Parameter problem */
+		case 133: /* ND Router Solicitation */
+		case 134: /* ND Router Advertisement */
+		case 135: /* ND Neighbour Solicitation */
+		case 136: /* ND Neighbour Advertisement */
+		case 137: /* ND Redirect */
+		case 141: /* IND Solicitation (like RARP) */
+		case 142: /* IND Advertisement */
+		case 144: /* Mobile Prefix Solicitation */
+		case 145: /* Mobile Prefix Advertisement */
+		case 146: /* SeND Certification Path Solicitation */
+		case 147: /* SeND Certification Path Advertisement */
+			/*XXX here could validate ICMPv6 checksum */
+			/* into the bypass */
+			return (true);
+		default:
+			return (false);
+		}
 	case 0:		/* IPv6 hop-by-hop options */
 	case 43:	/* IPv6 routing */
 	case 60:	/* IPv6 destination options */
+		if (cb->ipver != 6) {
+			JANZ_IP_DECODER_DEBUG("%s in %d packet\n",
+			    "IPv6 options", cb->ipver);
+			goto no_ports;
+		}
 		if ((hdrp + 4) > endoflineardata) {
 			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
@@ -484,16 +545,17 @@ janz_analyse(struct Qdisc *sch, Mjanz *q,
 		hdrp += ((unsigned int)hdrp[1] + 1U) * 8U;
 		goto try_nexthdr;
 	case 44:	/* IPv6 fragment */
+		if (cb->ipver != 6) {
+			JANZ_IP_DECODER_DEBUG("%s in %d packet\n",
+			    "IPv6 fragment header", cb->ipver);
+			goto no_ports;
+		}
 		if ((hdrp + 8) > endoflineardata) {
 			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
 			goto no_ports;
 		}
 		if (fragoff != -1) {
 			JANZ_IP_DECODER_DEBUG("two fragment headers\n");
-			goto no_ports;
-		}
-		if (cb->ipver != 6) {
-			JANZ_IP_DECODER_DEBUG("IPv6 fragment header in %d packet\n", cb->ipver);
 			goto no_ports;
 		}
 		memcpy(&fc.sip, ih6->saddr.s6_addr, 16);
@@ -572,7 +634,7 @@ janz_analyse(struct Qdisc *sch, Mjanz *q,
 		}
 		q->fragcache_used = fe;
 	}
-	return;
+	return (false);
 
  higher_fragment: {
 	struct janz_fragcache *fe;
@@ -584,7 +646,7 @@ janz_analyse(struct Qdisc *sch, Mjanz *q,
 			cb->nexthdr = fe->nexthdr;
 			cb->srcport = fe->sport;
 			cb->dstport = fe->dport;
-			return;
+			return (false);
 		}
 		fe = fe->next;
 	}
@@ -593,7 +655,7 @@ janz_analyse(struct Qdisc *sch, Mjanz *q,
  no_ports:
 	/* we end here if the packet buffer does not contain enough info */
 	cb->nexthdr = noportinfo;
-	return;
+	return (false);
 }
 
 static struct dentry *

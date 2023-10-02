@@ -104,18 +104,7 @@ enum {
 	/* x64[0] = current rate in bits/s */
 	TC_JANZ_RELAY_QUEUESZ,
 
-	/* report a single packet leaving our queue */
-	/* d32 = sojourn time in 1024 ns units
-	         (-1 = drop on queue resize,
-		  -2 = drop before enqueue with extralatency applied) */
-	/* e16 = xxxx reassigned soon */
-	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
-		3:4=ECN bits on dequeue, 5=TC_JANZ_RELAY_SOJOURN_xxxx,
-		6=TC_JANZ_RELAY_SOJOURN_MARK, 7=TC_JANZ_RELAY_SOJOURN_DROP */
-	/* x8 = source IP, y8 = destination IP */
-	/* z.zSOJOURN = packet size, IP version (4, 6, 0 for not IP) */
-	/* + if IP: L4 proto, if TCP/UDP also src/dst port */
-	TC_JANZ_RELAY_SOJOURN,
+	__TC_JANZ_RELAY_OLDVER5,
 
 	/* watchdog performance debugging */
 	/* f8 = 0 (not scheduled because of watchdog) or bitfield: */
@@ -128,6 +117,20 @@ enum {
 	/* y64[0] = amount of times delay < 4000 us */
 	/* y64[1] = amount of times delay >= 4 ms */
 	TC_JANZ_RELAY_WDOGDBG,
+
+	/* report a single packet leaving our queue */
+	/* d32 = sojourn time in 1024 ns units
+	         (-1 = drop on queue resize,
+		  -2 = drop before enqueue with extralatency applied) */
+	/* e16 = bitfield: 0:2=retransmission#total, 3:5=rexmit-#attempt,
+		6:15=unused */
+	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
+		3:4=ECN bits on dequeue, 5=TC_JANZ_RELAY_SOJOURN_xxxx,
+		6=TC_JANZ_RELAY_SOJOURN_MARK, 7=TC_JANZ_RELAY_SOJOURN_DROP */
+	/* x8 = source IP, y8 = destination IP */
+	/* z.zSOJOURN = packet size, IP version (4, 6, 0 for not IP) */
+	/* + if IP: L4 proto, if TCP/UDP also src/dst port */
+	TC_JANZ_RELAY_SOJOURN,
 
 	/* invalid, too high */
 	__TC_JANZ_RELAY_MAX

@@ -86,7 +86,8 @@ janz_record_packet(Sjanz *q,
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_SOJOURN;
 	r.d32 = cb->qdelay1024;
-	r.e16 = 0;
+	r.e16 = ((unsigned int)cb->xmittot) |
+	    ((unsigned int)cb->xmitnum << 3);
 	r.f8 = cb->record_flag;
 	r.z.zSOJOURN.psize = ((unsigned int)cb->xqid << 30) |
 	    (qdisc_pkt_len(skb) & 0x3FFFFFFFU);

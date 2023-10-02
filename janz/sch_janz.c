@@ -894,7 +894,7 @@ janz_deq(struct Qdisc *sch)
 {
 	struct janz_priv * const q = qdisc_priv(sch);
 	struct sk_buff *skb;
-	u64 now, rate = 0, rs;
+	u64 now, rate, rs;
 	struct janz_skb *cb;
 	int qid;
 
@@ -903,6 +903,8 @@ janz_deq(struct Qdisc *sch)
 	janz_record_wdog(q, now);
 #endif
 	janz_dropchk(sch, q, now);
+
+	rate = 0;
 
 	if (now < q->notbefore) {
 		register u64 nextns;

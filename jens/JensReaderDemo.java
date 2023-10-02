@@ -125,6 +125,7 @@ public final class JensReaderDemo {
                   r[i].pktSize);
 		switch (r[i].usedFIFO) {
 		case 0:
+			System.out.print("; FIFO bypass");
 			break;
 		case 1:
 			System.out.print("; lodelay FIFO");

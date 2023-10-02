@@ -476,7 +476,7 @@ public final class JensReaderLib {
             @UsedByJNI
             public boolean dropped;
             /**
-             * <p>Which FIFO was used (0 = unknown).</p>
+             * <p>Which FIFO was used (0 = bypass; 1, 2, 3 = FIFO#).</p>
              *
              * <p>{@link #handlePacket(Record[], int)} only.</p>
              */

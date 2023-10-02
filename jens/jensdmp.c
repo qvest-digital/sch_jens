@@ -326,7 +326,7 @@ static const char ecnidx[5][5] = {
 };
 
 static const char *fifoidstrs[4] = {
-	"", " FIFO lodelay", " FIFO normal", " FIFO bulk"
+	" FIFO bypass", " FIFO lodelay", " FIFO normal", " FIFO bulk"
 };
 
 static void

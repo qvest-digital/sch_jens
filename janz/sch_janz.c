@@ -243,6 +243,24 @@ janz_deq(struct Qdisc *sch)
 		return (skb);
 	}
 
+	/* next, retransmissions */
+	if (q->rexmit.first) {
+		/* inspect before dequeueing */
+		skb = q->rexmit.first;
+		cb = get_janz_skb(skb);
+		/* tailing a retransmitted packet but ready to send? */
+		if (cb->xmitnum == 7) {
+			/* dequeue */
+			skb = q_deq(sch, q, &(q->rexmit));
+			/* no qdisc_bstats_update: already done */
+			/* no qdelay_encode: already done */
+			/* no janz_record_packet: already done */
+			return (skb);
+		}
+		/* no, then it’s a retransmitted packet */
+		//…
+	}
+
 	rate = 0;
 
 	if (now < q->notbefore) {

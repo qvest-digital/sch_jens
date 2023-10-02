@@ -369,6 +369,19 @@ janz_sendoff(struct Qdisc *sch, Sjanz *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
+
+	/* not retransmitted packet but held up? */
+	if (!cb->xmittot && unlikely(q->rexmit.first)) {
+		/* signal this fact */
+		cb->xmitnum = 7;
+		/* append to nōn-reorder retransmission loop */
+		q_enq(sch, q, &(q->rexmit), skb);
+		/* but do report as sent already with flag */
+		janz_record_packet(q, skb, cb, now);
+		/* don’t send this packet */
+		return (true);
+	}
+
 	janz_record_packet(q, skb, cb, now);
 	return (false);
 }

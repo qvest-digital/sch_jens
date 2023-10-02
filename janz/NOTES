@@ -57,6 +57,7 @@ data to put on ice for retransmissions
 - skb
 - u64 now (time of FIRST transmission)
   ⇒ skb->dev_scratch (ulong!) if we reset “skb->dev = qdisc_dev(sch);” before handing out
+  ulong==u64 is now compile-time asserted
 - ts_enq
 - qdelay1024
 - srcport

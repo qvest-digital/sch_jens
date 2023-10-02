@@ -105,6 +105,11 @@ get_janz_skb(const struct sk_buff *skb)
 mbCTA_BEG(janz_misc);
  mbCTA(hasatomic64, sizeof(atomic64_t) == 8U);
  mbCTA(maxxlatency_ok, MAXXLATENCY <= 0xFFFFFFFFULL);
+ /* needed for:
+  * • unsigned long skb->dev_scratch
+  * • u64 ktime_get_ns() (return type)
+  */
+ mbCTA(on64bitsystem, sizeof(unsigned long) == sizeof(u64));
 mbCTA_END(janz_misc);
 
 #endif /* !__NET_SCHED_JANZ_DEFS_H */

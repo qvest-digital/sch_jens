@@ -258,7 +258,84 @@ janz_deq(struct Qdisc *sch)
 			return (skb);
 		}
 		/* no, then it’s a retransmitted packet */
-		//…
+		if (now >= ((u64)skb->dev_scratch) +
+		    nsmul(8, NSEC_PER_MSEC) * cb->xmitnum) {
+			/*
+			 * do the entire machinery from below and
+			 * janz_sendoff but without dequeueing the
+			 * skb first, in case we have to retransmit
+			 * at least one more time (rexmit FIFO order)
+			 */
+			rate = 0;
+			if (now < q->notbefore) {
+				register u64 nextns;
+
+				nextns = min(q->notbefore, q->drop_next);
+#ifdef SCH_JANZDBG
+				q->wdogreason = 0x10;
+				q->wdognext = nextns;
+#endif
+				qdisc_watchdog_schedule_ns(&q->watchdog, nextns);
+				skb = NULL;
+				goto out;
+			}
+			/* we have reached notbefore */
+			/* previous packet is fully sent */
+			qdisc_bstats_update(sch, skb);
+
+			rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
+			q->notbefore = (q->crediting ? max(q->notbefore,
+			    ((u64)skb->dev_scratch) +
+			    nsmul(8, NSEC_PER_MSEC) * cb->xmitnum) : now) +
+			    (rate * (u64)qdisc_pkt_len(skb));
+			q->crediting = 1;
+			if (rate != q->lastknownrate ||
+			    now >= q->qsz_next) {
+				janz_record_queuesz(sch, q, now, rate, 0);
+				++now;
+			}
+			janz_record_packet(q, skb, cb, now);
+			if (cb->xmitnum == cb->xmittot) {
+				/* actually dequeue, for sending */
+				if (unlikely(q_deq(sch, q, &(q->rexmit)) != skb)) {
+					WARN_TAINT(1, TAINT_CPU_OUT_OF_SPEC,
+					    "corrupted head of rexmit FIFO");
+					/* delay traffic noticeably */
+					/* so the user knows to look */
+					q->notbefore += NSEC_PER_SEC;
+				}
+				/* restore, used for rexmit base timestamp */
+				skb->dev = qdisc_dev(sch);
+				/* and off! */
+				return (skb);
+			}
+			/* no, keep this at the head of the rexmit FIFO */
+			++cb->xmitnum;
+			/*
+			 * while we did just set q->notbefore, it can,
+			 * nevertheless, be in the past (when crediting,
+			 * with backfilling), so give the regular FIFOs
+			 * a chance of running, even if they would just
+			 * pile up behind the retransmitted one
+			 */
+			now = ktime_get_ns();
+			if (now < q->notbefore) {
+				register u64 nextns;
+
+				nextns = min(q->notbefore, q->drop_next);
+#ifdef SCH_JANZDBG
+				q->wdogreason = 0x40;
+				q->wdognext = nextns;
+#endif
+				qdisc_watchdog_schedule_ns(&q->watchdog, nextns);
+				skb = NULL;
+				goto out;
+			}
+			/* FALLTHROUGH */
+		}
+		/* else it’s not yet the retransmitted packet’s time */
+		skb = NULL;
+		cb = NULL;
 	}
 
 	rate = 0;

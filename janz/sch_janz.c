@@ -37,6 +37,7 @@
 #include <net/inet_ecn.h>
 #include <net/pkt_cls.h>
 
+#include "mbsdcc.h"
 #include "janz_uapi.h"
 #include "gru32b.h"
 
@@ -44,6 +45,12 @@
 #define MAXXLATENCY nsmul(2, NSEC_PER_SEC)
 
 #define nsmul(val, fac) ((u64)((u64)(val) * (u64)(fac)))
+
+/* compile-time assertions */
+mbCTA_BEG(janz_misc);
+ mbCTA(hasatomic64, sizeof(atomic64_t) == 8U);
+ mbCTA(maxxlatency_ok, MAXXLATENCY <= 0xFFFFFFFFULL);
+mbCTA_END(janz_misc);
 
 static inline u64
 us_to_ns(u32 us)
@@ -74,20 +81,16 @@ struct janz_fragcache {
 	struct janz_fragcache *next;		//@  +8 :ptr
 } __attribute__((__packed__));
 
-/* compile-time assertion */
-struct janz_fragcache_check {
-	int hasatomic64[sizeof(atomic64_t) == 8 ? 1 : -1];
-	int cmp[sizeof(struct janz_fragcomp) == 37 ? 1 : -1];
-	int cac[sizeof(struct janz_fragcache) == (56 + sizeof(void *)) ? 1 : -1];
-	int tot[sizeof(struct janz_fragcache) <= 64 ? 1 : -1];
-	int xip[sizeof_field(struct tc_janz_relay, xip) == 16 ? 1 : -1];
-	int yip[sizeof_field(struct tc_janz_relay, yip) == 16 ? 1 : -1];
-	int x_y[offsetof(struct tc_janz_relay, yip) ==
-	    (offsetof(struct tc_janz_relay, xip) + 16) ? 1 : -1];
-	int s_d[offsetof(struct janz_fragcomp, dip) ==
-	    (offsetof(struct janz_fragcomp, sip) + 16) ? 1 : -1];
-	int maxxlatency_ok[(MAXXLATENCY <= 0xFFFFFFFFULL) ? 1 : -1];
-};
+/* compile-time assertions */
+mbCTA_BEG(janz_fragcache_check);
+ mbCTA(cmp, sizeof(struct janz_fragcomp) == 37U);
+ mbCTA(cac, sizeof(struct janz_fragcache) == (56U + sizeof(void *)));
+ mbCTA(tot, sizeof(struct janz_fragcache) <= 64U);
+ mbCTA(xip, mbccFSZ(struct tc_janz_relay, xip) == 16U);
+ mbCTA(yip, mbccFSZ(struct tc_janz_relay, yip) == 16U);
+ mbCTA(x_y, offsetof(struct tc_janz_relay, yip) == (offsetof(struct tc_janz_relay, xip) + 16U));
+ mbCTA(s_d, offsetof(struct janz_fragcomp, dip) == (offsetof(struct janz_fragcomp, sip) + 16U));
+mbCTA_END(janz_fragcache_check);
 
 struct janz_skbfifo {
 	struct sk_buff *first;

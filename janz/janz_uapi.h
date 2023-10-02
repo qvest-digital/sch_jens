@@ -25,6 +25,16 @@ enum {
 
 #define TC_JANZ_TIMESHIFT 10
 
+#ifdef mbCTA
+#define JANZ__SIZECHECK(name,len) \
+		mbCTA_BEG(name); \
+		mbCTA(name, sizeof(struct name) == (len)); \
+		mbCTA_END(name)
+#else
+#define JANZ__SIZECHECK(name,len) \
+		extern struct name name ## _cta[sizeof(struct name) == (len) ? 1 : -1]
+#endif
+
 /* relay record */
 struct tc_janz_relay {
 	__u64 ts;		/* timestamp (CLOCK_MONOTONIC, ns) */
@@ -71,7 +81,7 @@ struct tc_janz_relay {
 	} z;
 };
 /* compile-time check for correct size */
-extern struct tc_janz_relay tc_janz_relay_cta[sizeof(struct tc_janz_relay) == 64 ? 1 : -1];
+JANZ__SIZECHECK(tc_janz_relay, 64U);
 
 /* relay record types (see README for details) */
 enum {
@@ -144,6 +154,6 @@ struct janz_ctlfile_pkt {
 	__u64 bits_per_second;
 };
 /* compile-time check for correct size */
-extern struct janz_ctlfile_pkt janz_ctlfile_pkt_cta[sizeof(struct janz_ctlfile_pkt) == 8 ? 1 : -1];
+JANZ__SIZECHECK(janz_ctlfile_pkt, 8U);
 
 #endif

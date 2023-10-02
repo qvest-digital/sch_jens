@@ -155,12 +155,21 @@ struct janz_skb {
 		};
 		struct {		/* past these, just before janz_record_packet */
 			u16 curunused;		/* janz_sendoff / 0 */		//@8   :2
-			short qid;		/* -1/0/1/2 */			//@ +2 :2
+			short formerqid;	/* -1/0/1/2 */			//@ +2 :2
 		};
 	};									//…8   :4
 	u16 srcport;								//@ +4 :2
 	u16 dstport;								//@ +6 :2
-	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@8   :1
+	union {									//@8   :1
+		/* up to (skb->next == NULL) check in enqueue */
+		u8 tosbyte;		/* from IPv4/IPv6 header or faked */
+		/* generally after that, in dequeue/rexmit mostly */
+		struct {
+			u8 xqid:2;	/* qid (1/2/3) or 0=bypass */
+			u8 xmitnum:3;	/* (re)transmissions done */
+			u8 xmittot:3;	/* # transmissions to do in total */
+		};
+	};
 	u8 ipver;			/* 6 (IP) or 4 (Legacy IP) */		//@ +1 :1
 	u8 nexthdr;								//@ +2 :1
 	u8 record_flag;			/* for debugfs/relayfs reporting */	//@ +3 :1
@@ -271,7 +280,7 @@ janz_record_packet(struct sjanz_priv *q,
 	r.d32 = qdelay1024;
 	r.e16 = 0;
 	r.f8 = cb->record_flag;
-	r.z.zSOJOURN.psize = ((u32)(cb->qid + 1)) << 30 |
+	r.z.zSOJOURN.psize = ((unsigned int)cb->xqid << 30) |
 	    (qdisc_pkt_len(skb) & 0x3FFFFFFFU);
 	r.z.zSOJOURN.ipver = cb->ipver;
 	r.z.zSOJOURN.nexthdr = cb->nexthdr;
@@ -350,14 +359,14 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	if (!(q->q[qid].first = skb->next))
 		q->q[qid].last = NULL;
 	--sch->q.qlen;
-	cb = get_janz_skb(skb);
 	q->pktlensum -= qdisc_pkt_len(skb);
 	qdisc_qstats_backlog_dec(sch, skb);
+	cb = get_janz_skb(skb);
+	cb->xqid = qid + 1;
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	qd1024 = qdelay_encode(cb, now, NULL, resizing);
-	/* these both overlay cb->pktxlatency, do not move up */
+	/* overlay cb->pktxlatency, do not move up */
 	cb->curunused = 0;
-	cb->qid = qid;
 	janz_record_packet(q, skb, cb, qd1024, now);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
@@ -443,7 +452,7 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 
 static inline struct sk_buff *
 janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
-    struct janz_skb *cb, u64 now, int qid)
+    struct janz_skb *cb, u64 now)
 {
 	u64 qdelay;
 	u32 qd1024;
@@ -500,7 +509,6 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
-	cb->qid = qid;
 	janz_record_packet(q, skb, cb, qd1024, now);
 	return (skb);
 }
@@ -962,6 +970,7 @@ janz_deq(struct Qdisc *sch)
 	skb->next = NULL;
 	qdisc_qstats_backlog_dec(sch, skb);
 	qdisc_bstats_update(sch, skb);
+	cb->xqid = qid + 1;
 
 	rate = (u64)atomic64_read_acquire(&(sq->ns_pro_byte));
 	sq->notbefore = (sq->crediting ?
@@ -977,7 +986,7 @@ janz_deq(struct Qdisc *sch)
 		++now;
 	}
 
-	return (janz_sendoff(sch, sq, skb, cb, now, qid));
+	return (janz_sendoff(sch, sq, skb, cb, now));
 }
 
 static struct sk_buff *

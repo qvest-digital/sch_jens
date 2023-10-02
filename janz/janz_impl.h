@@ -196,10 +196,12 @@ jq_enq(struct Qdisc *sch, Mjanz *mq, Sjanz *sq, struct janz_skbfifo *q,
 	// assumption is exactly 1 packet is passed
 	if (WARN(skb->next != NULL, "jq_enq passed multiple packets?"))
 		skb->next = NULL;
+
+	overlimit = sch->q.qlen >= sch->limit;
+
 	skb_orphan(skb);
 	q_enq(sch, sq, q, skb);
 
-	overlimit = sch->q.qlen > sch->limit;
 	if (unlikely(overlimit)) {
 		janz_drop_overlen(sch, mq, now, true);
 		qdisc_qstats_overlimit(sch);

@@ -8,8 +8,10 @@ iproute2 (5.10.0-4jens24) UNRELEASED; urgency=medium
   * Change qosmode=2 behaviour: treat incoming CE-marked packets also
     as L4S, for consistency with LLD (i.e. L4S-enabled DOCSIS)
   * Drop e16 (chance) from packet reporting
+  * Orphan skb so nōn-FORWARD traffic gets slightly more chance to shine
+  * Some reliability improvements under the hood
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 21 Sep 2023 18:26:58 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 02 Oct 2023 22:27:46 +0200
 
 iproute2 (5.10.0-4jens23) tarent; urgency=low
 

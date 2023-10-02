@@ -954,6 +954,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	// assumption is 1 packet is passed
 	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?"))
 		skb->next = NULL;
+	skb_orphan(skb);
 
 	q->memusage += cb->truesz;
 	if (unlikely(overlimit = (++sch->q.qlen > sch->limit)))

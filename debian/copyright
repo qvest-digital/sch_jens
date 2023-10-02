@@ -65,6 +65,11 @@ Comment:
  .
 			Linus Torvalds
 
+Files: janz/mbsdcc.h
+Copyright: mirabilos <m@mirbsd.org>
+License: MirBSD
+Comment: or CC0
+
 Files: debian/*
 Copyright: 1996 Tom Lees <tom@lpsg.demon.co.uk>
            1998 Christoph Lameter <christoph@lameter.com>

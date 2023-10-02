@@ -150,13 +150,10 @@ struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
 	u64 ts_enq;			/* real enqueue timestamp */		//@8   :8
 	union {									//@8   :4
-		struct {		/* up to and including janz_drop_pkt/janz_sendoff */
-			u32 pktxlatency;	/* ts_enq adjustment */		//@8   :4
-		};
-		struct {		/* past these, just before janz_record_packet */
-			u16 curunused;		/* janz_sendoff / 0 */		//@8   :2
-			short formerqid;	/* -1/0/1/2 */			//@ +2 :2
-		};
+		/* up to and including janz_drop_pkt/janz_sendoff */
+		u32 pktxlatency;	/* ts_enq adjustment */
+		/* from qdelay_encode onwards */
+		u32 qdelay1024;		/* for reporting */
 	};									//…8   :4
 	u16 srcport;								//@ +4 :2
 	u16 dstport;								//@ +6 :2
@@ -203,12 +200,15 @@ delay_encode(u64 now, u64 base, u64 *qdelayp)
 	return ((u32)qdelay);
 }
 
-static inline u32
+static inline void
 qdelay_encode(struct janz_skb *cb, u64 now, u64 *qdelayp, bool resizing)
 {
-	if (unlikely(resizing))
-		return (0xFFFFFFFFUL);
-	return (delay_encode(now, cb->ts_enq + cb->pktxlatency, qdelayp));
+	u32 delay1024;
+
+	delay1024 = unlikely(resizing) ? 0xFFFFFFFFUL :
+	    delay_encode(now, cb->ts_enq + cb->pktxlatency, qdelayp);
+	/* overlays cb->pktxlatency, do not move up */
+	cb->qdelay1024 = delay1024;
 }
 
 static inline ssize_t
@@ -271,13 +271,13 @@ janz_record_queuesz(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 
 static inline void
 janz_record_packet(struct sjanz_priv *q,
-    struct sk_buff *skb, struct janz_skb *cb, u32 qdelay1024, u64 now)
+    struct sk_buff *skb, struct janz_skb *cb, u64 now)
 {
 	struct tc_janz_relay r = {0};
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_SOJOURN;
-	r.d32 = qdelay1024;
+	r.d32 = cb->qdelay1024;
 	r.e16 = 0;
 	r.f8 = cb->record_flag;
 	r.z.zSOJOURN.psize = ((unsigned int)cb->xqid << 30) |
@@ -353,7 +353,6 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 {
 	struct sk_buff *skb;
 	struct janz_skb *cb;
-	u32 qd1024;
 
 	skb = q->q[qid].first;
 	if (!(q->q[qid].first = skb->next))
@@ -364,10 +363,8 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	cb = get_janz_skb(skb);
 	cb->xqid = qid + 1;
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
-	qd1024 = qdelay_encode(cb, now, NULL, resizing);
-	/* overlay cb->pktxlatency, do not move up */
-	cb->curunused = 0;
-	janz_record_packet(q, skb, cb, qd1024, now);
+	qdelay_encode(cb, now, NULL, resizing);
+	janz_record_packet(q, skb, cb, now);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
 	kfree_skb(skb);
@@ -455,9 +452,8 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
     struct janz_skb *cb, u64 now)
 {
 	u64 qdelay;
-	u32 qd1024;
 
-	qd1024 = qdelay_encode(cb, now, &qdelay, false);
+	qdelay_encode(cb, now, &qdelay, false);
 
 	/**
 	 * maths proof, by example:
@@ -509,7 +505,7 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
-	janz_record_packet(q, skb, cb, qd1024, now);
+	janz_record_packet(q, skb, cb, now);
 	return (skb);
 }
 

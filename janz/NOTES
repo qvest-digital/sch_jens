@@ -6,10 +6,10 @@ uses of (struct janz_skb *cb) fields
 
 fields:
 - ts_enq
-- [	pktxlatency	| curunused*2	]
+- [	pktxlatency	| qdelay1024			]
 - srcport
 - dstport
-- [	tosbyte		| { xqid, xmitnum, xmittot } ]
+- [	tosbyte		| { xqid, xmitnum, xmittot }	]
 - ipver
 - nexthdr
 - record_flag
@@ -27,7 +27,6 @@ janz_drop_pkt:
   qdelay_encode:
   - ts_enq
   - pktxlatency
-- (curunused)
 - xqid
 - record_flag
 ⇒ janz_record_packet
@@ -56,10 +55,10 @@ data to put on ice for retransmissions
 --------------------------------------
 
 - skb
-- u32 qd1024 (from janz_sendoff to janz_record_packet) ⇒ maybe move to pktxlatency|(curunused*2)
 - u64 now (time of FIRST transmission)
   ⇒ skb->dev_scratch (ulong!) if we reset “skb->dev = qdisc_dev(sch);” before handing out
 - ts_enq
+- qdelay1024
 - srcport
 - dstport
 - xqid (2 bits)
@@ -70,5 +69,5 @@ data to put on ice for retransmissions
 - record_flag
 
 vs data we do NOT need any more
-- pktxlatency (already overlaid by curunused*2)
+- pktxlatency (already overlaid by qdelay1024)
 - tosbyte (already overlaid by { xqid, xmitnum, xmittot })

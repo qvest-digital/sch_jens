@@ -1,0 +1,74 @@
+developer notes
+===============
+
+uses of (struct janz_skb *cb) fields
+------------------------------------
+
+fields:
+- ts_enq
+- [	pktxlatency	| curunused
+			| qid		]
+- srcport
+- dstport
+- tosbyte
+- ipver
+- nexthdr
+- record_flag
+
+janz_record_packet:
+- ts_enq
+- qid
+- srcport
+- dstport
+- ipver
+- nexthdr
+- record_flag
+
+janz_drop_pkt:
+  qdelay_encode:
+  - ts_enq
+  - pktxlatency
+- (curunused)
+- qid
+- record_flag
+⇒ janz_record_packet
+
+janz_sendoff:
+  qdelay_encode:
+  - ts_enq
+  - pktxlatency
+- qid
+- record_flag
+⇒ janz_record_packet
+
+janz_init_record_flag:
+- tosbyte
+- record_flag
+
+janz_analyse:
+- ts_enq
+- srcport
+- dstport
+- tosbyte
+- ipver
+- nexthdr
+
+data to put on ice for retransmissions
+--------------------------------------
+
+- skb
+- u32 qd1024 (from janz_sendoff to janz_record_packet) ⇒ maybe move to pktxlatency|(curunused,qid)
+- u64 now (time of FIRST transmission)
+- ts_enq
+- qid (2 bits of 16+(curunused)16 in 32-field) → maybe move to tosbyte
+- srcport
+- dstport
+- ipver
+- nexthdr
+- record_flag
+- # of transmissions to do (3 bits) ⇒ maybe tosbyte
+- # of transmissions already done (3 bits) ⇒ maybe tosbyte
+
+vs data we do NOT need any more
+- pktxlatency (already overlaid by curunused, qid)
+- tosbyte (8 bits)

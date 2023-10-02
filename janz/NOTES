@@ -58,6 +58,7 @@ data to put on ice for retransmissions
 - skb
 - u32 qd1024 (from janz_sendoff to janz_record_packet) ⇒ maybe move to pktxlatency|(curunused*2)
 - u64 now (time of FIRST transmission)
+  ⇒ skb->dev_scratch (ulong!) if we reset “skb->dev = qdisc_dev(sch);” before handing out
 - ts_enq
 - srcport
 - dstport

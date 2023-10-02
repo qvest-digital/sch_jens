@@ -194,12 +194,9 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	case 2:
 		// traffic is categorised by ECT(1) or else only
 		qid = 1;
-		if (skb->protocol == htons(ETH_P_IP) ||
-		    skb->protocol == htons(ETH_P_IPV6)) {
-			if (((cb->record_flag & INET_ECN_MASK) == INET_ECN_ECT_1) ||
-			    ((cb->record_flag & INET_ECN_MASK) == INET_ECN_CE))
-				--qid;
-		}
+		if (((cb->record_flag & INET_ECN_MASK) == INET_ECN_ECT_1) ||
+		    ((cb->record_flag & INET_ECN_MASK) == INET_ECN_CE))
+			--qid;
 		break;
 	}
 	dstfifo = &(q->q[qid]);

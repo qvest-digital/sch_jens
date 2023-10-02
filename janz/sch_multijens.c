@@ -45,6 +45,7 @@ struct janz_gwq_ovl {
 };
 
 struct sjanz_priv {
+	struct janz_skbfifo rexmit;	/* retransmission loop */			//@16
 	struct janz_skbfifo q[3];	/* TOS FIFOs */					//@16
 	struct rchan *record_chan;	/* relay to userspace */			//@16
 #define QSZ_INTERVAL nsmul(500, NSEC_PER_MSEC)
@@ -77,11 +78,10 @@ struct mjanz_priv {
 	u32 fragcache_num;								//@16
 	u32 nsubbufs;									//   +4
 	struct janz_ctlfile_pkt *ctldata;	/* per-UE */				//@  +8
-	struct janz_skbfifo yfifo; /* for now (cf. sch_janz), see notyet later */	//@16
+	struct janz_skbfifo yfifo;	/* bypass */					//@16
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 #ifdef notyet
-	/* both for retransmissions [0‥uenum[ plus global bypass FIFO */
-	struct janz_skbfifo *bypasses;	/* per-UE + 1 (global Y signal) */
+	/*XXX bypass? rexmit? */
 	u8 has_pkts_in_bypass;		/* visit bypasses[0‥uenum+1[ before subqueues? */
 #endif
 };
@@ -337,6 +337,8 @@ janz_reset(struct Qdisc *sch)
 	ASSERT_RTNL();
 	if (sch->q.qlen) {
 		for (ue = 0; ue < q->uenum; ++ue) {
+			rtnl_kfree_skbs(q->subqueues[ue].rexmit.first,
+			    q->subqueues[ue].rexmit.last);
 			rtnl_kfree_skbs(q->subqueues[ue].q[0].first,
 			    q->subqueues[ue].q[0].last);
 			rtnl_kfree_skbs(q->subqueues[ue].q[1].first,
@@ -348,6 +350,8 @@ janz_reset(struct Qdisc *sch)
 		sch->q.qlen = 0;
 	}
 	for (ue = 0; ue < q->uenum; ++ue) {
+		q->subqueues[ue].rexmit.first = NULL;
+		q->subqueues[ue].rexmit.last = NULL;
 		q->subqueues[ue].q[0].first = NULL;
 		q->subqueues[ue].q[0].last = NULL;
 		q->subqueues[ue].q[1].first = NULL;

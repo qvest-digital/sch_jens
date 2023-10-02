@@ -61,6 +61,7 @@ struct janz_priv {
 	struct dentry *ctlfile;								//@16
 	u64 lastknownrate;								//@  +8
 	struct janz_skbfifo yfifo;	/* bypass */					//@16
+	struct janz_skbfifo rexmit;	/* retransmission loop */			//@16
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u8 crediting;
@@ -337,12 +338,14 @@ janz_reset(struct Qdisc *sch)
 
 	ASSERT_RTNL();
 	if (sch->q.qlen) {
+		rtnl_kfree_skbs(q->rexmit.first, q->rexmit.last);
 		rtnl_kfree_skbs(q->q[0].first, q->q[0].last);
 		rtnl_kfree_skbs(q->q[1].first, q->q[1].last);
 		rtnl_kfree_skbs(q->q[2].first, q->q[2].last);
 		rtnl_kfree_skbs(q->yfifo.first, q->yfifo.last);
 		sch->q.qlen = 0;
 	}
+	q->rexmit.first = NULL; q->rexmit.last = NULL;
 	q->q[0].first = NULL; q->q[0].last = NULL;
 	q->q[1].first = NULL; q->q[1].last = NULL;
 	q->q[2].first = NULL; q->q[2].last = NULL;

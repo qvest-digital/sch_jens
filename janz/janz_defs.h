@@ -85,8 +85,8 @@ struct janz_skb {
 		/* post that */
 		struct {
 			u8 xqid:2;	/* qid (1/2/3) or 0=bypass */
-			u8 xmitnum:3;	/* retransmissions done */
-			u8 xmittot:3;	/* #retransmissions to do in total */
+			u8 xmitnum:3;	/* retransmissions done (0‥5); 7=held up */
+			u8 xmittot:3;	/* #retransmissions to do */
 		};
 	};
 	u8 ipver;			/* 6 (IP) or 4 (Legacy IP) */		//@ +1 :1

@@ -199,7 +199,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 static struct sk_buff *
 janz_deq(struct Qdisc *sch)
 {
-	struct mjanz_priv *q = qdisc_priv(sch);
+	struct mjanz_priv * const q = qdisc_priv(sch);
 	struct sjanz_priv *sq;
 	struct sk_buff *skb;
 	u64 now, rate, rs;

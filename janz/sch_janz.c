@@ -213,9 +213,9 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 static struct sk_buff *
 janz_deq(struct Qdisc *sch)
 {
-	struct janz_priv *q = qdisc_priv(sch);
+	struct janz_priv * const q = qdisc_priv(sch);
 	struct sk_buff *skb;
-	u64 now, rate = 0, rs;
+	u64 now, rate, rs;
 	struct janz_skb *cb;
 	int qid;
 
@@ -241,6 +241,8 @@ janz_deq(struct Qdisc *sch)
 		janz_record_packet(q, skb, cb, now);
 		return (skb);
 	}
+
+	rate = 0;
 
 	if (now < q->notbefore) {
 		register u64 nextns;

@@ -437,7 +437,7 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 		q->drop_next = now + DROPCHK_INTERVAL;
 }
 
-static inline struct sk_buff *
+static inline bool
 janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
     struct janz_skb *cb, u64 now)
 {
@@ -497,7 +497,7 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 		}
 	}
 	janz_record_packet(q, skb, cb, qd1024, now);
-	return (skb);
+	return (false);
 }
 
 static inline void
@@ -882,6 +882,7 @@ janz_deq(struct Qdisc *sch)
 	int qid;
 	u64 mnextns;
 
+ redo_deq:
 	now = ktime_get_ns();
 
 	mnextns = (u64)~(u64)0;
@@ -974,7 +975,10 @@ janz_deq(struct Qdisc *sch)
 		++now;
 	}
 
-	return (janz_sendoff(sch, sq, skb, cb, now));
+	if (janz_sendoff(sch, sq, skb, cb, now))
+		/* sent to retransmission loop; fastpath recalling */
+		goto redo_deq;
+	return (skb);
 }
 
 static struct sk_buff *

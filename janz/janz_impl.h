@@ -221,7 +221,6 @@ janz_drop_pkt(struct Qdisc *sch, Sjanz *q, u64 now,
 
 	skb = q_deq(sch, q, &(q->q[qid]));
 	cb = get_janz_skb(skb);
-	cb->xqid = qid + 1;
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	qdelay_encode(cb, now, NULL, resizing);
 	janz_record_packet(q, skb, cb, now);

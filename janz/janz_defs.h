@@ -80,9 +80,9 @@ struct janz_skb {
 	u16 srcport;								//@ +4 :2
 	u16 dstport;								//@ +6 :2
 	union {									//@8   :1
-		/* up to (skb->next == NULL) check in enqueue */
+		/* before jq_enq call in janz_enq */
 		u8 tosbyte;		/* from IPv4/IPv6 header or faked */
-		/* generally after that, in dequeue/rexmit mostly */
+		/* post that */
 		struct {
 			u8 xqid:2;	/* qid (1/2/3) or 0=bypass */
 			u8 xmitnum:3;	/* (re)transmissions done */

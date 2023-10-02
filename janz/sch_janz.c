@@ -207,6 +207,8 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		}
 		break;
 	}
+	/* from here, cb->tosbyte is no longer valid */
+	cb->xqid = qid + 1;
 	dstfifo = &(q->q[qid]);
 
 	return (jq_enq(sch, q, q, dstfifo, skb, now, prev_backlog));
@@ -231,7 +233,6 @@ janz_deq(struct Qdisc *sch)
 	if (q->yfifo.first) {
 		skb = q_deq(sch, q, &(q->yfifo));
 		cb = get_janz_skb(skb);
-		cb->xqid = 0;
 		qdisc_bstats_update(sch, skb);
 #if 0 /* we can’t do this in sch_multijens at all, so for consistency… */
 		if (now >= q->qsz_next) {
@@ -298,7 +299,6 @@ janz_deq(struct Qdisc *sch)
  got_skb:
 	skb = q_deq(sch, q, &(q->q[qid]));
 	cb = get_janz_skb(skb);
-	cb->xqid = qid + 1;
 	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));

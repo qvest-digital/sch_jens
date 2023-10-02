@@ -76,3 +76,4 @@ other
 -----
 
 cb->pktxlatency := 0 for bypass
+cb->xqid = 0; for bypass

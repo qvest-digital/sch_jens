@@ -193,6 +193,8 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		}
 		break;
 	}
+	/* from here, cb->tosbyte is no longer valid */
+	cb->xqid = qid + 1;
 	dstfifo = &(sq->q[qid]);
 
 	return (jq_enq(sch, q, sq, dstfifo, skb, now, prev_backlog));
@@ -216,7 +218,6 @@ janz_deq(struct Qdisc *sch)
 	if (q->yfifo.first) {
 		skb = q_deq(sch, &(q->subqueues[0]), &(q->yfifo));
 		cb = get_janz_skb(skb);
-		cb->xqid = 0;
 		qdisc_bstats_update(sch, skb);
 		/* from janz_sendoff */
 		qdelay_encode(cb, now, NULL, false);
@@ -293,7 +294,6 @@ janz_deq(struct Qdisc *sch)
 	/* process this skb */
 	skb = q_deq(sch, sq, &(sq->q[qid]));
 	cb = get_janz_skb(skb);
-	cb->xqid = qid + 1;
 	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(sq->ns_pro_byte));

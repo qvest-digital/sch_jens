@@ -446,7 +446,6 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
     struct janz_skb *cb, u64 now, int qid)
 {
 	u64 qdelay;
-	u16 chance;
 	u32 qd1024;
 
 	qd1024 = qdelay_encode(cb, now, &qdelay, false);
@@ -473,10 +472,9 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 	 * even the cases that can’t happen would work correctly
 	 */
 	if (qdelay >= q->markfull) {
-		chance = 0xFFFFU;
 		goto domark;
 	} else if (qdelay <= q->markfree)
-		chance = 0;
+		/* nothing */;
 	else {
 		/* we know: tmin < t < tmax */
 		/* tmin = markfree, t = qdelay, tmax = markfull */
@@ -488,16 +486,6 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 		while (unlikely(tmax > (u64)0xFFFFFFFFUL)) {
 			tmax >>= 1;
 			t >>= 1;
-		}
-
-		{
-			/* scale tmax' to 65535 to calculate the chance */
-			u64 c = t;
-			c *= 65535U;
-			/* for rounding */
-			c += (tmax / 2U);
-			/* result [0; 65535] */
-			chance = div_u64(c, tmax);
 		}
 
 		/*

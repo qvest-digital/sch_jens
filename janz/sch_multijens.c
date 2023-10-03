@@ -877,18 +877,18 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 static struct sk_buff *
 janz_deq(struct Qdisc *sch)
 {
-	struct mjanz_priv *q = qdisc_priv(sch);
+	struct mjanz_priv * const q = qdisc_priv(sch);
 	struct sjanz_priv *sq;
 	struct sk_buff *skb;
 	u64 now, rate, rs;
 	u32 ue;
 	struct janz_skb *cb;
 	int qid;
-	u64 mnextns = (u64)~(u64)0;
+	u64 mnextns;
 
 	now = ktime_get_ns();
-	rs = (u64)~(u64)0U;
 
+	mnextns = (u64)~(u64)0;
 	ue = q->uecur;
  find_subqueue_to_send:
 	sq = &(q->subqueues[ue]);
@@ -928,6 +928,7 @@ janz_deq(struct Qdisc *sch)
 	}								\
 } while (/* CONSTCOND */ 0)
 
+	rs = (u64)~(u64)0U;
 	try_qid(0);
 	try_qid(1);
 	try_qid(2);

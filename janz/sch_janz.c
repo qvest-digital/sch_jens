@@ -891,7 +891,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 static struct sk_buff *
 janz_deq(struct Qdisc *sch)
 {
-	struct janz_priv *q = qdisc_priv(sch);
+	struct janz_priv * const q = qdisc_priv(sch);
 	struct sk_buff *skb;
 	u64 now, rate = 0, rs;
 	struct janz_skb *cb;
@@ -901,7 +901,6 @@ janz_deq(struct Qdisc *sch)
 #ifdef SCH_JANZDBG
 	janz_record_wdog(q, now);
 #endif
-	rs = (u64)~(u64)0U;
 	janz_dropchk(sch, q, now);
 
 	if (now < q->notbefore) {
@@ -940,6 +939,7 @@ janz_deq(struct Qdisc *sch)
 	}								\
 } while (/* CONSTCOND */ 0)
 
+	rs = (u64)~(u64)0U;
 	try_qid(0);
 	try_qid(1);
 	try_qid(2);

@@ -138,11 +138,6 @@ struct mjanz_priv {
 	u32 nsubbufs;									//   +4
 	struct janz_ctlfile_pkt *ctldata;	/* per-UE */				//@  +8
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
-#ifdef notyet
-	/* both for retransmissions [0‥uenum[ plus global bypass FIFO */
-	struct janz_skbfifo *bypasses;	/* per-UE + 1 (global Y signal) */
-	u8 has_pkts_in_bypass;		/* visit bypasses[0‥uenum+1[ before subqueues? */
-#endif
 };
 
 /* struct janz_skb *cb = get_janz_skb(skb); */

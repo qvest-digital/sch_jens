@@ -897,7 +897,6 @@ janz_deq(struct Qdisc *sch)
 	struct janz_skb *cb;
 	int qid;
 
-	qid = -1;
 	now = ktime_get_ns();
 #ifdef SCH_JANZDBG
 	janz_record_wdog(q, now);

@@ -886,7 +886,6 @@ janz_deq(struct Qdisc *sch)
 	int qid;
 	u64 mnextns = (u64)~(u64)0;
 
-	qid = -1;
 	now = ktime_get_ns();
 	rs = (u64)~(u64)0U;
 

@@ -150,13 +150,9 @@ struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
 	u64 ts_enq;			/* real enqueue timestamp */		//@8   :8
 	union {									//@8   :4
-		struct {		/* up to and including janz_drop_pkt/janz_sendoff */
-			u32 pktxlatency;	/* ts_enq adjustment */		//@8   :4
-		};
-		struct {		/* past these, just before janz_record_packet */
-			u16 curunused;		/* janz_sendoff / 0 */		//@8   :2
-			short formerqid;	/* -1/0/1/2 */			//@ +2 :2
-		};
+		/* up to and including janz_drop_pkt/janz_sendoff */
+		u32 pktxlatency;	/* ts_enq adjustment */
+		/* after reserved for qdelay1024 */
 	};									//…8   :4
 	u16 srcport;								//@ +4 :2
 	u16 dstport;								//@ +6 :2
@@ -364,8 +360,6 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	cb->xqid = qid + 1;
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	qd1024 = qdelay_encode(cb, now, NULL, resizing);
-	/* overlay cb->pktxlatency, do not move up */
-	cb->curunused = 0;
 	janz_record_packet(q, skb, cb, qd1024, now);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */

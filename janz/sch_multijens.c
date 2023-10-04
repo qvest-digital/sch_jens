@@ -138,11 +138,6 @@ struct mjanz_priv {
 	u32 nsubbufs;									//   +4
 	struct janz_ctlfile_pkt *ctldata;	/* per-UE */				//@  +8
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
-#ifdef notyet
-	/* both for retransmissions [0‥uenum[ plus global bypass FIFO */
-	struct janz_skbfifo *bypasses;	/* per-UE + 1 (global Y signal) */
-	u8 has_pkts_in_bypass;		/* visit bypasses[0‥uenum+1[ before subqueues? */
-#endif
 };
 
 /* struct janz_skb *cb = get_janz_skb(skb); */
@@ -150,17 +145,21 @@ struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
 	u64 ts_enq;			/* real enqueue timestamp */		//@8   :8
 	union {									//@8   :4
-		struct {		/* up to and including janz_drop_pkt/janz_sendoff */
-			u32 pktxlatency;	/* ts_enq adjustment */		//@8   :4
-		};
-		struct {		/* past these, just before janz_record_packet */
-			u16 curunused;		/* janz_sendoff / 0 */		//@8   :2
-			short qid;		/* -1/0/1/2 */			//@ +2 :2
-		};
+		/* up to and including janz_drop_pkt/janz_sendoff */
+		u32 pktxlatency;	/* ts_enq adjustment */
+		/* after reserved for qdelay1024 */
 	};									//…8   :4
 	u16 srcport;								//@ +4 :2
 	u16 dstport;								//@ +6 :2
-	u8 tosbyte;			/* from IPv4/IPv6 header or faked */	//@8   :1
+	union {									//@8   :1
+		/* early within enq */
+		u8 tosbyte;		/* from IPv4/IPv6 header or faked */
+		/* from (skb->next != NULL) check on */
+		struct {
+			u8 xqid:2;	/* qid (1/2/3) or 0=unknown or bypass */
+			u8 xunused:6;	/* reserved for retransmissions */
+		};
+	};
 	u8 ipver;			/* 6 (IP) or 4 (Legacy IP) */		//@ +1 :1
 	u8 nexthdr;								//@ +2 :1
 	u8 record_flag;			/* for debugfs/relayfs reporting */	//@ +3 :1
@@ -271,7 +270,7 @@ janz_record_packet(struct sjanz_priv *q,
 	r.d32 = qdelay1024;
 	r.e16 = 0;
 	r.f8 = cb->record_flag;
-	r.z.zSOJOURN.psize = ((u32)(cb->qid + 1)) << 30 |
+	r.z.zSOJOURN.psize = ((unsigned int)cb->xqid << 30) |
 	    (qdisc_pkt_len(skb) & 0x3FFFFFFFU);
 	r.z.zSOJOURN.ipver = cb->ipver;
 	r.z.zSOJOURN.nexthdr = cb->nexthdr;
@@ -350,14 +349,11 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	if (!(q->q[qid].first = skb->next))
 		q->q[qid].last = NULL;
 	--sch->q.qlen;
-	cb = get_janz_skb(skb);
 	q->pktlensum -= qdisc_pkt_len(skb);
 	qdisc_qstats_backlog_dec(sch, skb);
+	cb = get_janz_skb(skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	qd1024 = qdelay_encode(cb, now, NULL, resizing);
-	/* these both overlay cb->pktxlatency, do not move up */
-	cb->curunused = 0;
-	cb->qid = qid;
 	janz_record_packet(q, skb, cb, qd1024, now);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
@@ -441,9 +437,9 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 		q->drop_next = now + DROPCHK_INTERVAL;
 }
 
-static inline struct sk_buff *
+static inline bool
 janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
-    struct janz_skb *cb, u64 now, int qid)
+    struct janz_skb *cb, u64 now)
 {
 	u64 qdelay;
 	u32 qd1024;
@@ -500,9 +496,8 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
-	cb->qid = qid;
 	janz_record_packet(q, skb, cb, qd1024, now);
-	return (skb);
+	return (false);
 }
 
 static inline void
@@ -843,6 +838,8 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		}
 		break;
 	}
+	/* from here, cb->tosbyte is no longer valid */
+	cb->xqid = qid + 1;
 
 	// assumption is 1 packet is passed
 	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?"))
@@ -876,19 +873,19 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 static struct sk_buff *
 janz_deq(struct Qdisc *sch)
 {
-	struct mjanz_priv *q = qdisc_priv(sch);
+	struct mjanz_priv * const q = qdisc_priv(sch);
 	struct sjanz_priv *sq;
 	struct sk_buff *skb;
 	u64 now, rate, rs;
 	u32 ue;
 	struct janz_skb *cb;
 	int qid;
-	u64 mnextns = (u64)~(u64)0;
+	u64 mnextns;
 
-	qid = -1;
+ redo_deq:
 	now = ktime_get_ns();
-	rs = (u64)~(u64)0U;
 
+	mnextns = (u64)~(u64)0;
 	ue = q->uecur;
  find_subqueue_to_send:
 	sq = &(q->subqueues[ue]);
@@ -928,6 +925,7 @@ janz_deq(struct Qdisc *sch)
 	}								\
 } while (/* CONSTCOND */ 0)
 
+	rs = (u64)~(u64)0U;
 	try_qid(0);
 	try_qid(1);
 	try_qid(2);
@@ -977,7 +975,10 @@ janz_deq(struct Qdisc *sch)
 		++now;
 	}
 
-	return (janz_sendoff(sch, sq, skb, cb, now, qid));
+	if (janz_sendoff(sch, sq, skb, cb, now))
+		/* sent to retransmission loop; fastpath recalling */
+		goto redo_deq;
+	return (skb);
 }
 
 static struct sk_buff *

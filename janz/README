@@ -54,6 +54,14 @@ specific configuration interface; this is a prototype.
 See the tc-multijens(8) manual page and qdisc.md for details.
 
 
+sch_jensvq* kernel modules
+──────────────────────────
+
+This prototype explores ECN marking based on the data rate but
+sending with twice or thrice the data rate configured. It is
+otherwise identical to sch_janz whereever possible.
+
+
 Live measurement
 ────────────────
 

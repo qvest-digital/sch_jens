@@ -10,8 +10,10 @@ iproute2 (5.10.0-4jens24) UNRELEASED; urgency=medium
   * Drop e16 (chance) from packet reporting
   * Orphan skb so nōn-FORWARD traffic gets slightly more chance to shine
   * Some reliability improvements under the hood
+  * Add sch_jensvq{2,3}proto (experimental marking methods)
+    TODO: manpages
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 02 Oct 2023 22:27:46 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 12 Oct 2023 17:39:16 +0200
 
 iproute2 (5.10.0-4jens23) tarent; urgency=low
 

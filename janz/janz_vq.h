@@ -906,7 +906,7 @@ janz_deq(struct Qdisc *sch)
 	struct janz_priv * const q = qdisc_priv(sch);
 	struct sk_buff *skb;
 	u64 now, rate, rs;
-	u64 rq_notbefore, vq_notbefore;
+	u64 rq_notbefore, vq_notbefore = 0;
 	struct janz_skb *cb;
 	int qid;
 
@@ -928,8 +928,7 @@ janz_deq(struct Qdisc *sch)
 		q->wdognext = nextns;
 #endif
 		qdisc_watchdog_schedule_ns(&q->watchdog, nextns);
-		skb = NULL;
-		goto out;
+		goto send_nothing;
 	}
 
 	/* we have reached notbefore, previous packet is fully sent */
@@ -938,8 +937,10 @@ janz_deq(struct Qdisc *sch)
 		/* nothing to send, start subsequent packet later */
  nothing_to_send:
 		q->crediting = 0;
-		skb = NULL;
-		goto out;
+ send_nothing:
+		if (now >= q->qsz_next)
+			janz_record_queuesz(sch, q, now, rate, 0);
+		return (NULL);
 	}
 
 #define try_qid(i) do {							\
@@ -986,18 +987,12 @@ janz_deq(struct Qdisc *sch)
 	q->notbefore = rq_notbefore + (rate * (u64)qdisc_pkt_len(skb));
 	q->vq_notbefore = vq_notbefore + (rate * VQ_FACTOR * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
-	if (rate != q->lastknownrate)
-		goto force_rate_and_out;
 
- out:
-	if (now >= q->qsz_next) {
- force_rate_and_out:
+	if ((now >= q->qsz_next) || (rate != q->lastknownrate)) {
 		janz_record_queuesz(sch, q, now, rate, 0);
 		++now;
+		++vq_notbefore;
 	}
-
-	if (!skb)
-		return (NULL);
 	if (janz_sendoff(sch, q, skb, cb, now, vq_notbefore))
 		/* sent to retransmission; fastpath recalling */
 		goto redo_deq;

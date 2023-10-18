@@ -13,7 +13,7 @@ iproute2 (5.10.0-4jens24) tarent; urgency=low
   * Add sch_jensvq{2,3}proto (experimental marking methods)
     introducing vq_notbefore1024 field into the reporting
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Wed, 18 Oct 2023 23:51:54 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 19 Oct 2023 00:16:38 +0200
 
 iproute2 (5.10.0-4jens23) tarent; urgency=low
 

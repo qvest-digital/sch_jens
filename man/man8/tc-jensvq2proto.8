@@ -1,0 +1,306 @@
+.\" Copyright © 2022, 2023
+.\"	mirabilos <t.glaser@tarent.de>
+.\" Licensor: Deutsche Telekom LLCTO
+.\"
+.\" Provided that these terms and disclaimer and all copyright notices
+.\" are retained or reproduced in an accompanying document, permission
+.\" is granted to deal in this work without restriction, including un‐
+.\" limited rights to use, publicly perform, distribute, sell, modify,
+.\" merge, give away, or sublicence.
+.\"
+.\" This work is provided “AS IS” and WITHOUT WARRANTY of any kind, to
+.\" the utmost extent permitted by applicable law, neither express nor
+.\" implied; without malicious intent or gross negligence. In no event
+.\" may a licensor, author or contributor be held liable for indirect,
+.\" direct, other damage, loss, or other issues arising in any way out
+.\" of dealing in the work, even if advised of the possibility of such
+.\" damage or existence of a defect, except proven that it results out
+.\" of said person’s immediate fault when using the work as intended.
+.\"-
+.if \n(.g .hlm 0
+.Dd October 16, 2023
+.Dt TC\-JENSVQ2PROTO 8
+.Os Linux
+.Sh NAME
+.Nm tc\-jensvq2proto
+.Nd virtual queue prototype (2x) for the JENS network simulator
+.Sh SYNOPSIS
+.Nm tc
+.Ic qdisc ...\& Nm jensvq2proto
+.Op Ic limit Ar PACKETS
+.Op Ic rate Ar RATE
+.Op Ic handover Ar TIME
+.Op Ic qosmode Ar NUMBER
+.Op Ic markfree Ar TIME
+.Op Ic markfull Ar TIME
+.Op Ic subbufs Ar NUMBER
+.Op Ic fragcache Ar NUMBER
+.Op Ic extralatency Ar TIME
+.Sh DESCRIPTION
+JENS is a network limitation simulator used in an
+.Pq L4S or similar
+.No AML Pq Adaptive Managed Latency
+scenario to aid in developing latency- and bandwidth-aware applications.
+The
+.Nm janz
+queueing discipline is a bespoke Linux kernel module developed as part of JENS
+.Pq by Deutsche Telekom LLCTO
+that provides ECN CE
+.Pq Dq congestion experienced
+marking on ECN-enabled traffic using marking algorithms resembling
+the real-life PoC scenario as closely as possible as well as takes care
+of traffic shaping (limitation of bandwidth) by packet pacing.
+.Pp
+The
+.Nm sch_jensvq2proto
+qdisc operates exactly as the
+.Nm sch_janz
+qdisc described below, but runs the real queue at twice the
+configured speed and uses a virtual queue at the rate set by
+the user to determine queue delay for ECN CE marking.
+This is a rapid prototype for further improvements over L4S
+and subject to change without notice.
+.Pp
+The
+.Nm sch_janz
+qdisc is comprised of three FIFOs incoming packets sort into
+based on their IP QoS field, in which the TOS reading is used to
+separate interactive (lodelay), regular and bulk traffic; packets
+to send are then selected from the first FIFO that has any.
+This behaviour resembles the standard Linux qdisc
+.Ic sch_ Ns Li pfifo_fast
+although
+.Nm sch_janz
+moves ARP, RARP and PPPoE discovery traffic into the lodelay FIFO
+and uses a less complicated mapping from iptos values.
+The
+.Ic qosmode
+option (see below) changes this.
+.Pp
+Every 200 ms, the packets at the heads of the FIFOs are checked for their age
+.Pq sojourn time , a.k.a.\& queue delay :
+if one or more packets are older than 100 ms a single packet is dropped
+from the head;
+then, all packets older than 500 ms are dropped.
+.Pp
+Outgoing packets are paced based on the configured
+.Ar rate
+and
+.Ar handover
+delay; that is, the next packet is withheld until the time necessary
+to achieve the requested throughput
+.Pq and handover interruption .
+All packets that take longer than
+.Ar markfull
+to pass the queue
+.Pq Dq sojourn time
+as well as a percentage of those taking more than
+.Ar markfree
+.Pq longer queue delay rising the chance
+are marked as ECN CE
+.Pq Dq congestion experienced .
+.Pp
+.Nm sch_janz
+supports an extensive relayfs-based control and reporting interface exposed
+via debugfs; refer to the README and the provided sample applications.
+.Sh PARAMETERS
+.Bl -tag -width XX
+.It Ic limit
+is a hard limit on the real queue size.
+When this limit is reached, packets are dropped.
+Default: 10240\ packets
+.It Ic rate
+is the bandwidth outgoing packets are limited to.
+Default: 10\ Mbit/s
+.It Ic handover
+stops traffic for the specified amount of time.
+.It Ic markfree
+is the maximum queue delay packets are allowed to sojourn in the queue
+without being ECN CE-marked.
+Default: 4\ ms
+.It Ic markfull
+is the minimum queue delay at which packets will be marked (see above)
+with 100% probability.
+Default: 14\ ms
+.It Ic qosmode
+configures traffic priorisation according to its parameter:
+.Pp
+.Bl -tag -width 0\&
+.It Ic 0
+.Pq Em default
+IP
+.Pq including Legacy IP
+traffic starts out in the normal FIFO.
+If
+.Dv IPTOS_LOWDELAY
+.Pq Li 0x10
+is set, the packet moves up one priority to the lodelay FIFO.
+If
+.Dv IPTOS_THROUGHPUT
+.Pq Li 0x08
+is (additionally) set, the packet moves down one priority, that is,
+to the normal or bulk FIFO.
+.It Ic 1
+Any IPv6 and IPv4 traffic goes to the normal FIFO like in the RAN.
+.It Ic 2
+IP packets with
+.Li "ECT(1)"
+or a
+.Pq pre-existing
+.Li \&CE
+marking are sorted into the lodelay FIFO,
+all other IP traffic into the normal FIFO.
+.El
+.Pp
+Other traffic (not IP) is handled differently; the specifics are
+implementation detail (e.g.\& ARP is priorised,
+but most traffic is sorted into the normal FIFO).
+.It Ic subbufs
+enables debugfs functionality, for use with
+.Nm jensdmp
+or its Java\(rg wrapper.
+Setting this to 1 will use a suitable default amount of subbuffers
+.Pq currently 1024 ;
+any other value is used as number of subbuffers (containing 256 records,
+each sized 64 bytes, that is, 16\ KiB per subbuffer).
+This parameter can only be set at load time because memory has to be allocated.
+Default: 1
+.It Ic fragcache
+sets the size of the IP packet fragment cache, in 64-byte structs.
+This parameter can only be set at load time because memory has to be allocated.
+Default: 1024
+.It Ic extralatency
+adds artificial network-side
+.Pq before Nm janz
+latency.
+Default: 0\ ms
+.El
+.Sh STATISTICS
+This qdisc reports extensively via relayfs over debugfs; therefore, regular
+.Xr tc 8
+statistics are not provided beyond the bare minimum:
+.Bl -tag -width XX -offset indent
+.It backlog Pq \fBb\fRytes
+amount of gross packet payload bytes, possibly adjusted by
+.Xr tc-stab 8 ,
+currently in the queue
+.Pq FIFOs
+.It backlog Pq \fBp\fRackets
+basically
+.Li sch\-\*(Gtq.qlen
+.It overlimits
+number of packets dropped because the queue length limit was reached
+while enqueueing a new packet
+.El
+.Pp
+Specifically, drops accounting in the gnet stats is not done.
+.Sh EXAMPLES
+Set up a queue with standard parameters and display its statistics:
+.Bd -literal -offset 4n
+$ \fBsudo tc qdisc add dev eth0 root handle 1: jensvq2proto\fR\fC
+$ \fBsudo tc \-s qdisc show dev eth0\fR\fC
+qdisc jensvq2proto 1: root refcnt 2 limit 10240 rate 10000kbit \e
+    qosmode 0 markfree 4ms markfull 14ms \e
+    subbufs 1024 fragcache 1024 extralatency 0us
+ Sent 2012 bytes 12 pkt (dropped 0, overlimits 0, requeues 0)
+ backlog 0b 0p
+.Ed
+.Pp
+Introduce somewhat more harsh limits to simulate a slow network:
+.Bd -literal -offset 4n
+$ \fBping \-c4 8.8.8.8\fR\fC
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=58 time=4.62 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=58 time=4.50 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=58 time=4.51 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=58 time=4.43 ms
+
+\-\-\- 8.8.8.8 ping statistics \-\-\-
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 4.433/4.515/4.619/0.066 ms
+$ \fBsudo tc qdisc change dev eth0 handle 1: jensvq2proto\fR\fC \e
+    \fBlimit 128 rate 128kbit extralatency 80ms\fR\fC
+$ \fBping \-c4 8.8.8.8\fR\fC
+PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
+64 bytes from 8.8.8.8: icmp_seq=1 ttl=58 time=87.5 ms
+64 bytes from 8.8.8.8: icmp_seq=2 ttl=58 time=84.4 ms
+64 bytes from 8.8.8.8: icmp_seq=3 ttl=58 time=84.4 ms
+64 bytes from 8.8.8.8: icmp_seq=4 ttl=58 time=84.4 ms
+
+\-\-\- 8.8.8.8 ping statistics \-\-\-
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 84.417/85.193/87.486/1.323 ms
+$ \fBsudo tc \-s qdisc show dev eth0\fR\fC
+qdisc jensvq2proto 1: root refcnt 2 limit 128 rate 128kbit \e
+    qosmode 0 markfree 4ms markfull 14ms \e
+    subbufs 1024 fragcache 1024 extralatency 80ms
+ Sent 13022 bytes 79 pkt (dropped 0, overlimits 0, requeues 0)
+ backlog 110b 1p
+$ \fBsudo tc qdisc del dev eth0 root\fR\fC
+.Ed
+.Pp
+Note: the author first attempted this with a rate of 64 kbit/s.
+This led to packet loss making the SSH session hang because some
+packets ended up being older than 100 ms due to that low a bandwidth,
+and thus dropped.
+.Sh SEE ALSO
+.Xr tc 8
+.Pp
+.Pa /usr/share/doc/sch\-jens\-dkms/README.gz
+.Pp
+.Pa /usr/share/doc/iproute2/examples/JensReaderDemo.java
+.Sh AUTHORS
+.An mirabilos Aq t.glaser@tarent.de
+for Deutsche Telekom LLCTO
+.Sh CAVEATS
+This qdisc is only supported as the root egress qdisc on a device.
+.Pp
+This qdisc considers handles to be global, not per interface.
+.Pp
+The default queue limit is much too large, might want to adjust it.
+.Pp
+The traffic rate is internally converted to nanoseconds per byte
+needed to transfer, limiting it to about 8 Gbit/s; the closer the
+rate gets to the extremes, the less usable it will be.
+Experiments with 128 kbit/s as a lower bound show mixed results.
+To obtain the exact bandwidth in use, either run
+.Ic tc Fl j Ic qdisc show
+or do two 64-bit integer divisions: first divide 1000000000
+by the amount of bytes (not bits!) per second, then divide
+1000000000 by the result of the first division, resulting,
+again, in bytes per second
+.Pq or just read it from the relayfs channel .
+Packet pacing for bandwidth limiting only applies, too, on egress.
+.Pp
+The
+.Ic extralatency
+is asymmetric: it is only applied on the egress channel, because
+Linux cannot delay on ingress.
+It is applied before enqueueing but does not affect sojourn time.
+Basically, it simulates extra latency on the network in front of
+the JENS node.
+.Pp
+JENS uses the IPTOS QoS bits to categorise traffic by default.
+If your traffic uses DSCP classification instead, use the
+.Ic qosmode 2
+option; however,
+mind that packets that were ECN
+.Li CE Ns -marked
+before arrival are priorised even if they were not
+.Li "ECT(1)"
+originally.
+.Pp
+The RAN does not use the QoS bits to categorise traffic.
+For best simulation results, use the
+.Ic qosmode 1
+option to disable classification of IP and Legacy IP traffic.
+.Pp
+Classification of traffic and splitting it into three separate FISOs
+was originally meant as a debugging aid: to stop locking one's
+.Xr ssh 1
+session out (interactive SSH is in the lodelay class), and to perhaps move
+.Dq dirt traffic
+into the bulk FIFO so it does not impact the traffic of interest.
+However, field tests have shown that, for paced traffic of interest,
+even bulk traffic can still cause delays as it is sent out in between
+normal traffic packets.

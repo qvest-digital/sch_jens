@@ -38,6 +38,8 @@ License: GPL-2
 
 Files: jens/*
        man/man8/tc-janz.8
+       man/man8/tc-jensvq2proto.8
+       man/man8/tc-jensvq3proto.8
        man/man8/tc-multijens.8
 Copyright: 2021, 2022, 2023 mirabilos <t.glaser@tarent.de>
            2021, 2022, 2023 Deutsche Telekom LLCTO

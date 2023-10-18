@@ -120,7 +120,8 @@ struct janz_priv {
 	u32 pktlensum;			/* amount of bytes queued up */			//@  +12
 	struct dentry *ctlfile;								//@16
 	u64 lastknownrate;								//@  +8
-	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@16
+	u64 vq_notbefore;		/* for lower rate, virtual */			//@16
+	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u8 crediting;
 	u8 qosmode;
@@ -288,14 +289,22 @@ janz_record_wdog(struct janz_priv *q, u64 now)
 
 static inline void
 janz_record_packet(struct janz_priv *q,
-    struct sk_buff *skb, struct janz_skb *cb, u32 qdelay1024, u64 now)
+    struct sk_buff *skb, struct janz_skb *cb, u32 qdelay1024,
+    u64 now, u64 vq_notbefore)
 {
 	struct tc_janz_relay r = {0};
+
+	if (vq_notbefore) {
+		vq_notbefore -= now;
+		vq_notbefore >>= TC_JANZ_TIMESHIFT;
+		if (unlikely(vq_notbefore > 0x00FFFFFFUL))
+			vq_notbefore = 0x00FFFFFFUL;
+	}
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_SOJOURN;
 	r.d32 = qdelay1024;
-	r.e16 = 0;
+	r.e16 = (unsigned int)(vq_notbefore & 0xFFU) << 8;
 	r.f8 = cb->record_flag;
 	r.z.zSOJOURN.psize = ((unsigned int)cb->xqid << 30) |
 	    (qdisc_pkt_len(skb) & 0x3FFFFFFFU);
@@ -303,6 +312,7 @@ janz_record_packet(struct janz_priv *q,
 	r.z.zSOJOURN.nexthdr = cb->nexthdr;
 	r.z.zSOJOURN.sport = cb->srcport;
 	r.z.zSOJOURN.dport = cb->dstport;
+	r.z.zSOJOURN.vqnb_u = (vq_notbefore >> 8);
 
 	switch (cb->ipver) {
 	case 4: {
@@ -381,7 +391,7 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now,
 	cb = get_janz_skb(skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	qd1024 = qdelay_encode(cb, now, NULL, resizing);
-	janz_record_packet(q, skb, cb, qd1024, now);
+	janz_record_packet(q, skb, cb, qd1024, now, 0);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
 	kfree_skb(skb);
@@ -461,12 +471,12 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 
 static inline bool
 janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
-    struct janz_skb *cb, u64 now)
+    struct janz_skb *cb, u64 now, u64 vq_notbefore)
 {
 	u64 qdelay;
 	u32 qd1024;
 
-	qd1024 = qdelay_encode(cb, now, &qdelay, false);
+	qd1024 = qdelay_encode(cb, vq_notbefore, &qdelay, false);
 
 	/**
 	 * maths proof, by example:
@@ -518,7 +528,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
-	janz_record_packet(q, skb, cb, qd1024, now);
+	janz_record_packet(q, skb, cb, qd1024, now, vq_notbefore);
 	return (false);
 }
 
@@ -896,6 +906,7 @@ janz_deq(struct Qdisc *sch)
 	struct janz_priv * const q = qdisc_priv(sch);
 	struct sk_buff *skb;
 	u64 now, rate, rs;
+	u64 rq_notbefore, vq_notbefore;
 	struct janz_skb *cb;
 	int qid;
 
@@ -969,10 +980,11 @@ janz_deq(struct Qdisc *sch)
 	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
-	/* note *VQ_FACTOR to get DRP rate */
-	q->notbefore = (q->crediting ?
-	    max(q->notbefore, cb->ts_enq + cb->pktxlatency) : now) +
-	    (rate * (u64)qdisc_pkt_len(skb));
+	rq_notbefore = q->crediting ?
+	    max(q->notbefore, cb->ts_enq + cb->pktxlatency) : now;
+	vq_notbefore = max(rq_notbefore, q->vq_notbefore);
+	q->notbefore = rq_notbefore + (rate * (u64)qdisc_pkt_len(skb));
+	q->vq_notbefore = vq_notbefore + (rate * VQ_FACTOR * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
 	if (rate != q->lastknownrate)
 		goto force_rate_and_out;
@@ -986,7 +998,7 @@ janz_deq(struct Qdisc *sch)
 
 	if (!skb)
 		return (NULL);
-	if (janz_sendoff(sch, q, skb, cb, now))
+	if (janz_sendoff(sch, q, skb, cb, now, vq_notbefore))
 		/* sent to retransmission; fastpath recalling */
 		goto redo_deq;
 	return (skb);
@@ -1025,6 +1037,7 @@ janz_reset(struct Qdisc *sch)
 	sch->qstats.backlog = 0;
 	sch->qstats.overlimits = 0;
 	q->notbefore = 0;
+	q->vq_notbefore = 0;
 	q->crediting = 0;
 #ifdef SCH_JANZDBG
 	q->wdogreason = 0;

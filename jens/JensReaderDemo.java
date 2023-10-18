@@ -79,8 +79,9 @@ public final class JensReaderDemo {
                 } else if (r[i].sojournTime == 0x3FFFFFFFC00L) {
                     System.out.print("drop due to queue resizing; ");
                 } else {
-                    System.out.printf("sojourn-time: %9s ms; ",
-                      JensReaderLib.formatTimestamp(r[i].sojournTime));
+                    System.out.printf("sojourn-time: %9s ms virtual, %9s ms real; ",
+                      JensReaderLib.formatTimestamp(r[i].sojournTime),
+                      JensReaderLib.formatTimestamp(r[i].sojournTime - r[i].vqNB));
                 }
                 if (r[i].ecnValid) {
                     System.out.printf("ECN bits %s → %s",

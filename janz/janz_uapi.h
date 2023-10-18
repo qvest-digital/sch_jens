@@ -67,7 +67,7 @@ struct tc_janz_relay {
 			__u8 nexthdr;
 			__u16 sport;	/* host byteorder */
 			__u16 dport;	/* host byteorder */
-			__u16 pad1;
+			__u16 vqnb_u;	/* vq_notbefore1024 bit8‥23 */
 			__u32 real_owd;
 		} zSOJOURN;
 #if 0
@@ -123,7 +123,7 @@ enum {
 	         (-1 = drop on queue resize,
 		  -2 = drop before enqueue with extralatency applied) */
 	/* e16 = bitfield: 0:2=retransmission#total, 3:5=rexmit-#attempt,
-		6:15=unused */
+		6:7=unused, 8:15=vq_notbefore1024(bit0:7) */
 	/* f8 = bitfield: 0:1=ECN bits on enqueue, 2=ECN bits are valid,
 		3:4=ECN bits on dequeue, 5=TC_JANZ_RELAY_SOJOURN_xxxx,
 		6=TC_JANZ_RELAY_SOJOURN_MARK, 7=TC_JANZ_RELAY_SOJOURN_DROP */

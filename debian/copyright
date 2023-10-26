@@ -43,6 +43,10 @@ Copyright: 2021, 2022, 2023 mirabilos <t.glaser@tarent.de>
            2021, 2022, 2023 Deutsche Telekom LLCTO
 License: MirBSD
 
+Files: janz/gru32b.h
+Copyright: 2022 Jason A. Donenfeld <Jason@zx2c4.com>
+License: GPL-2
+
 Files: janz/*
        tc/q_janz.c
        tc/q_multijens.c

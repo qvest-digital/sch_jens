@@ -9,6 +9,7 @@ iproute2 (5.10.0-4jens19.1) tarent; urgency=medium
   * Use qdisc_pkt_len to guess at wire size
   * Change qosmode=2 behaviour: treat incoming CE-marked packets also
     as L4S, for consistency with LLD (i.e. L4S-enabled DOCSIS)
+  * Orphan skb so nōn-FORWARD traffic gets slightly more chance to shine
 
  -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 26 Oct 2023 17:18:42 +0200
 

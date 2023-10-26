@@ -1,6 +1,7 @@
 iproute2 (5.10.0-4jens19.1) tarent; urgency=medium
 
   * Bugfix cherry-pick release
+  * Small reliability improvement in initialisation code
 
  -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 26 Oct 2023 17:18:42 +0200
 

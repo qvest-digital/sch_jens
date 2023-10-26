@@ -1,7 +1,7 @@
 /*
  * Dǟ janz zesammene Kwejü-Disk
  *
- * Copyright © 2022 mirabilos <t.glaser@tarent.de>
+ * Copyright © 2022, 2023 mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom LLCTO
  *
  * This module for the Linux kernel is published under the GPLv2.

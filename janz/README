@@ -54,6 +54,25 @@ specific configuration interface; this is a prototype.
 See the tc-multijens(8) manual page and qdisc.md for details.
 
 
+sch_jensvq* kernel modules
+──────────────────────────
+
+This prototype explores ECN marking based on the data rate but
+sending with twice or thrice the data rate configured. It is
+otherwise identical to sch_janz whereever possible.
+
+The reporting concept is based on a “virtual queue” that runs
+at the configured data rate, and a “real queue” that runs at
+twice or thrice that rate. Most operations, such as dropping
+too-old packets, work on the real queue; ECN marking however
+uses the calculated queue delay on the virtual queue, so the
+*virtual* queue delay packet reports as sojourn time now; the
+vq_notbefore1024 field can be used except in very long (17+
+seconds) corner cases to obtain the real queue delay, which
+is roughly identical (within microseconds) to the reported
+one-way delay when no extralatency is used.
+
+
 Live measurement
 ────────────────
 
@@ -115,7 +134,13 @@ Record types define the following data members:
 
 • TC_JANZ_RELAY_SOJOURN:
   – d32 packet sojourn time in 1024 ns units
-  – e16 currently unused, reassigned soon
+  – e16 bitfield
+    ‣ 0:2 total number of retransmissions for this packet
+          (0=none, 1/2/3/4/5=retransmitted)
+    ‣ 3:5 “this” number of transmission (0=first, 1=second, …, 5=sixth)
+          or 7 (not retransmitted but held up by preceding rexmitted pkt)
+    ‣ 6:7 currently unused
+    ‣ 8:15 vq_notbefore1024 (bit0‥7)
   – f8 bitfield
     ‣ 0:1 ECN bits on enqueue
     ‣   2 ECN bits are valid (0 if they could not be determined)
@@ -135,12 +160,19 @@ Record types define the following data members:
     ‣ __u8 nexthdr (iff ipver; 6 = TCP / 17 = UDP, else {s,d}port invalid)
     ‣ __u16 sport (source port, for TCP or UDP)
     ‣ __u16 dport (destination port, "      " )
-    ‣ __u16 unused
+    ‣ __u16 vq_notbefore1024 (bit8‥23)
     ‣ __u32 real one-way delay, as pertains to this qdisc (1024 ns units)
 
       ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-      │ ▌<-psize----> │ i │ n │ <-s-> │ <-d-> │ - │ - │ <-real_owd--> │
+      │ ▌<-psize----> │ i │ n │ <-s-> │ <-d-> │ <-q-> │ <-real_owd--> │
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+
+  vq_notbefore1024 is a 24-bit unsigned integer that’s only not 0 when
+  sending an actual packet from the jensvq{2,3}proto qdiscs; then, it
+  is a timedelta carrying the 1024ns units the packet would be sent
+  later than ts in the virtual (DRP capacity) queue, whereas the packet
+  actually was sent off the real (double/triple capacity) queue at ts.
+  It’s spread over two record fields.
 
 • TC_JANZ_RELAY_QUEUESZ:
   – d32 queue length (bytes)

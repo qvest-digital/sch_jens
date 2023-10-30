@@ -1,4 +1,4 @@
-iproute2 (5.10.0-4jens24) UNRELEASED; urgency=medium
+iproute2 (5.10.0-4jens24) tarent; urgency=low
 
   * Incorporate BBRv3 patches for convenience:
     - patch "ss" tool to output congestion control state for BBRv3
@@ -10,8 +10,10 @@ iproute2 (5.10.0-4jens24) UNRELEASED; urgency=medium
   * Drop e16 (chance) from packet reporting
   * Orphan skb so nōn-FORWARD traffic gets slightly more chance to shine
   * Some reliability improvements under the hood
+  * Add sch_jensvq{2,3}proto (experimental marking methods)
+    introducing vq_notbefore1024 field into the reporting
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Mon, 02 Oct 2023 22:27:46 +0200
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 19 Oct 2023 00:16:38 +0200
 
 iproute2 (5.10.0-4jens23) tarent; urgency=low
 

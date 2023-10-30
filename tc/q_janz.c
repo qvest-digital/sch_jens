@@ -201,3 +201,15 @@ struct qdisc_util janz_qdisc_util = {
 	.parse_qopt	= janz_parse_opt,
 	.print_qopt	= janz_print_opt,
 };
+
+struct qdisc_util jensvq2proto_qdisc_util = {
+	.id		= "jensvq2proto",
+	.parse_qopt	= janz_parse_opt,
+	.print_qopt	= janz_print_opt,
+};
+
+struct qdisc_util jensvq3proto_qdisc_util = {
+	.id		= "jensvq3proto",
+	.parse_qopt	= janz_parse_opt,
+	.print_qopt	= janz_print_opt,
+};

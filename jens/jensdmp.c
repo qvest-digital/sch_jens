@@ -207,6 +207,7 @@ static void
 consume(size_t idx)
 {
 	char ipsrc[IPADDRFMTLEN], ipdst[IPADDRFMTLEN];
+	unsigned int vqnb1024;
 
 	//printf("%03zX [%llu.%09u] ", idx + 1U,
 	//    (unsigned long long)(rbuf[idx].ts / 1000000000),
@@ -230,6 +231,9 @@ consume(size_t idx)
 #endif
 
 	case TC_JANZ_RELAY_SOJOURN:
+		vqnb1024 = (unsigned int)rbuf[idx].z.zSOJOURN.vqnb_u << 8;
+		vqnb1024 |= (unsigned int)rbuf[idx].e16 >> 8;
+
 		printf("<pkt ts=\"%llX\" time=\"%X\""
 		    " ecn-in=\"%d%d\" ecn-out=\"%d%d\"",
 		    (unsigned long long)rbuf[idx].ts, rbuf[idx].d32,
@@ -256,8 +260,9 @@ consume(size_t idx)
 			    (unsigned)rbuf[idx].z.zSOJOURN.sport,
 			    (unsigned)rbuf[idx].z.zSOJOURN.dport);
 		}
-		printf(" real-owd=\"%X\" size=\"%u\" FIFO=\"%u\"/>\n",
+		printf(" real-owd=\"%X\" vq-notbefore1024=\"%X\" size=\"%u\" FIFO=\"%u\"/>\n",
 		    rbuf[idx].z.zSOJOURN.real_owd,
+		    vqnb1024,
 		    rbuf[idx].z.zSOJOURN.psize & 0x3FFFFFFFU,
 		    rbuf[idx].z.zSOJOURN.psize >> 30);
 		break;
@@ -309,7 +314,7 @@ tsv_header(void)
 	    ",\"TS.\""
 	    ",\"OWD.|MEMBYTES|wdogscheduled?\""
 	    ",\"QDELAY.|NPKTS|NTOOEARLY\""
-	    ",\"-|handover?|N50US\""
+	    ",\"VQ.NOTBEFORE|handover?|N50US\""
 	    ",\"ecnin|BWLIM|N1MS\""
 	    ",\"ecnout|TSOFS.|N4MS\""
 	    ",\"bit5?|-|NLATER\""
@@ -332,7 +337,7 @@ static const char *fifoidstrs[4] = {
 static void
 tsv_show(size_t idx)
 {
-	unsigned int t2, u1, u2, u3, u4;
+	unsigned int t2, u1, u2, u3, u4, u5, u6;
 	unsigned long long ul1, t1;
 	char ipsrc[IPADDRFMTLEN], ipdst[IPADDRFMTLEN];
 	char flow[2U * IPADDRFMTLEN + 28];
@@ -373,10 +378,16 @@ tsv_show(size_t idx)
 		ul1 <<= 10;
 		u3 = ul1 / 1000000000UL;
 		u4 = ul1 % 1000000000UL;
-		printf("\"p\"\t%llu.%09u\t%u.%09u\t%u.%09u\t0\t%s\t%s\t%u\t%u\t%u\t\"%s\"\t%u\n",
+		ul1 = (unsigned int)rbuf[idx].z.zSOJOURN.vqnb_u << 8;
+		ul1 |= (unsigned int)rbuf[idx].e16 >> 8;
+		ul1 <<= 10;
+		u5 = ul1 / 1000000000UL;
+		u6 = ul1 % 1000000000UL;
+		printf("\"p\"\t%llu.%09u\t%u.%09u\t%u.%09u\t%u.%09u\t%s\t%s\t%u\t%u\t%u\t\"%s\"\t%u\n",
 		    t1, t2,
 		    u3, u4,
 		    u1, u2,
+		    u5, u6,
 		    ecnidx[!(rbuf[idx].f8 & BIT(2)) ? 4 : ((unsigned int)rbuf[idx].f8 & 3U)],
 		    ecnidx[!(rbuf[idx].f8 & BIT(2)) ? 4 : (((unsigned int)rbuf[idx].f8 >> 3) & 3U)],
 		    !!(rbuf[idx].f8 & BIT(5)),

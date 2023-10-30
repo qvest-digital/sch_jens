@@ -403,6 +403,8 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now,
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
 	kfree_skb(skb);
+	/* ensure the next record orders totally past this one */
+	q->crediting = 0;
 }
 
 static xinline void

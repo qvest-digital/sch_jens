@@ -52,6 +52,7 @@
 mbCTA_BEG(janz_misc);
  mbCTA(hasatomic64, sizeof(atomic64_t) == 8U);
  mbCTA(maxxlatency_ok, MAXXLATENCY <= 0xFFFFFFFFULL);
+ mbCTA(vqfactor_ok, (VQ_FACTOR) >= 1 && (VQ_FACTOR) < 100);
 mbCTA_END(janz_misc);
 
 static xinline u64
@@ -212,9 +213,9 @@ janz_ctlfile_write(struct file *filp, const char __user *buf,
 		return (-EFAULT);
 
 	newrate = div64_u64(8ULL * NSEC_PER_SEC, data.bits_per_second);
-	newrate = (newrate + (VQ_FACTOR - 1)) / VQ_FACTOR;
-	if (newrate < 1)
-		newrate = 1;
+	newrate = (newrate + (u64)(VQ_FACTOR - 1)) / (u64)VQ_FACTOR;
+	if (newrate < 1U)
+		newrate = 1U;
 	atomic64_set_release(&(q->ns_pro_byte), (s64)newrate);
 
 	return (sizeof(data));
@@ -245,7 +246,8 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now,
 	r.d32 = q->pktlensum;
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
 	r.f8 = ishandover;
-	r.x64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate * VQ_FACTOR), 1ULL);
+	r.x64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate * (u64)VQ_FACTOR),
+	    1ULL);
 	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
 	janz_record_write(&r, q);
 
@@ -995,7 +997,8 @@ janz_deq(struct Qdisc *sch)
 	vq_notbefore = rq_notbefore;
 #else
 	vq_notbefore = max(rq_notbefore, q->vq_notbefore);
-	q->vq_notbefore = vq_notbefore + (rate * VQ_FACTOR * (u64)qdisc_pkt_len(skb));
+	q->vq_notbefore = vq_notbefore +
+	    (rate * (u64)VQ_FACTOR * (u64)qdisc_pkt_len(skb));
 #endif
 	q->notbefore = rq_notbefore + (rate * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
@@ -1129,7 +1132,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		u64 tmp = nla_get_u64(tb[TCA_JANZ_RATE64]);
 
 		tmp = div64_u64(NSEC_PER_SEC, tmp);
-		tmp = (tmp + (VQ_FACTOR - 1)) / VQ_FACTOR;
+		tmp = (tmp + (u64)(VQ_FACTOR - 1)) / (u64)VQ_FACTOR;
 		if (tmp < 1)
 			tmp = 1;
 		atomic64_set_release(&(q->ns_pro_byte), (s64)tmp);
@@ -1214,7 +1217,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	/* config values’ defaults */
 	sch->limit = 10240;
-	atomic64_set_release(&(q->ns_pro_byte), /* 10 Mbit/s */ 800 / VQ_FACTOR);
+	atomic64_set_release(&(q->ns_pro_byte),
+	    /* 10 Mbit/s */ (800 + (VQ_FACTOR - 1)) / VQ_FACTOR);
 	q->markfree = nsmul(4, NSEC_PER_MSEC);
 	q->markfull = nsmul(14, NSEC_PER_MSEC);
 	q->nsubbufs = 0;
@@ -1369,7 +1373,8 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
-	      max(div64_u64(NSEC_PER_SEC, rate * VQ_FACTOR), 1ULL), TCA_JANZ_PAD64) ||
+	      max(div64_u64(NSEC_PER_SEC, rate * (u64)VQ_FACTOR), 1ULL),
+	      TCA_JANZ_PAD64) ||
 	    nla_put_u32(skb, TCA_JANZ_QOSMODE, q->qosmode) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFREE, ns_to_us(q->markfree)) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFULL, ns_to_us(q->markfull)) ||

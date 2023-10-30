@@ -7,6 +7,8 @@
  * This module for the Linux kernel is published under the GPLv2.
  */
 
+#define VQ_FACTOR 1
+
 #undef JANZ_IP_DECODER_DEBUG
 #if 1
 #define JANZ_IP_DECODER_DEBUG(fmt,...)	do { /* nothing */ } while (0)
@@ -52,6 +54,7 @@
 mbCTA_BEG(janz_misc);
  mbCTA(hasatomic64, sizeof(atomic64_t) == 8U);
  mbCTA(maxxlatency_ok, MAXXLATENCY <= 0xFFFFFFFFULL);
+ mbCTA(vqfactor_ok, (VQ_FACTOR) >= 1 && (VQ_FACTOR) < 100);
 mbCTA_END(janz_misc);
 
 static xinline u64
@@ -114,7 +117,7 @@ struct sjanz_priv {
 #define DROPCHK_INTERVAL nsmul(200, NSEC_PER_MSEC)
 	u64 drop_next;			/* next time to check drops */			//@16
 	u64 notbefore;			/* ktime_get_ns() to send next, or 0 */		//@  +8
-	atomic64_t ns_pro_byte;		/* traffic shaping tgt bandwidth */		//@16
+	atomic64_t ns_pro_byte;		/* traffic shaping tgt bandwidth / VQ_FACTOR */	//@16
 	u64 markfree;									//@  +8
 	u64 markfull;									//@16
 	u64 lastknownrate;								//@  +8
@@ -219,8 +222,9 @@ janz_ctlfile_write(struct file *filp, const char __user *buf,
 	for (ue = 0; ue < q->uenum; ++ue) {
 		newrate = div64_u64(8ULL * NSEC_PER_SEC,
 		    q->ctldata[ue].bits_per_second);
-		if (newrate < 1)
-			newrate = 1;
+		newrate = (newrate + (u64)(VQ_FACTOR - 1)) / (u64)VQ_FACTOR;
+		if (newrate < 1U)
+			newrate = 1U;
 		atomic64_set_release(&(q->subqueues[ue].ns_pro_byte),
 		    (s64)newrate);
 	}
@@ -253,7 +257,8 @@ janz_record_queuesz(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	r.d32 = q->pktlensum;
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
 	r.f8 = ishandover;
-	r.x64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate), 1ULL);
+	r.x64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate * (u64)VQ_FACTOR),
+	    1ULL);
 	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
 	janz_record_write(&r, q);
 
@@ -263,14 +268,26 @@ janz_record_queuesz(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 
 static xinline void
 janz_record_packet(struct sjanz_priv *q,
-    struct sk_buff *skb, struct janz_skb *cb, u32 qdelay1024, u64 now)
+    struct sk_buff *skb, struct janz_skb *cb, u32 qdelay1024,
+    u64 now, u64 vq_notbefore)
 {
 	struct tc_janz_relay r = {0};
+
+	if (vq_notbefore) {
+		vq_notbefore -= now;
+		if (vq_notbefore) {
+			vq_notbefore >>= TC_JANZ_TIMESHIFT;
+			if (unlikely(vq_notbefore > 0x00FFFFFFUL))
+				vq_notbefore = 0x00FFFFFFUL;
+			else if (unlikely(vq_notbefore < 1))
+				vq_notbefore = 1;
+		}
+	}
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_SOJOURN;
 	r.d32 = qdelay1024;
-	r.e16 = 0;
+	r.e16 = (unsigned int)(vq_notbefore & 0xFFU) << 8;
 	r.f8 = cb->record_flag;
 	r.z.zSOJOURN.psize = ((unsigned int)cb->xqid << 30) |
 	    (qdisc_pkt_len(skb) & 0x3FFFFFFFU);
@@ -278,6 +295,7 @@ janz_record_packet(struct sjanz_priv *q,
 	r.z.zSOJOURN.nexthdr = cb->nexthdr;
 	r.z.zSOJOURN.sport = cb->srcport;
 	r.z.zSOJOURN.dport = cb->dstport;
+	r.z.zSOJOURN.vqnb_u = (vq_notbefore >> 8);
 
 	switch (cb->ipver) {
 	case 4: {
@@ -356,10 +374,12 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	cb = get_janz_skb(skb);
 	cb->record_flag |= TC_JANZ_RELAY_SOJOURN_DROP;
 	qd1024 = qdelay_encode(cb, now, NULL, resizing);
-	janz_record_packet(q, skb, cb, qd1024, now);
+	janz_record_packet(q, skb, cb, qd1024, now, 0);
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
 	kfree_skb(skb);
+	/* ensure the next record orders totally past this one */
+	q->crediting = 0;
 }
 
 static xinline void
@@ -441,12 +461,12 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 
 static xinline bool
 janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
-    struct janz_skb *cb, u64 now)
+    struct janz_skb *cb, u64 rq_notbefore, u64 vq_notbefore)
 {
 	u64 qdelay;
 	u32 qd1024;
 
-	qd1024 = qdelay_encode(cb, now, &qdelay, false);
+	qd1024 = qdelay_encode(cb, vq_notbefore, &qdelay, false);
 
 	/**
 	 * maths proof, by example:
@@ -498,7 +518,7 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
-	janz_record_packet(q, skb, cb, qd1024, now);
+	janz_record_packet(q, skb, cb, qd1024, rq_notbefore, vq_notbefore);
 	return (false);
 }
 
@@ -876,7 +896,7 @@ janz_deq(struct Qdisc *sch)
 	struct sjanz_priv *sq;
 	struct sk_buff *skb;
 	u64 now, rate, rs;
-	u64 rq_notbefore;
+	u64 rq_notbefore, vq_notbefore;
 	u32 ue;
 	struct janz_skb *cb;
 	int qid;
@@ -963,15 +983,17 @@ janz_deq(struct Qdisc *sch)
 	rate = (u64)atomic64_read_acquire(&(sq->ns_pro_byte));
 	rq_notbefore = sq->crediting ?
 	    max(sq->notbefore, cb->ts_enq + cb->pktxlatency) : now;
+	vq_notbefore = rq_notbefore;
 	sq->notbefore = rq_notbefore + (rate * (u64)qdisc_pkt_len(skb));
 	sq->crediting = 1;
 
 	if ((now >= sq->qsz_next) || (rate != sq->lastknownrate)) {
-		janz_record_queuesz(sch, sq, now, rate, 0);
+		janz_record_queuesz(sch, sq, rq_notbefore, rate, 0);
 		++now;
 		++rq_notbefore;
+		++vq_notbefore;
 	}
-	if (janz_sendoff(sch, sq, skb, cb, now))
+	if (janz_sendoff(sch, sq, skb, cb, rq_notbefore, vq_notbefore))
 		/* sent to retransmission loop; fastpath recalling */
 		goto redo_deq;
 	return (skb);
@@ -1123,8 +1145,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		for (ue = 0; ue < q->uenum; ++ue) {
 			/* per-UE stuff from sch_janz janz_init() */
 			atomic64_set_release(&(q->subqueues[ue].ns_pro_byte),
-			    /* 10 Mbit/s */ 800);
-			q->subqueues[ue].lastknownrate = 800; /* same as above */
+			    /* 10 Mbit/s */ (800 + (VQ_FACTOR - 1)) / VQ_FACTOR);
 			q->subqueues[ue].markfree = nsmul(4, NSEC_PER_MSEC);
 			q->subqueues[ue].markfull = nsmul(14, NSEC_PER_MSEC);
 			q->subqueues[ue].xlatency = 0;
@@ -1146,6 +1167,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		u64 tmp = nla_get_u64(tb[TCA_JANZ_RATE64]);
 
 		tmp = div64_u64(NSEC_PER_SEC, tmp);
+		tmp = (tmp + (u64)(VQ_FACTOR - 1)) / (u64)VQ_FACTOR;
 		if (tmp < 1)
 			tmp = 1;
 		for (ue = 0; ue < q->uenum; ++ue) {
@@ -1408,7 +1430,8 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 
 	rate = (u64)atomic64_read_acquire(&(q->subqueues[0].ns_pro_byte));
 	if (nla_put_u64_64bit(skb, TCA_JANZ_RATE64,
-	      max(div64_u64(NSEC_PER_SEC, rate), 1ULL), TCA_JANZ_PAD64) ||
+	      max(div64_u64(NSEC_PER_SEC, rate * (u64)VQ_FACTOR), 1ULL),
+	      TCA_JANZ_PAD64) ||
 	    nla_put_u32(skb, TCA_JANZ_QOSMODE, q->subqueues[0].qosmode) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFREE, ns_to_us(q->subqueues[0].markfree)) ||
 	    nla_put_u32(skb, TCA_JANZ_MARKFULL, ns_to_us(q->subqueues[0].markfull)) ||

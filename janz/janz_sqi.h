@@ -913,7 +913,7 @@ janz_deq(struct Qdisc *sch)
 	struct janz_priv * const q = qdisc_priv(sch);
 	struct sk_buff *skb;
 	u64 now, rate, rs;
-	u64 rq_notbefore, vq_notbefore = 0;
+	u64 rq_notbefore, vq_notbefore;
 	struct janz_skb *cb;
 	int qid;
 
@@ -1215,7 +1215,6 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	/* config values’ defaults */
 	sch->limit = 10240;
 	atomic64_set_release(&(q->ns_pro_byte), /* 10 Mbit/s */ 800 / VQ_FACTOR);
-	q->lastknownrate = 800 / VQ_FACTOR; /* same as above */
 	q->markfree = nsmul(4, NSEC_PER_MSEC);
 	q->markfull = nsmul(14, NSEC_PER_MSEC);
 	q->nsubbufs = 0;

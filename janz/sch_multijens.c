@@ -238,7 +238,7 @@ janz_record_write(struct tc_janz_relay *record, struct sjanz_priv *q)
 
 static inline void
 janz_record_queuesz(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
-    u64 rate, u8 f)
+    u64 rate, u8 ishandover)
 {
 	struct tc_janz_relay r = {0};
 
@@ -250,13 +250,13 @@ janz_record_queuesz(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	r.type = TC_JANZ_RELAY_QUEUESZ;
 	r.d32 = q->pktlensum;
 	r.e16 = sch->q.qlen > 0xFFFFU ? 0xFFFFU : sch->q.qlen;
-	r.f8 = f;
+	r.f8 = ishandover;
 	r.x64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate), 1ULL);
 	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
 	janz_record_write(&r, q);
 
-	/* use of ktime_get_ns() is deliberate */
-	q->qsz_next = ktime_get_ns() + QSZ_INTERVAL;
+	/* use of ktime_get_ns() outside of handover is deliberate */
+	q->qsz_next = (ishandover ? now : ktime_get_ns()) + QSZ_INTERVAL;
 }
 
 static inline void
@@ -858,9 +858,6 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	}
 	qdisc_qstats_backlog_inc(sch, skb);
 
-	if (now >= sq->qsz_next)
-		janz_record_queuesz(sch, sq, now, 0, 0);
-
 	if (unlikely(overlimit)) {
 		qdisc_qstats_overlimit(sch);
 		qdisc_tree_reduce_backlog(sch, 0,
@@ -907,9 +904,7 @@ janz_deq(struct Qdisc *sch)
 
 	if (!sq->q[0].first && !sq->q[1].first && !sq->q[2].first) {
 		/* nothing to send, start subsequent packet later */
- nothing_to_send:
-		sq->crediting = 0;
-		goto try_next_subqueue;
+		goto nothing_to_send;
 	}
 
 #define try_qid(i) do {							\
@@ -934,16 +929,17 @@ janz_deq(struct Qdisc *sch)
 	/* nothing to send, but we have to reschedule first */
 	/* if we end up here, rs was set above */
 	mnextns = min(mnextns, rs);
-	goto nothing_to_send;
 
+ nothing_to_send:
+	sq->crediting = 0;
  try_next_subqueue:
-	if (now >= sq->qsz_next)
+	if (!sq->crediting && (now >= sq->qsz_next))
 		janz_record_queuesz(sch, sq, now, 0, 0);
 	/* loop, only one full loop though */
 	if (ue != q->uecur)
 		goto find_subqueue_to_send;
 
-	/* nothing to send in all subqueues, drops/qsz_next checked etc. */
+	/* nothing to send in all subqueues, drops checked etc. */
 	if (mnextns != (u64)~(u64)0)
 		qdisc_watchdog_schedule_ns(&q->watchdog, mnextns);
 	return (NULL);
@@ -966,11 +962,7 @@ janz_deq(struct Qdisc *sch)
 	    max(sq->notbefore, cb->ts_enq + cb->pktxlatency) : now) +
 	    (rate * (u64)qdisc_pkt_len(skb));
 	sq->crediting = 1;
-	if (rate != sq->lastknownrate)
-		goto force_rate_and_out;
-
-	if (now >= sq->qsz_next) {
- force_rate_and_out:
+	if ((now >= sq->qsz_next) || (rate != sq->lastknownrate)) {
 		janz_record_queuesz(sch, sq, now, rate, 0);
 		++now;
 	}
@@ -1028,6 +1020,7 @@ janz_reset(struct Qdisc *sch)
 		q->subqueues[ue].pktlensum = 0;
 		q->subqueues[ue].notbefore = 0;
 		q->subqueues[ue].crediting = 0;
+		q->subqueues[ue].lastknownrate = 0;
 		if (q->subqueues[ue].record_chan)
 			relay_flush(q->subqueues[ue].record_chan);
 	}
@@ -1159,15 +1152,17 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	if (tb[TCA_JANZ_HANDOVER]) {
 		u64 tmp = nla_get_u32(tb[TCA_JANZ_HANDOVER]);
 
-		handover_started = tmp != 0;
-		tmp *= NSEC_PER_USEC;
-		tmp += ktime_get_ns();
-		/* implementation of handover */
-		for (ue = 0; ue < q->uenum; ++ue) {
-			q->subqueues[ue].notbefore =
-			    tmp < q->subqueues[ue].notbefore ?
-			    q->subqueues[ue].notbefore : tmp;
-			q->subqueues[ue].crediting = 0;
+		if (tmp != 0) {
+			tmp *= NSEC_PER_USEC;
+			tmp += ktime_get_ns();
+			/* implementation of handover */
+			for (ue = 0; ue < q->uenum; ++ue) {
+				q->subqueues[ue].notbefore =
+				    tmp < q->subqueues[ue].notbefore ?
+				    q->subqueues[ue].notbefore : tmp;
+				q->subqueues[ue].crediting = 0;
+			}
+			handover_started = true;
 		}
 	}
 

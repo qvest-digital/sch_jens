@@ -481,7 +481,7 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 
 static xinline bool
 janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
-    struct janz_skb *cb, u64 now, u64 vq_notbefore)
+    struct janz_skb *cb, u64 rq_notbefore, u64 vq_notbefore)
 {
 	u64 qdelay;
 	u32 qd1024;
@@ -538,7 +538,7 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
 				cb->record_flag |= (u8)INET_ECN_CE << 3;
 		}
 	}
-	janz_record_packet(q, skb, cb, qd1024, now, vq_notbefore);
+	janz_record_packet(q, skb, cb, qd1024, rq_notbefore, vq_notbefore);
 	return (false);
 }
 
@@ -1001,12 +1001,12 @@ janz_deq(struct Qdisc *sch)
 	q->crediting = 1;
 
 	if ((now >= q->qsz_next) || (rate != q->lastknownrate)) {
-		janz_record_queuesz(sch, q, now, rate, 0);
+		janz_record_queuesz(sch, q, rq_notbefore, rate, 0);
 		++now;
 		++rq_notbefore;
 		++vq_notbefore;
 	}
-	if (janz_sendoff(sch, q, skb, cb, now, vq_notbefore))
+	if (janz_sendoff(sch, q, skb, cb, rq_notbefore, vq_notbefore))
 		/* sent to retransmission; fastpath recalling */
 		goto redo_deq;
 	return (skb);

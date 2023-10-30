@@ -111,6 +111,11 @@ This timestamp has no relation to wall-clock time but is
 consistent within measurement as it increases monotonically,
 pausing when the system is suspended.
 
+Note: ts is not necessarily the timestamp from when the
+packet was physically transmitted when the packet pacing
+“backdates” packets to make up for Linux calling the dequeue
+method later than requested.
+
 The .type member, an 8-bit unsigned integer, indicates
 which record it is, i.e. which meaning it has and how
 the data members are filled. This is one of:

@@ -991,6 +991,7 @@ janz_deq(struct Qdisc *sch)
 	if ((now >= q->qsz_next) || (rate != q->lastknownrate)) {
 		janz_record_queuesz(sch, q, now, rate, 0);
 		++now;
+		++rq_notbefore;
 		++vq_notbefore;
 	}
 	if (janz_sendoff(sch, q, skb, cb, now, vq_notbefore))

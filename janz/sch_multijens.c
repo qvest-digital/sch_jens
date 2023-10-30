@@ -876,6 +876,7 @@ janz_deq(struct Qdisc *sch)
 	struct sjanz_priv *sq;
 	struct sk_buff *skb;
 	u64 now, rate, rs;
+	u64 rq_notbefore;
 	u32 ue;
 	struct janz_skb *cb;
 	int qid;
@@ -960,15 +961,16 @@ janz_deq(struct Qdisc *sch)
 	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(sq->ns_pro_byte));
-	sq->notbefore = (sq->crediting ?
-	    max(sq->notbefore, cb->ts_enq + cb->pktxlatency) : now) +
-	    (rate * (u64)qdisc_pkt_len(skb));
+	rq_notbefore = sq->crediting ?
+	    max(sq->notbefore, cb->ts_enq + cb->pktxlatency) : now;
+	sq->notbefore = rq_notbefore + (rate * (u64)qdisc_pkt_len(skb));
 	sq->crediting = 1;
+
 	if ((now >= sq->qsz_next) || (rate != sq->lastknownrate)) {
 		janz_record_queuesz(sch, sq, now, rate, 0);
 		++now;
+		++rq_notbefore;
 	}
-
 	if (janz_sendoff(sch, sq, skb, cb, now))
 		/* sent to retransmission loop; fastpath recalling */
 		goto redo_deq;

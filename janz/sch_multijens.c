@@ -41,6 +41,8 @@
 #include "janz_uapi.h"
 #include "gru32b.h"
 
+#define xinline inline __attribute__((__always_inline__))
+
 /* constant must fit 32 bits; 2'000'000'000 will do */
 #define MAXXLATENCY nsmul(2, NSEC_PER_SEC)
 
@@ -52,13 +54,13 @@ mbCTA_BEG(janz_misc);
  mbCTA(maxxlatency_ok, MAXXLATENCY <= 0xFFFFFFFFULL);
 mbCTA_END(janz_misc);
 
-static inline u64
+static xinline u64
 us_to_ns(u32 us)
 {
 	return (nsmul(us, NSEC_PER_USEC));
 }
 
-static inline u64
+static xinline u64
 ns_to_us(u64 ns)
 {
 	return (div_u64(ns, NSEC_PER_USEC));
@@ -165,14 +167,14 @@ struct janz_skb {
 	u8 record_flag;			/* for debugfs/relayfs reporting */	//@ +3 :1
 } __attribute__((__packed__));
 
-static inline struct janz_skb *
+static xinline struct janz_skb *
 get_janz_skb(const struct sk_buff *skb)
 {
 	qdisc_cb_private_validate(skb, sizeof(struct janz_skb));
 	return ((struct janz_skb *)qdisc_skb_cb(skb)->data);
 }
 
-static inline u32
+static xinline u32
 delay_encode(u64 now, u64 base, u64 *qdelayp)
 {
 	u64 qdelay;
@@ -193,7 +195,7 @@ delay_encode(u64 now, u64 base, u64 *qdelayp)
 	return ((u32)qdelay);
 }
 
-static inline u32
+static xinline u32
 qdelay_encode(struct janz_skb *cb, u64 now, u64 *qdelayp, bool resizing)
 {
 	if (unlikely(resizing))
@@ -201,7 +203,7 @@ qdelay_encode(struct janz_skb *cb, u64 now, u64 *qdelayp, bool resizing)
 	return (delay_encode(now, cb->ts_enq + cb->pktxlatency, qdelayp));
 }
 
-static inline ssize_t
+static ssize_t
 janz_ctlfile_write(struct file *filp, const char __user *buf,
     size_t count, loff_t *posp)
 {
@@ -226,7 +228,7 @@ janz_ctlfile_write(struct file *filp, const char __user *buf,
 	return (count);
 }
 
-static inline void
+static xinline void
 janz_record_write(struct tc_janz_relay *record, struct sjanz_priv *q)
 {
 	unsigned long flags;	/* used by spinlock macros */
@@ -236,7 +238,7 @@ janz_record_write(struct tc_janz_relay *record, struct sjanz_priv *q)
 	spin_unlock_irqrestore(&q->record_lock, flags);
 }
 
-static inline void
+static xinline void
 janz_record_queuesz(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
     u64 rate, u8 ishandover)
 {
@@ -259,7 +261,7 @@ janz_record_queuesz(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	q->qsz_next = (ishandover ? now : ktime_get_ns()) + QSZ_INTERVAL;
 }
 
-static inline void
+static xinline void
 janz_record_packet(struct sjanz_priv *q,
     struct sk_buff *skb, struct janz_skb *cb, u32 qdelay1024, u64 now)
 {
@@ -298,7 +300,7 @@ janz_record_packet(struct sjanz_priv *q,
 	janz_record_write(&r, q);
 }
 
-static inline void
+static xinline void
 janz_fragcache_maint(struct mjanz_priv *q, u64 now)
 {
 	u64 old;
@@ -337,7 +339,7 @@ janz_fragcache_maint(struct mjanz_priv *q, u64 now)
 	}
 }
 
-static inline void
+static xinline void
 janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
     int qid, bool resizing)
 {
@@ -360,7 +362,7 @@ janz_drop_pkt(struct Qdisc *sch, struct sjanz_priv *q, u64 now,
 	kfree_skb(skb);
 }
 
-static inline void
+static xinline void
 janz_drop_1pkt_whenold(struct Qdisc *sch, struct sjanz_priv *q,
     u64 now, bool resizing)
 {
@@ -372,7 +374,7 @@ janz_drop_1pkt_whenold(struct Qdisc *sch, struct sjanz_priv *q,
 		janz_drop_pkt(sch, q, now, 2, resizing);
 }
 
-static inline void
+static xinline void
 janz_drop_1pkt_overlen(struct Qdisc *sch, struct sjanz_priv *q,
     u64 now, bool resizing)
 {
@@ -384,7 +386,7 @@ janz_drop_1pkt_overlen(struct Qdisc *sch, struct sjanz_priv *q,
 		janz_drop_pkt(sch, q, now, 0, resizing);
 }
 
-static inline void
+static xinline void
 janz_drop_overlen(struct Qdisc *sch, struct mjanz_priv *q, u64 now,
     bool isenq)
 {
@@ -398,7 +400,7 @@ janz_drop_overlen(struct Qdisc *sch, struct mjanz_priv *q, u64 now,
 	} while (unlikely(sch->q.qlen > sch->limit));
 }
 
-static inline bool
+static xinline bool
 janz_qheadolder(struct sjanz_priv *q, u64 ots, int qid)
 {
 	struct janz_skb *cb;
@@ -409,7 +411,7 @@ janz_qheadolder(struct sjanz_priv *q, u64 ots, int qid)
 	return ((unlikely(cb->ts_enq + cb->pktxlatency < ots)) ? true : false);
 }
 
-static inline void
+static xinline void
 janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 {
 	u64 ots;
@@ -437,7 +439,7 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 		q->drop_next = now + DROPCHK_INTERVAL;
 }
 
-static inline bool
+static xinline bool
 janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
     struct janz_skb *cb, u64 now)
 {
@@ -500,7 +502,7 @@ janz_sendoff(struct Qdisc *sch, struct sjanz_priv *q, struct sk_buff *skb,
 	return (false);
 }
 
-static inline void
+static xinline void
 janz_init_record_flag(struct janz_skb *cb)
 {
 	u8 ecnbits;
@@ -513,7 +515,7 @@ janz_init_record_flag(struct janz_skb *cb)
 	cb->record_flag = ecnbits;
 }
 
-static inline void
+static xinline void
 janz_analyse(struct Qdisc *sch, struct mjanz_priv *q,
     struct sk_buff *skb, struct janz_skb *cb, u64 now)
 {
@@ -992,7 +994,7 @@ janz_peek(struct Qdisc *sch)
 	return (NULL);
 }
 
-static inline void
+static xinline void
 janz_reset(struct Qdisc *sch)
 {
 	u32 ue;
@@ -1041,7 +1043,7 @@ static const struct nla_policy janz_nla_policy[TCA_JANZ_MAX + 1] = {
 	[TCA_MULTIJENS_UENUM]	= { .type = NLA_U32 },
 };
 
-static inline int
+static xinline int
 janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 {
 	u32 ue;

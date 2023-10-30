@@ -1,11 +1,13 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0)
 /* commit e9a688bcb19348862afe30d7c85bc37c4c293471 */
 /* + changed get_random_u{8,16} */
+/* + forced inlining */
 
 /* © 2022 Jason A. Donenfeld <Jason@zx2c4.com> */
 /* SPDX-License-Identifier: GPL-2.0 */
 
-static u32 __get_random_u32_below(u32 ceil)
+static inline __attribute__((__always_inline__)) u32
+__get_random_u32_below(u32 ceil)
 {
 	/*
 	 * This is the slow path for variable ceil. It is still fast, most of
@@ -30,7 +32,8 @@ static u32 __get_random_u32_below(u32 ceil)
  * distribution, suitable for all uses. Fastest when ceil is a constant, but
  * still fast for variable ceil as well.
  */
-static inline u32 get_random_u32_below(u32 ceil)
+static inline __attribute__((__always_inline__)) u32
+get_random_u32_below(u32 ceil)
 {
 	if (!__builtin_constant_p(ceil))
 		return __get_random_u32_below(ceil);

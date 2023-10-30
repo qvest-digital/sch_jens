@@ -1,5 +1,5 @@
 /*
- * JENS “virtual queue”-based marking qdisc
+ * JENS (optionally “virtual queue”-based) marking qdisc
  *
  * Copyright © 2022, 2023 mirabilos <t.glaser@tarent.de>
  * Licensor: Deutsche Telekom LLCTO
@@ -122,8 +122,10 @@ struct janz_priv {
 	u32 pktlensum;			/* amount of bytes queued up */			//@  +12
 	struct dentry *ctlfile;								//@16
 	u64 lastknownrate;								//@  +8
+#if VQ_FACTOR != 1
 	u64 vq_notbefore;		/* for lower rate, virtual */			//@16
-	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@  +8
+#endif
+	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//@8
 	spinlock_t record_lock;		/* for record_chan */				//@?
 	u8 crediting;
 	u8 qosmode;
@@ -298,9 +300,13 @@ janz_record_packet(struct janz_priv *q,
 
 	if (vq_notbefore) {
 		vq_notbefore -= now;
-		vq_notbefore >>= TC_JANZ_TIMESHIFT;
-		if (unlikely(vq_notbefore > 0x00FFFFFFUL))
-			vq_notbefore = 0x00FFFFFFUL;
+		if (vq_notbefore) {
+			vq_notbefore >>= TC_JANZ_TIMESHIFT;
+			if (unlikely(vq_notbefore > 0x00FFFFFFUL))
+				vq_notbefore = 0x00FFFFFFUL;
+			else if (unlikely(vq_notbefore < 1))
+				vq_notbefore = 1;
+		}
 	}
 
 	r.ts = now;
@@ -983,9 +989,13 @@ janz_deq(struct Qdisc *sch)
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	rq_notbefore = q->crediting ?
 	    max(q->notbefore, cb->ts_enq + cb->pktxlatency) : now;
+#if VQ_FACTOR == 1
+	vq_notbefore = rq_notbefore;
+#else
 	vq_notbefore = max(rq_notbefore, q->vq_notbefore);
-	q->notbefore = rq_notbefore + (rate * (u64)qdisc_pkt_len(skb));
 	q->vq_notbefore = vq_notbefore + (rate * VQ_FACTOR * (u64)qdisc_pkt_len(skb));
+#endif
+	q->notbefore = rq_notbefore + (rate * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
 
 	if ((now >= q->qsz_next) || (rate != q->lastknownrate)) {
@@ -1033,7 +1043,9 @@ janz_reset(struct Qdisc *sch)
 	sch->qstats.backlog = 0;
 	sch->qstats.overlimits = 0;
 	q->notbefore = 0;
+#if VQ_FACTOR != 1
 	q->vq_notbefore = 0;
+#endif
 	q->crediting = 0;
 	q->lastknownrate = 0;
 #ifdef SCH_JANZDBG
@@ -1115,7 +1127,7 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		u64 tmp = nla_get_u64(tb[TCA_JANZ_RATE64]);
 
 		tmp = div64_u64(NSEC_PER_SEC, tmp);
-		tmp = (tmp  + (VQ_FACTOR - 1)) / VQ_FACTOR;
+		tmp = (tmp + (VQ_FACTOR - 1)) / VQ_FACTOR;
 		if (tmp < 1)
 			tmp = 1;
 		atomic64_set_release(&(q->ns_pro_byte), (s64)tmp);
@@ -1373,7 +1385,11 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 }
 
 static struct Qdisc_ops janz_ops __read_mostly = {
+#if VQ_FACTOR != 1
 	.id		= "jensvq" mbccS2(VQ_FACTOR) "proto",
+#else
+	.id		= "janz",
+#endif
 	.priv_size	= sizeof(struct janz_priv),
 	.enqueue	= janz_enq,
 	.dequeue	= janz_deq,

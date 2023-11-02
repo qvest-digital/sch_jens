@@ -23,7 +23,7 @@
 .Os Linux
 .Sh NAME
 .Nm tc\-jensvq3proto
-.Nd virtual queue prototype (3x) for the JENS network simulator
+.Nd virtual queue prototype (3x, rqd) for the JENS network simulator
 .Sh SYNOPSIS
 .Nm tc
 .Ic qdisc ...\& Nm jensvq3proto
@@ -58,6 +58,10 @@ qdisc operates exactly as the
 qdisc described below, but runs the real queue at thrice the
 configured speed and uses a virtual queue at the rate set by
 the user to determine queue delay for ECN CE marking.
+.Nm tc\-jensvq3proto
+uses the real qdelay to calculate drops, while
+.Nm tc\-jensvq3pvqd
+uses the virtual qdelay for that.
 This is a rapid prototype for further improvements over L4S
 and subject to change without notice.
 .Pp
@@ -244,7 +248,8 @@ This led to packet loss making the SSH session hang because some
 packets ended up being older than 100 ms due to that low a bandwidth,
 and thus dropped.
 .Sh SEE ALSO
-.Xr tc 8
+.Xr tc 8 ,
+.Xr tc\-janz 8
 .Pp
 .Pa /usr/share/doc/sch\-jens\-dkms/README.gz
 .Pp

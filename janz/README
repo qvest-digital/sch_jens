@@ -175,7 +175,7 @@ Record types define the following data members:
       └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
 
   vq_notbefore1024 is a 24-bit unsigned integer that’s only not 0 when
-  sending an actual packet from the jensvq{2,3}proto qdiscs; then, it
+  sending an actual packet from the jensvq{2,3,4,5}* qdiscs; then, it
   is a timedelta carrying the 1024ns units the packet would be sent
   later than ts in the virtual (DRP capacity) queue, whereas the packet
   actually was sent off the real (double/triple capacity) queue at ts.

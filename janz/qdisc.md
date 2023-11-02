@@ -400,11 +400,14 @@ The packets leave the bypass and “`sch_janz` subqueues” in a
 simple round-robin skipping empty queues until their next turn.
 This may possibly be changed in the future.
 
-## Operation of the `sch_jensvq2proto` and `sch_jensvq3proto` qdiscs
+## Operation of the `sch_jensvq`\* qdiscs
 
 These operate exactly like `sch_janz` but the real queue is run at
-twice or thrice, respectively, the data rate configured while the
-calculation of the queue delay uses a virtual queue at configured
-speed.
+twice, thrice, four or five times, respectively, the data rate
+configured while the calculation of the queue delay uses a virtual
+queue at configured speed.
+
+The `pvqd` flavour uses the virtual qdisc delay to calculate drops,
+while the normal/`proto` qdiscs do that on the real qdisc delay.
 
 This is currently a rapid prototype, subject to change without notice.

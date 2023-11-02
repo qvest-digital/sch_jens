@@ -47,12 +47,24 @@ unload:
 	-rmmod sch_multijens
 	-rmmod sch_jensvq2proto
 	-rmmod sch_jensvq3proto
+	-rmmod sch_jensvq4proto
+	-rmmod sch_jensvq5proto
+	-rmmod sch_jensvq2pvqd
+	-rmmod sch_jensvq3pvqd
+	-rmmod sch_jensvq4pvqd
+	-rmmod sch_jensvq5pvqd
 
 load: unload
 	insmod sch_janz.ko
 	insmod sch_multijens.ko
 	insmod sch_jensvq2proto.ko
 	insmod sch_jensvq3proto.ko
+	insmod sch_jensvq4proto.ko
+	insmod sch_jensvq5proto.ko
+	insmod sch_jensvq2pvqd.ko
+	insmod sch_jensvq3pvqd.ko
+	insmod sch_jensvq4pvqd.ko
+	insmod sch_jensvq5pvqd.ko
 
 show-hz:
 	@-rm -f .show-hz

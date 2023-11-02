@@ -213,3 +213,39 @@ struct qdisc_util jensvq3proto_qdisc_util = {
 	.parse_qopt	= janz_parse_opt,
 	.print_qopt	= janz_print_opt,
 };
+
+struct qdisc_util jensvq4proto_qdisc_util = {
+	.id		= "jensvq4proto",
+	.parse_qopt	= janz_parse_opt,
+	.print_qopt	= janz_print_opt,
+};
+
+struct qdisc_util jensvq5proto_qdisc_util = {
+	.id		= "jensvq5proto",
+	.parse_qopt	= janz_parse_opt,
+	.print_qopt	= janz_print_opt,
+};
+
+struct qdisc_util jensvq2pvqd_qdisc_util = {
+	.id		= "jensvq2pvqd",
+	.parse_qopt	= janz_parse_opt,
+	.print_qopt	= janz_print_opt,
+};
+
+struct qdisc_util jensvq3pvqd_qdisc_util = {
+	.id		= "jensvq3pvqd",
+	.parse_qopt	= janz_parse_opt,
+	.print_qopt	= janz_print_opt,
+};
+
+struct qdisc_util jensvq4pvqd_qdisc_util = {
+	.id		= "jensvq4pvqd",
+	.parse_qopt	= janz_parse_opt,
+	.print_qopt	= janz_print_opt,
+};
+
+struct qdisc_util jensvq5pvqd_qdisc_util = {
+	.id		= "jensvq5pvqd",
+	.parse_qopt	= janz_parse_opt,
+	.print_qopt	= janz_print_opt,
+};

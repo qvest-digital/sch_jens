@@ -4,7 +4,10 @@
 
 QDISC_KIND=' choke codel bfifo pfifo pfifo_head_drop fq fq_codel gred hhf \
             mqprio multiq netem pfifo_fast pie fq_pie red rr sfb sfq tbf atm \
-            cbq drr dsmark hfsc htb prio qfq janz multijens jensvq2proto jensvq3proto '
+            cbq drr dsmark hfsc htb prio qfq \
+            janz multijens \
+            jensvq2proto jensvq3proto jensvq4proto jensvq5proto \
+            jensvq2pvqd jensvq3pvqd jensvq4pvqd jensvq5pvqd '
 FILTER_KIND=' basic bpf cgroup flow flower fw route rsvp tcindex u32 matchall '
 ACTION_KIND=' gact mirred bpf sample '
 
@@ -301,7 +304,7 @@ _tc_qdisc_options()
             _tc_one_of_list 'ecn noecn'
             return 0
             ;;
-        janz|jensvq2proto|jensvq3proto)
+        janz|jensvq*)
             _tc_once_attr 'limit rate handover qosmode markfree markfull \
                 subbufs fragcache extralatency'
             return 0

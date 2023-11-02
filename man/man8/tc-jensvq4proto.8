@@ -18,15 +18,15 @@
 .\" of said person’s immediate fault when using the work as intended.
 .\"-
 .if \n(.g .hlm 0
-.Dd October 16, 2023
-.Dt TC\-JENSVQ2PROTO 8
+.Dd November 2, 2023
+.Dt TC\-JENSVQ4PROTO 8
 .Os Linux
 .Sh NAME
-.Nm tc\-jensvq2proto
-.Nd virtual queue prototype (2x, rqd) for the JENS network simulator
+.Nm tc\-jensvq4proto
+.Nd virtual queue prototype (4x, rqd) for the JENS network simulator
 .Sh SYNOPSIS
 .Nm tc
-.Ic qdisc ...\& Nm jensvq2proto
+.Ic qdisc ...\& Nm jensvq4proto
 .Op Ic limit Ar PACKETS
 .Op Ic rate Ar RATE
 .Op Ic handover Ar TIME
@@ -52,15 +52,15 @@ the real-life PoC scenario as closely as possible as well as takes care
 of traffic shaping (limitation of bandwidth) by packet pacing.
 .Pp
 The
-.Nm sch_jensvq2proto
+.Nm sch_jensvq4proto
 qdisc operates exactly as the
 .Nm sch_janz
-qdisc described below, but runs the real queue at twice the
+qdisc described below, but runs the real queue at four times the
 configured speed and uses a virtual queue at the rate set by
 the user to determine queue delay for ECN CE marking.
-.Nm tc\-jensvq2proto
+.Nm tc\-jensvq4proto
 uses the real qdelay to calculate drops, while
-.Nm tc\-jensvq2pvqd
+.Nm tc\-jensvq4pvqd
 uses the virtual qdelay for that.
 This is a rapid prototype for further improvements over L4S
 and subject to change without notice.
@@ -201,9 +201,9 @@ Specifically, drops accounting in the gnet stats is not done.
 .Sh EXAMPLES
 Set up a queue with standard parameters and display its statistics:
 .Bd -literal -offset 4n
-$ \fBsudo tc qdisc add dev eth0 root handle 1: jensvq2proto\fR\fC
+$ \fBsudo tc qdisc add dev eth0 root handle 1: jensvq4proto\fR\fC
 $ \fBsudo tc \-s qdisc show dev eth0\fR\fC
-qdisc jensvq2proto 1: root refcnt 2 limit 10240 rate 10000kbit \e
+qdisc jensvq4proto 1: root refcnt 2 limit 10240 rate 10000kbit \e
     qosmode 0 markfree 4ms markfull 14ms \e
     subbufs 1024 fragcache 1024 extralatency 0us
  Sent 2012 bytes 12 pkt (dropped 0, overlimits 0, requeues 0)
@@ -222,7 +222,7 @@ PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
 \-\-\- 8.8.8.8 ping statistics \-\-\-
 4 packets transmitted, 4 received, 0% packet loss, time 3005ms
 rtt min/avg/max/mdev = 4.433/4.515/4.619/0.066 ms
-$ \fBsudo tc qdisc change dev eth0 handle 1: jensvq2proto\fR\fC \e
+$ \fBsudo tc qdisc change dev eth0 handle 1: jensvq4proto\fR\fC \e
     \fBlimit 128 rate 128kbit extralatency 80ms\fR\fC
 $ \fBping \-c4 8.8.8.8\fR\fC
 PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
@@ -235,7 +235,7 @@ PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.
 4 packets transmitted, 4 received, 0% packet loss, time 3006ms
 rtt min/avg/max/mdev = 84.417/85.193/87.486/1.323 ms
 $ \fBsudo tc \-s qdisc show dev eth0\fR\fC
-qdisc jensvq2proto 1: root refcnt 2 limit 128 rate 128kbit \e
+qdisc jensvq4proto 1: root refcnt 2 limit 128 rate 128kbit \e
     qosmode 0 markfree 4ms markfull 14ms \e
     subbufs 1024 fragcache 1024 extralatency 80ms
  Sent 13022 bytes 79 pkt (dropped 0, overlimits 0, requeues 0)

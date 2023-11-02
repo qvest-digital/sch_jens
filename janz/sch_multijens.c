@@ -437,18 +437,20 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 	u64 ots;
 	int qid;
 
+#define dropchkbase now
+
 	if (now < q->drop_next)
 		return;
 
 	/* drop one packet if one or more packets are older than 100 ms */
-	ots = now - nsmul(100, NSEC_PER_MSEC);
+	ots = dropchkbase - nsmul(100, NSEC_PER_MSEC);
 	if (janz_qheadolder(q, ots, 0) ||
 	    janz_qheadolder(q, ots, 1) ||
 	    janz_qheadolder(q, ots, 2))
 		janz_drop_1pkt_whenold(sch, q, now, false);
 
 	/* drop all packets older than 500 ms */
-	ots = now - nsmul(500, NSEC_PER_MSEC);
+	ots = dropchkbase - nsmul(500, NSEC_PER_MSEC);
 	for (qid = 0; qid <= 2; ++qid)
 		while (janz_qheadolder(q, ots, qid))
 			janz_drop_pkt(sch, q, now, qid, false);
@@ -457,6 +459,8 @@ janz_dropchk(struct Qdisc *sch, struct sjanz_priv *q, u64 now)
 	now = ktime_get_ns();
 	if (q->drop_next < now)
 		q->drop_next = now + DROPCHK_INTERVAL;
+
+#undef dropchkbase
 }
 
 static xinline bool
@@ -1500,4 +1504,18 @@ module_init(janz_modinit);
 module_exit(janz_modexit);
 MODULE_AUTHOR("Deutsche Telekom LLCTO");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("bespoke egress traffic scheduler for the JENS network simulator, multiple UE simulation");
+#define janzmoddesc_bs "bespoke egress traffic scheduler for the JENS network simulator"
+#define janzmoddesc_sm ", multiple UE simulation"
+#if VQ_FACTOR == 1
+#define janzmoddesc_vq ""
+#define janzmoddesc_qd ""
+#else
+#define janzmoddesc_vq ", at " mbccS2(VQ_FACTOR) "x virtual queue"
+#ifdef VQ_USE_FOR_DROPS
+#define janzmoddesc_qd ", drops from virtual queue"
+#else
+#define janzmoddesc_qd ", drops from real queue"
+#endif
+#endif
+#define janzmoddesc janzmoddesc_bs janzmoddesc_sm janzmoddesc_vq janzmoddesc_qd
+MODULE_DESCRIPTION(janzmoddesc);

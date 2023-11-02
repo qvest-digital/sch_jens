@@ -459,18 +459,24 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 	u64 ots;
 	int qid;
 
+#ifdef VQ_USE_FOR_DROPS
+#define dropchkbase max(q->vq_notbefore, now)
+#else
+#define dropchkbase now
+#endif
+
 	if (now < q->drop_next)
 		return;
 
 	/* drop one packet if one or more packets are older than 100 ms */
-	ots = now - nsmul(100, NSEC_PER_MSEC);
+	ots = dropchkbase - nsmul(100, NSEC_PER_MSEC);
 	if (janz_qheadolder(q, ots, 0) ||
 	    janz_qheadolder(q, ots, 1) ||
 	    janz_qheadolder(q, ots, 2))
 		janz_drop_1pkt_whenold(sch, q, now, false);
 
 	/* drop all packets older than 500 ms */
-	ots = now - nsmul(500, NSEC_PER_MSEC);
+	ots = dropchkbase - nsmul(500, NSEC_PER_MSEC);
 	for (qid = 0; qid <= 2; ++qid)
 		while (janz_qheadolder(q, ots, qid))
 			janz_drop_pkt(sch, q, now, qid, false);
@@ -479,6 +485,8 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now)
 	now = ktime_get_ns();
 	if (q->drop_next < now)
 		q->drop_next = now + DROPCHK_INTERVAL;
+
+#undef dropchkbase
 }
 
 static xinline bool
@@ -1391,10 +1399,12 @@ janz_dump(struct Qdisc *sch, struct sk_buff *skb)
 }
 
 static struct Qdisc_ops janz_ops __read_mostly = {
-#if VQ_FACTOR != 1
-	.id		= "jensvq" mbccS2(VQ_FACTOR) "proto",
-#else
+#if VQ_FACTOR == 1
 	.id		= "janz",
+#elif defined(VQ_USE_FOR_DROPS)
+	.id		= "jensvq" mbccS2(VQ_FACTOR) "pvqd",
+#else
+	.id		= "jensvq" mbccS2(VQ_FACTOR) "proto",
 #endif
 	.priv_size	= sizeof(struct janz_priv),
 	.enqueue	= janz_enq,
@@ -1446,4 +1456,18 @@ module_init(janz_modinit);
 module_exit(janz_modexit);
 MODULE_AUTHOR("Deutsche Telekom LLCTO");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("bespoke egress traffic scheduler for the JENS network simulator, single UE simulation");
+#define janzmoddesc_bs "bespoke egress traffic scheduler for the JENS network simulator"
+#define janzmoddesc_sm ", single UE simulation"
+#if VQ_FACTOR == 1
+#define janzmoddesc_vq ""
+#define janzmoddesc_qd ""
+#else
+#define janzmoddesc_vq ", at " mbccS2(VQ_FACTOR) "x virtual queue"
+#ifdef VQ_USE_FOR_DROPS
+#define janzmoddesc_qd ", drops from virtual queue"
+#else
+#define janzmoddesc_qd ", drops from real queue"
+#endif
+#endif
+#define janzmoddesc janzmoddesc_bs janzmoddesc_sm janzmoddesc_vq janzmoddesc_qd
+MODULE_DESCRIPTION(janzmoddesc);

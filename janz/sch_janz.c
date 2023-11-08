@@ -441,6 +441,7 @@ static inline struct sk_buff *
 janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek, int *qidp)
 {
 	u64 now, rate = 0;
+	u64 rq_notbefore;
 	struct sk_buff *skb;
 	struct janz_skb *cb;
 	int qid;
@@ -523,13 +524,15 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek, int *qidp)
 	qdisc_bstats_update(sch, skb);
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
-	q->notbefore = (q->crediting ?
-	    max(q->notbefore, t1024_to_ns(cb->ts_arrive)) : now) +
+	rq_notbefore = q->crediting ?
+	    max(q->notbefore, t1024_to_ns(cb->ts_arrive)) : now;
+	q->notbefore = rq_notbefore +
 	    (rate * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
 	if ((now >= q->qsz_next) || (rate != q->lastknownrate)) {
 		janz_record_queuesz(sch, q, now, rate, 0);
 		++now;
+		++rq_notbefore;
 	}
 	return (skb);
 }

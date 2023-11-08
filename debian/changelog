@@ -1,3 +1,14 @@
+iproute2 (5.10.0-4jens19.2) tarent; urgency=medium
+
+  * Bugfix cherry-pick release
+  * Queue size reporting is now fully ordered against packet reporting
+    and no longer in enqueue
+  * .peek stalls a minute and always returns nil
+  * rq_notbefore-based queue delay calculation, packet reporting
+  * Re-enable GCC warnings Linux disabled
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 09 Nov 2023 00:16:41 +0100
+
 iproute2 (5.10.0-4jens19.1) tarent; urgency=medium
 
   * Bugfix cherry-pick release

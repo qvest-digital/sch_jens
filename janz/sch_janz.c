@@ -638,8 +638,8 @@ janz_analyse(struct Qdisc *sch, struct janz_priv *q,
 	u8 noportinfo = 59;
 	int fragoff = -1;
 	struct janz_fragcomp fc;
-	struct ipv6hdr *ih6;
-	struct iphdr *ih4;
+	struct ipv6hdr *ih6 = NULL;
+	struct iphdr *ih4 = NULL;
 
 	/* addresses */
 	switch (skb->protocol) {

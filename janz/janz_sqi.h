@@ -171,7 +171,7 @@ get_janz_skb(const struct sk_buff *skb)
 }
 
 static xinline u32
-delay_encode(u64 now, u64 base, u64 *qdelayp)
+delay_encode(u64 now, u64 base, u64 *qdelayp, bool roundup)
 {
 	u64 qdelay;
 
@@ -185,6 +185,8 @@ delay_encode(u64 now, u64 base, u64 *qdelayp)
 	if (qdelayp)
 		*qdelayp = qdelay;
 
+	if (roundup)
+		qdelay += (1ULL << TC_JANZ_TIMESHIFT) - 1ULL;
 	qdelay >>= TC_JANZ_TIMESHIFT;
 	if (unlikely(qdelay > 0xFFFFFFFDUL))
 		return (0xFFFFFFFDUL);
@@ -194,9 +196,15 @@ delay_encode(u64 now, u64 base, u64 *qdelayp)
 static xinline u32
 qdelay_encode(struct janz_skb *cb, u64 now, u64 *qdelayp, bool resizing)
 {
+	u32 res;
+
 	if (unlikely(resizing))
 		return (0xFFFFFFFFUL);
-	return (delay_encode(now, cb->ts_enq + cb->pktxlatency, qdelayp));
+	res = delay_encode(now, cb->ts_enq + cb->pktxlatency, qdelayp, false);
+	/* for symmetry with janz_record_packet -> vq_notbefore */
+	if (unlikely(res < 1U))
+		res = 1U;
+	return (res);
 }
 
 static ssize_t
@@ -306,8 +314,8 @@ janz_record_packet(struct janz_priv *q,
 			vq_notbefore >>= TC_JANZ_TIMESHIFT;
 			if (unlikely(vq_notbefore > 0x00FFFFFFUL))
 				vq_notbefore = 0x00FFFFFFUL;
-			else if (unlikely(vq_notbefore < 1))
-				vq_notbefore = 1;
+			else if (unlikely(vq_notbefore < 1U))
+				vq_notbefore = 1U;
 		}
 	}
 
@@ -341,7 +349,7 @@ janz_record_packet(struct janz_priv *q,
 	    }
 	}
 
-	r.z.zSOJOURN.real_owd = delay_encode(ktime_get_ns(), cb->ts_enq, NULL);
+	r.z.zSOJOURN.real_owd = delay_encode(ktime_get_ns(), cb->ts_enq, NULL, true);
 	janz_record_write(&r, q);
 }
 

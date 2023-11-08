@@ -9,3 +9,6 @@ endif
 
 # work around Linux adding flags it itself isn’t even ready for
 ccflags-y += -Wimplicit-fallthrough=4
+
+# aaaaaaaaaaaaaaaah! Why U disable these Loonix?!
+ccflags-y += -Wformat-security -Wunused-but-set-variable -Wunused-const-variable -Wmaybe-uninitialized

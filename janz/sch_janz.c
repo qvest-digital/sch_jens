@@ -991,14 +991,14 @@ static struct sk_buff *
 janz_peek(struct Qdisc *sch)
 {
 	struct janz_priv *q = qdisc_priv(sch);
-	static bool warned_about_peek = false;
-	int qid;
 
-	if (!warned_about_peek) {
-		printk(KERN_WARNING "sch_janz: .peek called... why exactly?\n");
-		warned_about_peek = true;
-	}
-	return (janz_getnext(sch, q, true, &qid));
+	pr_warn(".peek called; this is not supported!\n");
+	dump_stack();
+	/* delay traffic noticeably, so the user knows to look */
+	q->notbefore = ktime_get_ns() + NSEC_PER_SEC;
+	q->crediting = 0;
+	/* hard reply no packet to now send */
+	return (NULL);
 }
 
 static inline void

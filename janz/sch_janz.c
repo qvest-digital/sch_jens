@@ -1399,4 +1399,4 @@ module_init(janz_modinit);
 module_exit(janz_modexit);
 MODULE_AUTHOR("Deutsche Telekom LLCTO");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("bespoke egress traffic scheduler for the JENS network simulator");
+MODULE_DESCRIPTION("bespoke egress traffic scheduler for the JENS network simulator, single UE simulation");

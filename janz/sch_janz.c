@@ -158,6 +158,11 @@ struct janz_skb {
 	u8 record_flag;			/* for debugfs/relayfs reporting */	//@ +3 :1
 } __attribute__((__packed__));
 
+struct janz_64bit_check {
+	/* needed as skb->dev_scratch occupies ts_arrive in ktime ns… */
+	int on64bitsystem[sizeof(unsigned long) == sizeof(u64) ? 1 : -1];
+};
+
 static inline struct janz_skb *
 get_janz_skb(const struct sk_buff *skb)
 {
@@ -528,7 +533,7 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek, int *qidp,
 
 	rate = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 	rq_notbefore = q->crediting ?
-	    max(q->notbefore, t1024_to_ns(cb->ts_arrive)) : now;
+	    max(q->notbefore, ((u64)skb->dev_scratch)) : now;
 	q->notbefore = rq_notbefore +
 	    (rate * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
@@ -548,8 +553,12 @@ janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
 	u64 qdelay;
 	struct janz_skb *cb = get_janz_skb(skb);
 	u16 chance;
+	u64 ts_arrive_ns;
 
-	qdelay = t1024_to_ns((u32)cmp1024(ns_to_t1024(now), cb->ts_arrive));
+	ts_arrive_ns = (u64)skb->dev_scratch;
+	skb->dev = qdisc_dev(sch);
+
+	qdelay = now - ts_arrive_ns;
 
 	/**
 	 * maths proof, by example:
@@ -904,7 +913,8 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 
 	/* initialise values in cb */
 	cb->ts_begin = now1024;
-	cb->ts_arrive = ns_to_t1024(now + q->xlatency);
+	skb->dev_scratch = now + q->xlatency;
+	cb->ts_arrive = ns_to_t1024((u64)skb->dev_scratch);
 	cb->truesz = skb->truesize;
 	/* init values from before analysis */
 	cb->srcport = 0;

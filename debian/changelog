@@ -1,3 +1,15 @@
+iproute2 (5.10.0-4jens25) tarent; urgency=medium
+
+  * Queue size reporting is now fully ordered against packet reporting
+    and no longer in enqueue
+  * rq/vq_notbefore-based qdelay calculation and packet reporting
+  * Code simplification/merging
+  * Performance improvements
+  * Add jensvq{4,5}proto (allocating higher real-queue bandwidth factors)
+  * Introduce jensvq{2,3,4,5}pvqd (dropcheck is vq-based)
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Thu, 09 Nov 2023 00:49:57 +0100
+
 iproute2 (5.10.0-4jens24) tarent; urgency=low
 
   * Incorporate BBRv3 patches for convenience:

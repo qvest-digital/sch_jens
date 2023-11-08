@@ -179,8 +179,8 @@ janz_ctlfile_write(struct file *filp, const char __user *buf,
 		return (-EFAULT);
 
 	newrate = div64_u64(8ULL * NSEC_PER_SEC, data.bits_per_second);
-	if (newrate < 1)
-		newrate = 1;
+	if (newrate < 1U)
+		newrate = 1U;
 	atomic64_set_release(&(q->ns_pro_byte), (s64)newrate);
 
 	return (sizeof(data));
@@ -363,6 +363,8 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024,
 	/* inefficient for large reduction in sch->limit (resizing = true) */
 	/* but we assume this doesn’t happen often, if at all */
 	kfree_skb(skb);
+	/* ensure the next record orders totally past this one */
+	q->crediting = 0;
 }
 
 static inline void
@@ -438,7 +440,8 @@ janz_dropchk(struct Qdisc *sch, struct janz_priv *q, u64 now, u32 now1024)
 }
 
 static inline struct sk_buff *
-janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek, int *qidp)
+janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek, int *qidp,
+    u64 *allq_notbeforep)
 {
 	u64 now, rate = 0;
 	u64 rq_notbefore;
@@ -530,19 +533,19 @@ janz_getnext(struct Qdisc *sch, struct janz_priv *q, bool is_peek, int *qidp)
 	    (rate * (u64)qdisc_pkt_len(skb));
 	q->crediting = 1;
 	if ((now >= q->qsz_next) || (rate != q->lastknownrate)) {
-		janz_record_queuesz(sch, q, now, rate, 0);
+		janz_record_queuesz(sch, q, rq_notbefore, rate, 0);
 		++now;
 		++rq_notbefore;
 	}
+	*allq_notbeforep = rq_notbefore;
 	return (skb);
 }
 
 static inline void
 janz_sendoff(struct Qdisc *sch, struct janz_priv *q, struct sk_buff *skb,
-    int qid)
+    int qid, u64 /*rq_notbefore==vq_notbefore*/ now)
 {
 	u64 qdelay;
-	u64 now = ktime_get_ns();
 	struct janz_skb *cb = get_janz_skb(skb);
 	u16 chance;
 
@@ -984,9 +987,10 @@ janz_deq(struct Qdisc *sch)
 	struct janz_priv *q = qdisc_priv(sch);
 	struct sk_buff *skb;
 	int qid;
+	u64 allq_notbefore;
 
-	if ((skb = janz_getnext(sch, q, false, &qid)))
-		janz_sendoff(sch, q, skb, qid);
+	if ((skb = janz_getnext(sch, q, false, &qid, &allq_notbefore)))
+		janz_sendoff(sch, q, skb, qid, allq_notbefore);
 	return (skb);
 }
 
@@ -1173,7 +1177,6 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	/* config values’ defaults */
 	sch->limit = 10240;
 	atomic64_set_release(&(q->ns_pro_byte), /* 10 Mbit/s */ 800);
-	q->lastknownrate = 800; /* same as above */
 	q->markfree = nsmul(4, NSEC_PER_MSEC);
 	q->markfull = nsmul(14, NSEC_PER_MSEC);
 	q->nsubbufs = 0;

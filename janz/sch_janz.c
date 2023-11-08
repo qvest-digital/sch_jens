@@ -271,7 +271,7 @@ janz_record_packet(struct janz_priv *q,
 
 	r.ts = now;
 	r.type = TC_JANZ_RELAY_SOJOURN;
-	r.d32 = queuedelay;
+	r.d32 = queuedelay < 1U ? 1U : queuedelay;
 	r.e16 = chance;
 	r.f8 = cb->record_flag;
 	r.z.zSOJOURN.psize = ((u32)(qid + 1)) << 30 |

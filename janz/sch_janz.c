@@ -1060,7 +1060,6 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	struct janz_priv *q = qdisc_priv(sch);
 	struct nlattr *tb[TCA_JANZ_MAX + 1];
 	int err;
-	bool rate_changed = false;
 	bool handover_started = false;
 
 	if (!opt)
@@ -1087,14 +1086,11 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 
 	if (tb[TCA_JANZ_RATE64]) {
 		u64 tmp = nla_get_u64(tb[TCA_JANZ_RATE64]);
-		u64 old;
 
 		tmp = div64_u64(NSEC_PER_SEC, tmp);
 		if (tmp < 1)
 			tmp = 1;
-		old = (u64)atomic64_read_acquire(&(q->ns_pro_byte));
 		atomic64_set_release(&(q->ns_pro_byte), (s64)tmp);
-		rate_changed = old != tmp;
 	}
 
 	if (tb[TCA_JANZ_HANDOVER]) {
@@ -1138,10 +1134,9 @@ janz_chg(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		janz_drop_overlen(sch, q, now, ns_to_t1024(now), false);
 	}
 
-	if (q->record_chan) {
-		/* report if rate changes or a handover starts */
-		if (rate_changed || handover_started)
-			janz_record_queuesz(sch, q, ktime_get_ns(), 0, 1);
+	/* report if a handover starts */
+	if (likely(q->record_chan) && unlikely(handover_started)) {
+		janz_record_queuesz(sch, q, ktime_get_ns(), 0, 1);
 		/* flush subbufs before handover */
 		if (handover_started)
 			relay_flush(q->record_chan);
@@ -1241,7 +1236,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	q->fragcache_aged = 0;
 
 	now = ktime_get_ns();
-	q->qsz_next = now + QSZ_INTERVAL;
+	q->qsz_next = now;
 	q->drop_next = now + DROPCHK_INTERVAL;
 
 	sch->flags &= ~TCQ_F_CAN_BYPASS;

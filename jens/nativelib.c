@@ -101,7 +101,8 @@ static jfieldID o_REC_tsOffset;		// @Unsigned long
 // queue-size
 static jfieldID o_REC_len;		// int (u16)
 static jfieldID o_REC_mem;		// long (u32)
-static jfieldID o_REC_bwLimit;		// long (s64)
+static jfieldID o_REC_virtCapacity;	// long (s64)
+static jfieldID o_REC_realCapacity;	// long (s64)
 static jfieldID o_REC_handoverStarting;	// bool
 // packet
 static jfieldID o_REC_sojournTime;	// long (s64)
@@ -249,7 +250,8 @@ JNI_OnLoad(JavaVM *vm, void *reserved __unused)
 	getfield(REC, tsOffset, "J");
 	getfield(REC, len, "I");
 	getfield(REC, mem, "J");
-	getfield(REC, bwLimit, "J");
+	getfield(REC, virtCapacity, "J");
+	getfield(REC, realCapacity, "J");
 	getfield(REC, handoverStarting, "Z");
 	getfield(REC, sojournTime, "J");
 	getfield(REC, ecnIn, "I");
@@ -470,8 +472,10 @@ nativeRead(JNIEnv *env, jobject obj)
 			    (jint)(unsigned int)buf->e16);
 			(*env)->SetLongField(env, to, o_REC_mem,
 			    (jlong)(unsigned long long)buf->d32);
-			(*env)->SetLongField(env, to, o_REC_bwLimit,
+			(*env)->SetLongField(env, to, o_REC_virtCapacity,
 			    (jlong)buf->x64[0]);
+			(*env)->SetLongField(env, to, o_REC_realCapacity,
+			    (jlong)(buf->y64[0] ? buf->y64[0] : buf->x64[0]));
 			(*env)->SetIntField(env, to, o_REC_handoverStarting,
 			    buf->f8 & TC_JANZ_RELAY_QUEUESZ_HOVER ? JNI_TRUE : JNI_FALSE);
 			(*env)->DeleteLocalRef(env, to);

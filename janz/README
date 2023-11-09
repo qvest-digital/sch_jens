@@ -187,8 +187,11 @@ Record types define the following data members:
   – f8 bitfield
     ‣   0 handover started
   – x8 subdivided
-    ‣ first 64 bit: current bandwidth limit (bits/s)
+    ‣ first 64 bit: current virtual queue bandwidth limit (bits/s)
     ‣ second 64 bit: current timestamp offset (ns)
+  – y8 subdivided
+    ‣ first 64 bit: current real queue bandwidth limit (bits/s)
+    ‣ second 64 bit: currently unused
   – z struct: currently unused
 
       ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
@@ -255,7 +258,8 @@ For v1, the janz_ctlfile_pkt structure is 8 bytes long:
 The members are:
 
 • u64 bits_per_second: the bandwidth to pace outgoing packets to,
-  in bits per second (default: 10'000'000); corresponds to
+  in bits per second (default: 10'000'000), also known as the
+  virtual queue bandwidth or virtual link capacity; corresponds to
   the “rate” tc-janz(8) parameter; as of jens19, changing this via the
   control interface triggers TC_JANZ_RELAY_QUEUESZ writing before the
   next writing of TC_JANZ_RELAY_SOJOURN; before, it did not trigger

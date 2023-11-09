@@ -54,8 +54,9 @@ public final class JensReaderDemo {
                 System.out.printf("%s [%17s] ",
                   JensReaderLib.formatTimestamp(r[i].timestamp, r[i].tsOffset),
                   JensReaderLib.formatTimestamp(r[i].timestamp));
-                System.out.printf("queue-size: bwlimit %.3f Mbit/s; ",
-                  (double) r[i].bwLimit / 1000000.0);
+                System.out.printf("queue-size: bwlimit %.3f/%.3f Mbit/s; ",
+                  (double) r[i].virtCapacity / 1000000.0,
+                  (double) r[i].realCapacity / 1000000.0);
                 if (r[i].handoverStarting)
                     System.out.print("handover starting; ");
                 System.out.printf("%7.2f KiB in %d packet%s\n",

@@ -256,6 +256,7 @@ janz_record_queuesz(struct Qdisc *sch, struct janz_priv *q, u64 now,
 	r.f8 = ishandover;
 	r.x64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate * (u64)VQ_FACTOR),
 	    1ULL);
+	r.y64[0] = max(div64_u64(8ULL * NSEC_PER_SEC, rate), 1ULL);
 	r.x64[1] = (u64)ktime_to_ns(ktime_mono_to_real(ns_to_ktime(now))) - now;
 	janz_record_write(&r, q);
 

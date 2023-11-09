@@ -86,11 +86,12 @@ javac: .built/java
 e:=env "LD_LIBRARY_PATH=$$PWD"
 p=de.telekom.llcto.jens.reader
 if=eth0
+qtype=janz
 run: all .built/java
-	sudo $e java -cp .built $p.JensReaderDemo ${if} /sys/kernel/debug/sch_janz/0001:0
+	sudo $e java -cp .built $p.JensReaderDemo ${if} /sys/kernel/debug/sch_${qtype}/0001:0
 
 rundemo: ratedemo
-	sudo ./ratedemo /sys/kernel/debug/sch_janz/0001:v1
+	sudo ./ratedemo /sys/kernel/debug/sch_${qtype}/0001:v1
 
 runmdemo: mratedemo
 	sudo ./mratedemo /sys/kernel/debug/sch_multijens/0001:v1 \
@@ -105,7 +106,7 @@ runmdemo: mratedemo
 
 jd= #-t
 rundump: jensdmp
-	sudo ./jensdmp ${jd} /sys/kernel/debug/sch_janz/0001:0
+	sudo ./jensdmp ${jd} /sys/kernel/debug/sch_${qtype}/0001:0
 
 install:
 	install -m 0755 -d ${DESTDIR}/usr/lib/jni

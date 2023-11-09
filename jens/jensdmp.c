@@ -269,10 +269,13 @@ consume(size_t idx)
 
 	case TC_JANZ_RELAY_QUEUESZ:
 		printf("<Qsz ts=\"%llX\" len=\"%X\" mem=\"%X\""
-		    " tsofs=\"%llX\" bw=\"%llu\"",
+		    " tsofs=\"%llX\" vcap=\"%llu\" rcap=\"%llu\"",
 		    (unsigned long long)rbuf[idx].ts,
 		    (unsigned int)rbuf[idx].e16, (unsigned int)rbuf[idx].d32,
 		    (unsigned long long)rbuf[idx].x64[1],
+		    (unsigned long long)rbuf[idx].x64[0],
+		    (unsigned long long)rbuf[idx].y64[0] ?
+		    (unsigned long long)rbuf[idx].y64[0] :
 		    (unsigned long long)rbuf[idx].x64[0]);
 		if (rbuf[idx].f8 & TC_JANZ_RELAY_QUEUESZ_HOVER)
 			fputs(" handover=\"starting\"", stdout);
@@ -315,9 +318,9 @@ tsv_header(void)
 	    ",\"OWD.|MEMBYTES|wdogscheduled?\""
 	    ",\"QDELAY.|NPKTS|NTOOEARLY\""
 	    ",\"VQ.NOTBEFORE|handover?|N50US\""
-	    ",\"ecnin|BWLIM|N1MS\""
+	    ",\"ecnin|VCAP|N1MS\""
 	    ",\"ecnout|TSOFS.|N4MS\""
-	    ",\"bit5?|-|NLATER\""
+	    ",\"bit5?|RCAP|NLATER\""
 	    ",\"mark?|-|(THISDELAY)\""
 	    ",\"drop?|-|(&F8)\""
 	    ",\"flow|-|-\""
@@ -338,7 +341,7 @@ static void
 tsv_show(size_t idx)
 {
 	unsigned int t2, u1, u2, u3, u4, u5, u6;
-	unsigned long long ul1, t1;
+	unsigned long long ul1, ul2, t1;
 	char ipsrc[IPADDRFMTLEN], ipdst[IPADDRFMTLEN];
 	char flow[2U * IPADDRFMTLEN + 28];
 	const char *fifoidstr;
@@ -401,13 +404,16 @@ tsv_show(size_t idx)
 		ul1 = rbuf[idx].x64[1];
 		u2 = ul1 % 1000000000UL;
 		ul1 /= 1000000000UL;
-		printf("\"q\"\t%llu.%09u\t%u\t%u\t%u\t%llu\t%llu.%09u\n",
+		ul2 = (unsigned long long)rbuf[idx].y64[0];
+		if (!ul2)
+			ul2 = (unsigned long long)rbuf[idx].x64[0];
+		printf("\"q\"\t%llu.%09u\t%u\t%u\t%u\t%llu\t%llu.%09u\t%llu\n",
 		    t1, t2,
 		    (unsigned int)rbuf[idx].d32,
 		    (unsigned int)rbuf[idx].e16,
 		    !!(rbuf[idx].f8 & BIT(0)),
 		    (unsigned long long)rbuf[idx].x64[0],
-		    ul1, u2);
+		    ul1, u2, ul2);
 		break;
 
 	case TC_JANZ_RELAY_WDOGDBG:

@@ -312,7 +312,8 @@ public final class JensReaderLib {
          * <li>{@link #tsOffset}</li>
          * <li>{@link #len}</li>
          * <li>{@link #mem}</li>
-         * <li>{@link #bwLimit}</li>
+         * <li>{@link #virtCapacity}</li>
+         * <li>{@link #realCapacity}</li>
          * <li>{@link #handoverStarting}</li>
          * </ul>
          *
@@ -395,10 +396,24 @@ public final class JensReaderLib {
              * <p>Maximum 8 Gbit/s using SI præficēs; this is always a
              * multiple of 8 bits because bytes are used internally.</p>
              *
+             * <p>This is the capacity used to calculate marking.</p>
+             *
              * <p>{@link #handleQueueSize(Record[], int)} only.</p>
              */
             @UsedByJNI
-            public @Positive(max = 8000000000L) long bwLimit;
+            public @Positive(max = 8000000000L) long virtCapacity;
+            /**
+             * <p>Current peak capacity limit in bits per second.</p>
+             *
+             * <p>Maximum 8 Gbit/s using SI præficēs; this is always a
+             * multiple of 8 bits because bytes are used internally.</p>
+             *
+             * <p>This is the capacity used to shape traffic to.</p>
+             *
+             * <p>{@link #handleQueueSize(Record[], int)} only.</p>
+             */
+            @UsedByJNI
+            public @Positive(max = 8000000000L) long realCapacity;
             /**
              * <p>Whether a handover is just starting.</p>
              *

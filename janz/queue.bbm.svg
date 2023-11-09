@@ -1284,7 +1284,17 @@
        y="214.8674"
        fill="#68825b"
        font-family="'Alte DIN 1451 Mittelschrift'"
-       id="tspan314">link speed</tspan></text>
+       id="tspan314a">underlying</tspan><tspan
+       x="635.8775"
+       y="251.8674"
+       fill="#68825b"
+       font-family="'Alte DIN 1451 Mittelschrift'"
+       id="tspan314b">physical</tspan><tspan
+       x="635.8775"
+       y="294.8674"
+       fill="#68825b"
+       font-family="'Alte DIN 1451 Mittelschrift'"
+       id="tspan314c">link speed</tspan></text>
   <path
      d="m541.01 201.99v-129.1"
      fill="none"

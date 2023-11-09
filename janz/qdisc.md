@@ -168,15 +168,15 @@ After enqueue, the packets are put into a FIFO where they wait for the
 respective signal (Y for bypass; L, N or B respectively for operative
 traffic) to change so they can proceed. For bypass traffic that’s an
 Asig (exit signal), passing them on to the NIC (network interface) at
-(underlying) link speed. For regular traffic, things are a bit more
-complicated (see below) but the waiting is true for these as well.
+underlying (physical) link speed. For regular traffic, things are a bit
+more complicated (see below) but the waiting is true for these as well.
 
 These signals are in the `dequeue` domain however. Linux splits the
 process of sending packets into two parts, and they are not called
 one after another — rather, `enqueue` is called whenever something
 (a local application or routing) wants to send whereas `dequeue` is
 called whenever the network interface is open to receive new frames
-to pass on to the physical link.
+to pass on to the underlying physical link.
 
 #### drop checks
 
@@ -246,8 +246,9 @@ waits until its bandwidth allotment is available, and which is
 implemented in `sch_janz` as packet pacing:
 
 The gross length of the packet (which in Linux includes some, but not all,
-layer 2 framing (e.g. the Ethernet header is present but not the trailer))
-is multiplied with the currently configured bandwidth represented as
+layer 2 framing (e.g. the Ethernet header is present but not the trailer;
+ATM frame padding is applied)) is multiplied with the currently configured
+bandwidth (also known as the (emulated radio) link capacity) represented as
 nanoseconds per byte. Then, `q->notbefore` is set to (at first) the current
 time plus the size*bandwidth product, indicating that the next packet can
 be sent by then at the earliest.
@@ -287,10 +288,12 @@ changed.
 
 The fourth blue arrow, however, occurs **after** the saved `notbefore`.
 But since we have been sending a packet as last action, we just send a
-packet now at maximum link speed and still calculate the next `notbefore`
-based on the previous `notbefore`, not `now`, in order to be able to
-saturate the underlying link at the configured bandwidth even when called
-at different intervals from those indicated to the kernel to call us back.
+packet now at maximum underlying physical link speed and still calculate
+the next `notbefore` based on the previous `notbefore` (except no earlier
+than when the packet arrived, with `extralatency` (if any) applied) and
+not `now`, in order to be able to saturate the underlying physical link
+at the configured bandwidth even when called at different intervals from
+those indicated to the kernel to call us back.
 
 This assumes that the underlying link speed is higher than the configured
 bandwidth, of course. At 10GigE timing, the packet arrives a little later
@@ -301,8 +304,9 @@ past `notbefore`), and, more importantly, the average/measured bandwidth
 is still the configured one. (If the underlying link is not fast enough,
 the kernel will not call back for another packet quickly save for buffers
 in the NIC, so that won’t be an issue normally. The JENS simulations are
-normally setting around 1‥50 Mbit/s on a 100+ Mbit/s link, so the link
-speed will be sufficiently fast unless the JENS NUC is kept at 100%CPU.)
+normally setting around 1‥50 Mbit/s on a 100+ Mbit/s WLAN or GigE physical
+link, so the underlying physical link speed will be sufficiently fast
+unless the JENS NUC is kept at 100%CPU.)
 
 The fifth blue arrow occurs after the backdated `notbefore` from the burst
 packet has expired, so we continue normally.
@@ -329,7 +333,7 @@ The packet continues on, going into a left curve…
 
 In the 4G (LTE) and 5G networks, a number of packets are subject to
 retransmissions, possibly more than once even. Retransmissions due
-to bad link quality are not modelled by `sch_janz`; their net effect
+to bad radio quality are not modelled by `sch_janz`; their net effect
 should be included in the DRP (data rate pattern) in use. However,
 systematic retransmissions *are* modelled by `sch_janz` because they
 have measurable impact on latency as link usage approaches capacity.
@@ -354,8 +358,8 @@ are not affected. Since the RAN doesn’t reorder packets, `sch_janz`
 also doesn’t (i.e. all packets that transfer after one that is
 retransmitted also enter the loop, and once the retransmission delay
 is over, all packets from the loop pass on to the NIC at underlying
-wire speed; if the link is fast enough this should model the RAN
-behaviour sufficiently closely).
+wire speed; if the underlying physical link is fast enough, this
+should model the RAN behaviour sufficiently closely).
 
 The retransmission delay depends on the radio operation mode (TDD,
 FDD, …) and other factors. In a first stage, HARQ RTT of 8 ms is
@@ -375,13 +379,14 @@ After leaving `dequeue`, either directly from the bypass FIFO or
 having passed packet pacing and possibly RAN retransmissions, the
 packet is returned to the Linux kernel which will then send it to
 the network card to leave at wire speed. To get best results, the
-underlying link speed should be the maximum supported, i.e. keep
-the link speed at gigabit Ethernet or even faster if available
-instead of reducing it to, say, 100-baseTX, even if you only ever
-simulate 10–20 Mbit/s reduced data rate, because, as outlined in
-various places above, `sch_janz` out of necessity simulates part
-of radio conditions and in-UE processes in the qdisc and therefore
-before entering the physical link underlying the simulation.
+underlying physical link speed should be the maximum possible, so
+keep the underlying physical link speed at gigabit Ethernet or even
+faster instead of reducing it to, say, 100-baseTX, even if you only
+ever simulate a real (radio) link capacity of a 10–20 Mbit/s data
+rate, because, as outlined in various places above, `sch_janz` out
+of necessity simulates part of radio conditions and in-UE processes
+in the qdisc and therefore before entering the NUC’s physical link
+underlying the simulation.
 
 It is expected that the remaining “burstiness” of the actual
 network packets arriving at the recipient can be smoothed out
@@ -405,7 +410,10 @@ This may possibly be changed in the future.
 These operate exactly like `sch_janz` but the real queue is run at
 twice, thrice, four or five times, respectively, the data rate
 configured while the calculation of the queue delay uses a virtual
-queue at configured speed.
+queue at configured speed. That is, the real (simulated radio) link
+capacity is ran at a multiplier from the “fair link share”, which
+the virtual link capacity (for marking calculation) falls on, with
+the configured data rate setting the latter.
 
 The `pvqd` flavour uses the virtual qdisc delay to calculate drops,
 while the normal/`proto` qdiscs do that on the real qdisc delay.

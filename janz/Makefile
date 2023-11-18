@@ -55,6 +55,7 @@ unload:
 	-rmmod sch_jensvq5pvqd
 
 load: unload
+	sleep 1
 	insmod sch_janz.ko
 	insmod sch_multijens.ko
 	insmod sch_jensvq2proto.ko

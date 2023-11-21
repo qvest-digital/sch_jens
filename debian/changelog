@@ -1,3 +1,12 @@
+iproute2 (5.10.0-4jens26) UNRELEASED; urgency=medium
+
+  * Update nomenclature (underlying physical link (speed) vs.
+    physical/virtual link capacity (queue bandwidth) vs. fair share)
+  * dual (real/virtual) queue bwlim reporting in qsz records
+  * Do not ship Java™ example/JNI lib any more, it is currently unused
+
+ -- Thorsten Glaser <t.glaser@tarent.de>  Tue, 21 Nov 2023 01:18:37 +0100
+
 iproute2 (5.10.0-4jens25) tarent; urgency=medium
 
   * Queue size reporting is now fully ordered against packet reporting

@@ -15,7 +15,6 @@ sbin/ss /bin
 sbin/tc
 sbin/tipc
 usr/include/iproute2/
-usr/lib/jni/libjensdmpJNI.so
 usr/lib/tc/
 usr/libexec/jensdmp
 usr/libexec/mratedemo

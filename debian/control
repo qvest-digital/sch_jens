@@ -4,8 +4,8 @@ Bugs: mailto:t.glaser@tarent.de
 Section: net
 Priority: optional
 Maintainer: Thorsten Glaser <t.glaser@tarent.de>
-Vcs-Browser: https://github.com/tarent/sch_jens/
-Vcs-Git: git@github.com:tarent/sch_jens.git
+Vcs-Browser: https://github.com/qvest-digital/sch_jens
+Vcs-Git: git@github.com:qvest-digital/sch_jens
 Standards-Version: 4.5.1
 Rules-Requires-Root: no
 Build-Depends: bison,

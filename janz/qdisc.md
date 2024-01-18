@@ -419,3 +419,12 @@ The `pvqd` flavour uses the virtual qdisc delay to calculate drops,
 while the normal/`proto` qdiscs do that on the real qdisc delay.
 
 This is currently a rapid prototype, subject to change without notice.
+
+## Operation of the `sch_jensvq` qdisc
+
+This qdisc is not yet finished.
+
+It will operate similarly to `sch_multijens`, with a fixed number of
+eight (8) UEs, one bypass, only one FIFO (no priorisation), a much
+extended control and reporting interface. (In the beginning, handover,
+bypass and retransmission may be missing.)

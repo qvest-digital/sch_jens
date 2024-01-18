@@ -1,9 +1,9 @@
 Source: iproute2
 Origin: tarent
-Bugs: mailto:t.glaser@tarent.de
+Bugs: mailto:t.glaser@qvest-digital.com
 Section: net
 Priority: optional
-Maintainer: Thorsten Glaser <t.glaser@tarent.de>
+Maintainer: Thorsten Glaser <t.glaser@qvest-digital.com>
 Vcs-Browser: https://github.com/qvest-digital/sch_jens
 Vcs-Git: git@github.com:qvest-digital/sch_jens
 Standards-Version: 4.5.1

@@ -5,7 +5,7 @@ iproute2 (5.10.0-4jens26) UNRELEASED; urgency=medium
   * dual (real/virtual) queue bwlim reporting in qsz records
   * Do not ship Java™ example/JNI lib any more, it is currently unused
 
- -- Thorsten Glaser <t.glaser@tarent.de>  Tue, 21 Nov 2023 01:18:37 +0100
+ -- Thorsten Glaser <t.glaser@qvest-digital.com>  Fri, 12 Jan 2024 20:58:21 +0100
 
 iproute2 (5.10.0-4jens25) tarent; urgency=medium
 

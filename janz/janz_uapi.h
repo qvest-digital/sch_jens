@@ -159,4 +159,71 @@ struct janz_ctlfile_pkt {
 /* compile-time check for correct size */
 JANZ__SIZECHECK(janz_ctlfile_pkt, 8U);
 
+/*XXX breaks userspace builds, have to do it by hand */
+#include <linux/bitfield.h>
+
+/* part of sch_jensvq, Deutsche Telekom LLCTO */
+
+enum {
+	TCA_JENSVQ_UNSPEC,
+	TCA_JENSVQ_LIMIT,
+	TCA_JENSVQ_MARKFREE,
+	TCA_JENSVQ_MARKFULL,
+	TCA_JENSVQ_SUBBUFS,
+	TCA_JENSVQ_FRAGCACHE,
+	TCA_JENSVQ_XLATENCY,
+	__TCA_JENSVQ_MAX
+};
+
+#define TCA_JENSVQ_MAX (__TCA_JENSVQ_MAX - 1)
+
+#define JENSVQ_NUE 8
+
+struct jensvq_relay {
+	__u64 vts;		// virtual timestamp (ns, CLOCK_MONOTONIC)
+	__u64 hts;		// human timestamp (ns, time_t)
+	struct in6_addr srcip;	// sender IP or Legacy IP addresses, if ipv ≠ 0
+	struct in6_addr dstip;	// dito but recipient
+	__u32 flags;		// bitfield, see below
+	__u32 psize;		// raw packet size, including partial L2 framing
+	__u16 sport;		// source port, if ipv ≠ 0 ∧ nh ∈ { 6, 17 }
+	__u16 dport;		// destination port, dito
+	__u16 upkts;		// # of packets enqueued for this UE
+	__u8 nh;		// L3 protocol number (next header) if ipv ≠ 0
+	__u8 reserved1;
+	__u64 vbw;		// current virtual link capacity
+	__u64 rbw;		// current physical link capacity
+	__u64 vqdelay;		// queue delay ECN marking is calculated from
+	__u64 rqdelay;		// queue delay from channel bandwidth limiting
+	__u64 owdelay;		// extralatency + queue delay + retransmissions
+	__u32 ubytes;		// # of bytes enqueued for this UE
+	__u32 reserved2[5];
+};
+JANZ__SIZECHECK(jensvq_relay, 128U);
+
+/* usage:
+ *	val = FIELD_GET(JENSVQ_Fuenum, flags);
+ *	flags &= ~JENSVQ_Fuenum;
+ *	flags |= FIELD_PREP(JENSVQ_Fuenum, val);
+ */
+#define JENSVQ_Ftype	GENMASK(1, 0)	// 0=padding, 1=packet, 2=handover
+#define JENSVQ_Frexnum	GENMASK(4, 2)	// 0‥5=this# rexmit; 7=held up by rexmitted
+#define JENSVQ_Frextot	GENMASK(7, 5)	// # of rexmits for this packet
+#define JENSVQ_Fmark	BIT(8)		// ECN CE marking
+#define JENSVQ_Fecnval	BIT(9)		// whether ecn{en,de}q are valid
+#define JENSVQ_Fecnenq	GENMASK(11, 10)	// ECN bits on enqueue, incoming
+#define JENSVQ_Fecndeq	GENMASK(13, 12)	// ECN bits on dequeue, outgoing
+#define JENSVQ_Fipv	GENMASK(15, 14)	// 0=not IP, 1=IPv6, 2=IPv4
+#define JENSVQ_Fdrop	BIT(16)		// dropped
+#define JENSVQ_Fbypass	BIT(17)		// bypass used
+#define JENSVQ_Fuenum	GENMASK(20, 18)	// UE number
+
+struct jensvq_ctlfile_pkt {
+	struct {
+		__u64 vq_bps;
+		__u64 rq_bps;
+	} ue[JENSVQ_NUE];
+};
+JANZ__SIZECHECK(jensvq_ctlfile_pkt, 128U);
+
 #endif

@@ -13,6 +13,7 @@ The current builds are supplied for the following releases:
           libbpf0 from bullseye; “should work”, as-is
 • Ubuntu: 20.04 LTS (focal) in use at a partner, works
   +       22.04 LTS (jammy): uses same package, untested
+  +       24.04 LTS (noble): uses same package, untested
 
 For bookworm (and some *buntu) kernels, please read the note
 regarding PREEMPT/PREEMPT_DYNAMIC at the end of this file.
@@ -73,7 +74,7 @@ is roughly identical (within microseconds) to the reported
 one-way delay when no extralatency is used.
 
 
-Live measurement
+Live measurement (not sch_jensvq)
 ────────────────
 
 The debugging filesystem must be mounted:
@@ -228,7 +229,75 @@ Subbuffers are flushed on queue deconfiguration and when starting a
 handover (after the TC_JANZ_RELAY_QUEUESZ indicating so was emitted).
 
 
-Control interface
+Live measurement (sch_jensvq)
+─────────────────────────────
+
+The reporting interface is versioned, the current version number is 2,
+/sys/kernel/debug/sch_jensvq/0001:v2-0 would be an example pathname.
+
+This data is passed from kernel to userspace in records structured
+as follows via relayfs, once per event or packet sent:
+
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ <-vts-----------------------> │ <-hts-----------------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-srcip-----------------------------------------------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-dstip-----------------------------------------------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-flags-----> │ <-psize-----> │ sport │ dport │ upkts │ nh│ - │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vbw-----------------------> │ <-rbw-----------------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vqdelay-------------------> │ <-rqdelay-------------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-owdelay-------------------> │ <-ubytes----> │ - │ - │ - │ - │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │ - │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+
+Meaning of the fields:
+• u64 vts = virtual timestamp (ns, CLOCK_MONOTONIC, may be backdated)
+• u64 hts = human timestamp (time_t, ns, as of sending/reporting)
+• u8[16] srcip, dstip = IP or Legacy IP addresses if ipv ≠ 0
+• u32 flags = bitfield (see below)
+• u32 psize = raw packet size, including partial L2 framing
+• u16 sport, dport = ports if ipv ≠ 0 ∧ nh ∈ { 6, 17 }
+• u16 upkts = # of packets enqueued for this UE (without “this” one)
+• u8 nh = L3 protocol number if flags.ipv ≠ 0 (IP next header)
+• u64 vbw, rbw = current virtual / physical link capacity on the UE
+• u64 vqdelay = queue delay ECN marking is calculated from (ns)
+• u64 rqdelay = queue delay from channel bandwidth limiting (ns)
+• u64 owdelay = extralatency + queue delay + retransmissions (ns)
+• u32 ubytes = # of bytes enqueued for this UE (see upkts)
+
+The flags field is subdivided as follows:
+
+• 0‥1	type (00=padding/invalid, 01=packet, 10=start of handover, 11=reserved)
+• 2‥4	“this” number of transmission (0=first, 1=second, …, 5=sixth)
+	or 7 (not retransmitted but held up by preceding rexmitted pkt)
+• 5‥7	total number of retransmissions for this packet
+	(0=none, 1/2/3/4/5=retransmitted)
+• 8	attempted ECN CE marking
+• 9	valid flag for the two following fields
+• 10‥11	ECN bits on enqueue
+• 12‥13	ECN bits on dequeue
+• 14‥15	IP version (00=not IP, 01=IPv6, 10=IPv4, 11=reserved)
+• 16	dropped
+• 17	bypass packet (excluded from bandwidth calculation, UE#0 only)
+• 18‥20	UE number
+• 21‥31	reserved (MBZ)
+
+All integers are written in host-native endianness.
+
+For start-of-handover packets, only the following fields are valid:
+• vts, hts
+• upkts, ubytes
+• flags (exactly equal to 2)
+• vbw is in CLOCK_MONOTONIC when traffic will resume at the earliest
+
+
+Control interface (not sch_jensvq)
 ─────────────────
 
 The control interface is versioned; the current version number is 1
@@ -272,6 +341,50 @@ at once, UE#00 first, UE#01 second, etc.
 
 For other control operations such as starting a handover, you will
 still need tc change.
+
+
+Control interface (sch_jensvq)
+──────────────────────────────
+
+The control interface is versioned, the current version number is 2,
+/sys/kernel/debug/sch_jensvq/0001:v2-c would be an example pathname.
+
+Keep this file open, only ever write to it (no seek, read or so),
+close it only once you don’t need it any more at program termination,
+or when unconfiguring the corresponding sch_jensvq qdisc.
+
+Then, you can write(2) the jensvq_ctlfile_pkt structure many times per
+second. Do note that the structure must be written with one write(2)
+call (not buffered or split), and the amount of bytes written must
+be precisely the struct size (no more, no less), otherwise, an error
+will be returned. The expected amount is also exposed as the nominal
+file’s size.
+
+For v2, the jensvq_ctlfile_pkt structure is 128 bytes long:
+
+┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+│ <-vq_bps[0]-----------------> │ <-rq_bps[0]-----------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vq_bps[1]-----------------> │ <-rq_bps[1]-----------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vq_bps[2]-----------------> │ <-rq_bps[2]-----------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vq_bps[3]-----------------> │ <-rq_bps[3]-----------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vq_bps[4]-----------------> │ <-rq_bps[4]-----------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vq_bps[5]-----------------> │ <-rq_bps[5]-----------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vq_bps[6]-----------------> │ <-rq_bps[6]-----------------> │
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│ <-vq_bps[7]-----------------> │ <-rq_bps[7]-----------------> │
+└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+
+This is, the u64 bits_per_second for the virtual and real queue
+times 8 (number of UEs).
+
+As a special accomodation, if rq_bps is 0 then vq_bps is the
+amount of nanoseconds to stop traffic for a handover instead.
 
 
 Performance considerations

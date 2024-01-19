@@ -159,9 +159,6 @@ struct janz_ctlfile_pkt {
 /* compile-time check for correct size */
 JANZ__SIZECHECK(janz_ctlfile_pkt, 8U);
 
-/*XXX breaks userspace builds, have to do it by hand */
-#include <linux/bitfield.h>
-
 /* part of sch_jensvq, Deutsche Telekom LLCTO */
 
 enum {
@@ -202,21 +199,25 @@ struct jensvq_relay {
 JANZ__SIZECHECK(jensvq_relay, 128U);
 
 /* usage:
- *	val = FIELD_GET(JENSVQ_Fuenum, flags);
+ *	val = JENS_GET(JENSVQ_Fuenum, flags);
  *	flags &= ~JENSVQ_Fuenum;
- *	flags |= FIELD_PREP(JENSVQ_Fuenum, val);
+ *	flags |= JENS_FMK(JENSVQ_Fuenum, val);
  */
-#define JENSVQ_Ftype	GENMASK(1, 0)	// 0=padding, 1=packet, 2=handover
-#define JENSVQ_Frexnum	GENMASK(4, 2)	// 0‥5=this# rexmit; 7=held up by rexmitted
-#define JENSVQ_Frextot	GENMASK(7, 5)	// # of rexmits for this packet
-#define JENSVQ_Fmark	BIT(8)		// ECN CE marking
-#define JENSVQ_Fecnval	BIT(9)		// whether ecn{en,de}q are valid
-#define JENSVQ_Fecnenq	GENMASK(11, 10)	// ECN bits on enqueue, incoming
-#define JENSVQ_Fecndeq	GENMASK(13, 12)	// ECN bits on dequeue, outgoing
-#define JENSVQ_Fipv	GENMASK(15, 14)	// 0=not IP, 1=IPv6, 2=IPv4
-#define JENSVQ_Fdrop	BIT(16)		// dropped
-#define JENSVQ_Fbypass	BIT(17)		// bypass used
-#define JENSVQ_Fuenum	GENMASK(20, 18)	// UE number
+#define JENSVQ_Ftype	0x00000003U	// 0=padding, 1=packet, 2=handover
+#define JENSVQ_Frexnum	0x0000001CU	// 0‥5=this# rexmit; 7=held up by rexmitted
+#define JENSVQ_Frextot	0x000000E0U	// # of rexmits for this packet
+#define JENSVQ_Fmark	0x00000100U	// ECN CE marked
+#define JENSVQ_Fecnval	0x00000200U	// whether ecn{en,de}q are valid
+#define JENSVQ_Fecnenq	0x00000C00U	// ECN bits on enqueue, incoming
+#define JENSVQ_Fecndeq	0x00003000U	// ECN bits on dequeue, outgoing
+#define JENSVQ_Fipv	0x0000C000U	// 0=not IP, 1=IPv6, 2=IPv4
+#define JENSVQ_Fdrop	0x00010000U	// dropped
+#define JENSVQ_Fbypass	0x00020000U	// bypass used
+#define JENSVQ_Fuenum	0x001C0000U	// UE number
+
+#define JENS__MASK2SHIFT(mask) (__builtin_ffsll(mask) - 1)
+#define JENS_GET(mask,v) ((unsigned)(((unsigned)(v) & mask) >> JENS__MASK2SHIFT(mask)))
+#define JENS_FMK(mask,v) (((unsigned)(v) << JENS__MASK2SHIFT(mask)) & mask)
 
 struct jensvq_ctlfile_pkt {
 	struct {

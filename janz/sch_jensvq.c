@@ -9,11 +9,6 @@
  */
 
 #undef JANZ_IP_DECODER_DEBUG
-#if 1
-#define JANZ_IP_DECODER_DEBUG(fmt,...)	do { /* nothing */ } while (0)
-#else
-#define JANZ_IP_DECODER_DEBUG(fmt,...)	printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
-#endif
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -170,6 +165,7 @@ mbCTA_BEG(jensvq_structs_check);
  mbCTA(cx_o1, offsetof(struct janz_skb, rqdelay) == 8U);
  mbCTA(cx_o2, offsetof(struct janz_skb, janz_cb_num) == 16U);
  mbCTA(cx_o3, offsetof(struct janz_skb, tosbyte) == 18U);
+ mbCTA(cb_sd, offsetof(struct janz_cb, dstip) == (offsetof(struct janz_cb, srcip) + 16U));
 mbCTA_END(jensvq_structs_check);
 
 static xinline u64 us_to_ns(u32 us);
@@ -198,9 +194,23 @@ static struct dentry *janz_debugfs_create(const char *filename, struct dentry *p
 static int janz_debugfs_destroy(struct dentry *dentry);
 static int janz_subbuf_init(struct rchan_buf *buf, void *subbuf,
     void *prev_subbuf, size_t prev_padding);
+static xinline void janz_record_write(struct jensvq_relay *record, struct jensvq_qd *q);
 static ssize_t janz_ctlfile_write(struct file *filp, const char __user *buf,
     size_t count, loff_t *posp);
 static void janz_gwq_fn(struct work_struct *work);
+
+static xinline bool janz_analyse(struct Qdisc *sch, struct jensvq_qd *q,
+    struct sk_buff *skb, struct janz_skb *cx, struct janz_cb *cb, u64 now);
+static xinline void janz_fragcache_maint(struct jensvq_qd *q, u64 now);
+
+static xinline void janz_record_handover(struct Qdisc *sch, struct jensvq_qd *q,
+    u64 now, u64 notbefore, unsigned int ue);
+static xinline void janz_record_packet(struct Qdisc *sch, struct jensvq_qd *q,
+    struct sk_buff *skb, struct janz_skb *cx, struct janz_cb *cb, u64 now,
+    u64 vbw, u64 rbw);
+
+static xinline void janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
+    u64 now, unsigned int ue);
 
 module_init(janz_modinit);
 module_exit(janz_modexit);
@@ -337,13 +347,27 @@ janz_modexit(void)
 	debugfs_remove(janz_debugfs_main);
 }
 
+static xinline void
+janz_record_handover(struct Qdisc *sch, struct jensvq_qd *q,
+    u64 now, u64 notbefore, unsigned int ue)
+{
+	struct jensvq_relay r = {0};
+
+	r.vts = now;
+	r.flags = JENS_FMK(JENSVQ_Ftype, 2);
+	r.upkts = q->ue[ue].pktnum;
+	r.ubytes = q->ue[ue].pktlensum;
+	r.vbw = notbefore;
+	janz_record_write(&r, q);
+}
+
 static int
 janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 {
 	struct jensvq_qd *q = qdisc_priv(sch);
 	int rv;
 	unsigned int i;
-	u64 t;
+	u64 now;
 	char name[12];
 
 	/* lock and watchdog initialisation */
@@ -414,10 +438,12 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 	}
 	d_inode(q->ctlfile)->i_size = sizeof(struct jensvq_ctlfile_pkt);
 
-	t = ktime_get_ns() + DROPCHK_INTERVAL;
-	for (i = 0; i < JENSVQ_NUE; ++i)
-		q->ue[i].drop_next = t;
-
+	now = ktime_get_ns();
+	for (i = 0; i < JENSVQ_NUE; ++i) {
+		q->ue[i].drop_next = now + DROPCHK_INTERVAL;
+		/* report 0ns handover signals initialisation + time delta */
+		janz_record_handover(sch, q, now, now, i);
+	}
 	sch->flags &= ~TCQ_F_CAN_BYPASS;
 	return (0);
 
@@ -681,6 +707,18 @@ janz_subbuf_init(struct rchan_buf *buf, void *subbuf,
 	return (1);
 }
 
+static xinline void
+janz_record_write(struct jensvq_relay *record, struct jensvq_qd *q)
+{
+	unsigned long flags;	/* used by spinlock macros */
+
+	record->hts = ktime_get_real_ns();
+	raw_spin_lock_irqsave(&q->record_lock, flags);
+	__relay_write(q->record_chan, record, sizeof(struct jensvq_relay));
+	raw_spin_unlock_irqrestore(&q->record_lock, flags);
+}
+
+
 static struct sk_buff *
 janz_peek(struct Qdisc *sch)
 {
@@ -747,4 +785,501 @@ janz_ctlfile_write(struct file *filp, const char __user *buf,
 	}
 
 	return (sizeof(data));
+}
+
+static int
+janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
+{
+	struct jensvq_qd *q = qdisc_priv(sch);
+	struct janz_skb *cx = get_cx(skb);
+	struct janz_cb *cb;
+	u64 now;
+	unsigned int ue, pktlen;
+	int rv = NET_XMIT_SUCCESS;
+
+	now = ktime_get_ns();
+	ue = (u32)skb->mark < JENSVQ_NUE ? (u32)skb->mark : 0U;
+
+	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?!"))
+		skb->next = NULL;
+	if ((pktlen = qdisc_pkt_len(skb)) > 65535U) {
+		pr_warn("overweight packet (%u) received\n", pktlen);
+		/* sync with below */
+		if (pktlen > 131071U)
+			pktlen = 131071U;
+	}
+	skb_orphan(skb);
+
+	/* ensure we have space in the queue */
+	if (unlikely(sch->q.qlen >= sch->limit)) {
+		u32 prev_backlog = sch->qstats.backlog;
+
+		do {
+			janz_drop1(sch, q, now, ue);
+			qdisc_qstats_overlimit(sch);
+		} while (unlikely(sch->q.qlen >= sch->limit));
+		qdisc_tree_reduce_backlog(sch, 0,
+		    prev_backlog - sch->qstats.backlog);
+		rv = NET_XMIT_CN;
+	}
+	/* we now know at least one cb element is free */
+	cb = q->cb_free;
+	q->cb_free = cb->next;
+	/* initialise cb/cx struct */
+	memset(cx, '\0', sizeof(struct janz_skb));
+	cx->janz_cb_num = (size_t)(cb - q->cb_base);
+	memset(cb, '\0', sizeof(struct janz_cb));
+	cb->next = NULL;
+	cb->ts_arrive = now;
+
+	if (janz_analyse(sch, q, skb, cx, cb, now)) {
+		cb->ts_enq = now;
+		cb->bypass = 1;
+
+		if (!q->byp.first) {
+			q->byp.first = skb;
+			q->byp.last = skb;
+		} else {
+			q->byp.last->next = skb;
+			q->byp.last = skb;
+		}
+		q->byplensum += pktlen;
+		++q->bypnum;
+		++sch->q.qlen;
+		qdisc_qstats_backlog_inc(sch, skb);
+		return (rv);
+	}
+
+	cb->ts_enq = now + q->xlatency;
+	cb->uenum = ue;
+
+	if (!q->ue[ue].q.first) {
+		q->ue[ue].q.first = skb;
+		q->ue[ue].q.last = skb;
+	} else {
+		q->ue[ue].q.last->next = skb;
+		q->ue[ue].q.last = skb;
+	}
+	q->ue[ue].pktlensum += pktlen;
+	++q->ue[ue].pktnum;
+	++sch->q.qlen;
+	qdisc_qstats_backlog_inc(sch, skb);
+	return (rv);
+}
+
+#ifdef JANZ_IP_DECODER_DEBUG
+static const char * const ipver_decode[4] = {
+	"not IP",
+	"IPv6",
+	"IPv4",
+	"invalid"
+};
+#undef JANZ_IP_DECODER_DEBUG
+#define JANZ_IP_DECODER_DEBUG(fmt,...)	printk(KERN_DEBUG pr_fmt(fmt), ##__VA_ARGS__)
+#else
+#define JANZ_IP_DECODER_DEBUG(fmt,...)	do { /* nothing */ } while (0)
+#endif
+
+static xinline bool
+janz_analyse(struct Qdisc *sch, struct jensvq_qd *q,
+    struct sk_buff *skb, struct janz_skb *cx, struct janz_cb *cb, u64 now)
+{
+	unsigned char *hdrp;
+	unsigned char *endoflineardata = skb->data + skb_headlen(skb);
+	/* normally: the nexthdr for IPv6’s no payload marker */
+	u8 noportinfo = 59;
+	int fragoff = -1;
+	struct janz_fragcomp fc;
+	struct ipv6hdr *ih6 = NULL;
+	struct iphdr *ih4 = NULL;
+	struct janz_fragcache *fe;
+
+	/* addresses */
+	switch (skb->protocol) {
+	case htons(ETH_P_IP):
+		ih4 = ip_hdr(skb);
+		hdrp = (void *)ih4;
+		if ((hdrp + sizeof(struct iphdr)) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("IPv4 too short\n");
+			goto no_ports;
+		}
+		JANZ_IP_DECODER_DEBUG("IPv4 %08X->%08X proto %u frag %d\n",
+		    htonl(ih4->saddr), htonl(ih4->daddr), ih4->protocol, ip_is_fragment(ih4) ? 1 : 0);
+		cx->tosbyte = ih4->tos;
+		ipv6_addr_set_v4mapped(ih4->saddr, &cb->srcip);
+		ipv6_addr_set_v4mapped(ih4->daddr, &cb->dstip);
+		cb->ecnenq = cx->tosbyte & INET_ECN_MASK;
+		cb->ecndeq = cb->ecnenq /* at first */;
+		cb->ecnval = 1;
+		cb->ipver = 2;
+		cb->nexthdr = ih4->protocol;
+		hdrp += ih4->ihl * 4;
+		/* Legacy IP fragmentation */
+		if (ip_is_fragment(ih4)) {
+			/* use nexthdr from IPv6 frag header as indicator */
+			noportinfo = 44;
+			/* fragment information */
+			memcpy(&fc.sip, &cb->srcip, 32);
+			fc.idp = ((u32)ih4->protocol << 24) | ((u32)ih4->id & 0xFFFFU);
+			fc.v = cb->ipver;
+			if ((fragoff = ntohs(ih4->frag_off) & IP_OFFSET) != 0) {
+				/* higher fragment */
+				/* use cached fragments info */
+				goto higher_fragment;
+			}
+			/* first fragment */
+			/* fall through to unfragmented packet handler */
+		}
+		break;
+	case htons(ETH_P_IPV6):
+		ih6 = ipv6_hdr(skb);
+		hdrp = (void *)ih6;
+		if ((hdrp + sizeof(struct ipv6hdr)) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("IPv6 too short\n");
+			goto no_ports;
+		}
+		JANZ_IP_DECODER_DEBUG("IPv6 %02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X->%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X:%02X%02X nexthdr %u\n",
+		    ih6->saddr.s6_addr[0], ih6->saddr.s6_addr[1], ih6->saddr.s6_addr[2], ih6->saddr.s6_addr[3],
+		    ih6->saddr.s6_addr[4], ih6->saddr.s6_addr[5], ih6->saddr.s6_addr[6], ih6->saddr.s6_addr[7],
+		    ih6->saddr.s6_addr[8], ih6->saddr.s6_addr[9], ih6->saddr.s6_addr[10], ih6->saddr.s6_addr[11],
+		    ih6->saddr.s6_addr[12], ih6->saddr.s6_addr[13], ih6->saddr.s6_addr[14], ih6->saddr.s6_addr[15],
+		    ih6->daddr.s6_addr[0], ih6->daddr.s6_addr[1], ih6->daddr.s6_addr[2], ih6->daddr.s6_addr[3],
+		    ih6->daddr.s6_addr[4], ih6->daddr.s6_addr[5], ih6->daddr.s6_addr[6], ih6->daddr.s6_addr[7],
+		    ih6->daddr.s6_addr[8], ih6->daddr.s6_addr[9], ih6->daddr.s6_addr[10], ih6->daddr.s6_addr[11],
+		    ih6->daddr.s6_addr[12], ih6->daddr.s6_addr[13], ih6->daddr.s6_addr[14], ih6->daddr.s6_addr[15],
+		    ih6->nexthdr);
+		cx->tosbyte = ipv6_get_dsfield(ih6);
+		memcpy(&cb->srcip, ih6->saddr.s6_addr, 16);
+		memcpy(&cb->dstip, ih6->daddr.s6_addr, 16);
+		cb->ecnenq = cx->tosbyte & INET_ECN_MASK;
+		cb->ecndeq = cb->ecnenq /* at first */;
+		cb->ecnval = 1;
+		cb->ipver = 1;
+		cb->nexthdr = ih6->nexthdr;
+		hdrp += 40;
+		break;
+	/* ARP/RARP bypass */
+	case htons(ETH_P_ARP):
+		JANZ_IP_DECODER_DEBUG("ARP packet\n");
+		return (true);
+	case htons(ETH_P_RARP):
+		JANZ_IP_DECODER_DEBUG("RARP packet\n");
+		return (true);
+	/* others of possible interest */
+	case htons(ETH_P_PPP_DISC):
+		JANZ_IP_DECODER_DEBUG("PPPoE discovery packet\n");
+		return (false);
+	case htons(ETH_P_LOOP):
+	case htons(ETH_P_LOOPBACK):
+		JANZ_IP_DECODER_DEBUG("ethernet loopback packet\n");
+		return (false);
+	default:
+		JANZ_IP_DECODER_DEBUG("unknown proto htons(0x%04X)\n", (unsigned)ntohs(skb->protocol));
+		return (false);
+	}
+	/* we end here only if the packet is IPv4 or IPv6 */
+
+ try_nexthdr:
+	switch (cb->nexthdr) {
+	case 1:		/* ICMP */
+		if (cb->ipver != 2) {
+			JANZ_IP_DECODER_DEBUG("%s in %s packet\n",
+			    "ICMP", ipver_decode[cb->ipver]);
+			goto no_ports;
+		}
+		if ((hdrp + 4) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto no_ports;
+		}
+		switch (/* Type */ hdrp[0]) {
+		case 3: /* Destination Unreachable */
+		case 5: /* Redirect */
+		case 9: /* Router Advertisement */
+		case 10: /* Router Solicitation */
+		case 11: /* Time Exceeded */
+		case 12: /* Parameter Problem: Bad IP header */
+		case 13: /* Timestamp (like NTP) */
+		case 14: /* Timestamp Reply */
+			/*XXX here could validate legacy ICMP checksum */
+			/* into the bypass */
+			return (true);
+		default:
+			return (false);
+		}
+	case 6:		/* TCP */
+	case 17:	/* UDP */
+		/* both begin with src and dst ports in this order */
+		if ((hdrp + 4) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto no_ports;
+		}
+		cb->sport = ((unsigned int)hdrp[0] << 8) | hdrp[1];
+		cb->dport = ((unsigned int)hdrp[2] << 8) | hdrp[3];
+		break;
+	case 58:	/* ICMPv6 */
+		if (cb->ipver != 1) {
+			JANZ_IP_DECODER_DEBUG("%s in %s packet\n",
+			    "ICMPv6", ipver_decode[cb->ipver]);
+			goto no_ports;
+		}
+		if ((hdrp + 4) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto no_ports;
+		}
+		switch (/* Type */ hdrp[0]) {
+		case 1: /* Destination unreachable */
+		case 2: /* Packet too big */
+		case 3: /* Time exceeded */
+		case 4: /* Parameter problem */
+		case 133: /* ND Router Solicitation */
+		case 134: /* ND Router Advertisement */
+		case 135: /* ND Neighbour Solicitation */
+		case 136: /* ND Neighbour Advertisement */
+		case 137: /* ND Redirect */
+		case 141: /* IND Solicitation (like RARP) */
+		case 142: /* IND Advertisement */
+		case 144: /* Mobile Prefix Solicitation */
+		case 145: /* Mobile Prefix Advertisement */
+		case 146: /* SeND Certification Path Solicitation */
+		case 147: /* SeND Certification Path Advertisement */
+			/*XXX here could validate ICMPv6 checksum */
+			/* into the bypass */
+			return (true);
+		default:
+			return (false);
+		}
+	case 0:		/* IPv6 hop-by-hop options */
+	case 43:	/* IPv6 routing */
+	case 60:	/* IPv6 destination options */
+		if (cb->ipver != 1) {
+			JANZ_IP_DECODER_DEBUG("%s in %s packet\n",
+			    "IPv6 options", ipver_decode[cb->ipver]);
+			goto no_ports;
+		}
+		if ((hdrp + 4) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto no_ports;
+		}
+		cb->nexthdr = hdrp[0];
+		hdrp += ((unsigned int)hdrp[1] + 1U) * 8U;
+		goto try_nexthdr;
+	case 44:	/* IPv6 fragment */
+		if (cb->ipver != 1) {
+			JANZ_IP_DECODER_DEBUG("%s in %s packet\n",
+			    "IPv6 fragment header", ipver_decode[cb->ipver]);
+			goto no_ports;
+		}
+		if ((hdrp + 8) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto no_ports;
+		}
+		if (fragoff != -1) {
+			JANZ_IP_DECODER_DEBUG("two fragment headers\n");
+			goto no_ports;
+		}
+		memcpy(&fc.sip, &cb->srcip, 32);
+		memcpy(&fc.idp, hdrp + 4, 4);
+		fc.v = cb->ipver;
+		/* update failure cause */
+		noportinfo = 44;
+		/* first fragment? */
+		fragoff = (((unsigned int)hdrp[2] << 8) | hdrp[3]) & 0xFFF8U;
+		JANZ_IP_DECODER_DEBUG("frag, ofs %u, nexthdr %u\n", fragoff, hdrp[0]);
+		if (fragoff) {
+			/* nope */
+			goto higher_fragment;
+		}
+		cb->nexthdr = hdrp[0];
+		hdrp += 8;
+		goto try_nexthdr;
+	case 51:	/* IPsec AH */
+		if ((hdrp + 4) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto no_ports;
+		}
+		cb->nexthdr = hdrp[0];
+		hdrp += ((unsigned int)hdrp[1] + 2U) * 4U;
+		goto try_nexthdr;
+	case 135:	/* Mobile IP */
+	case 139:	/* Host Identity Protocol v2 */
+	case 140:	/* SHIM6: Site Multihoming by IPv6 Intermediation */
+		if ((hdrp + 4) > endoflineardata) {
+			JANZ_IP_DECODER_DEBUG("%u too short\n", cb->nexthdr);
+			goto done_addresses;
+		}
+		/* this kind of extension header has no payload normally */
+		if (hdrp[0] == 59)
+			goto done_addresses;
+		cb->nexthdr = hdrp[0];
+		hdrp += ((unsigned int)hdrp[1] + 1U) * 8U;
+		goto try_nexthdr;
+	default:	/* any other L4 protocol, unknown extension headers */
+		JANZ_IP_DECODER_DEBUG("unknown exthdr %u\n", cb->nexthdr);
+		break;
+	}
+	/* we end here if either nexthdr is TCP/UDP and ports are filled in */
+	/* or it’s another L4 proto; ports are 0 then */
+ done_addresses:
+	if (fragoff != -1) {
+		janz_fragcache_maint(q, now);
+		/* record for later packets */
+
+		if (unlikely(q->fragcache_free == NULL)) {
+			net_warn_ratelimited("no free fragment cache, please raise count\n");
+			/* reuse last one */
+			fe = q->fragcache_used;
+			while (fe->next->next != NULL)
+				fe = fe->next;
+			q->fragcache_last = fe;
+			q->fragcache_aged = fe->ts;
+			fe = fe->next;
+			q->fragcache_last->next = NULL;
+		} else {
+			fe = q->fragcache_free;
+			q->fragcache_free = fe->next;
+		}
+		memcpy(&(fe->c), &fc, sizeof(struct janz_fragcomp));
+		fe->nexthdr = cb->nexthdr;
+		fe->ts = cb->ts_arrive;
+		fe->sport = cb->sport;
+		fe->dport = cb->dport;
+		fe->next = q->fragcache_used;
+		if (unlikely(!fe->next)) {
+			q->fragcache_last = fe;
+			q->fragcache_aged = fe->ts;
+		}
+		q->fragcache_used = fe;
+	}
+	return (false);
+
+ higher_fragment:
+	fe = q->fragcache_used;
+	while (fe) {
+		if (!memcmp(&fc, &(fe->c), sizeof(struct janz_fragcomp))) {
+			cb->nexthdr = fe->nexthdr;
+			cb->sport = fe->sport;
+			cb->dport = fe->dport;
+			return (false);
+		}
+		fe = fe->next;
+	}
+
+ no_ports:
+	/* we end here if the packet buffer does not contain enough info */
+	cb->nexthdr = noportinfo;
+	return (false);
+}
+
+static xinline void
+janz_fragcache_maint(struct jensvq_qd *q, u64 now)
+{
+	u64 old;
+	struct janz_fragcache *lastnew;
+	struct janz_fragcache *firstold;
+	struct janz_fragcache *lastold;
+
+	if (!q->fragcache_used)
+		return;
+
+	old = now - nsmul(60, NSEC_PER_SEC);
+
+	if (old <= q->fragcache_aged)
+		return;
+
+	if (old <= q->fragcache_used->ts) {
+		lastnew = q->fragcache_used;
+		while (lastnew->next && old <= lastnew->next->ts)
+			lastnew = lastnew->next;
+		q->fragcache_aged = lastnew->ts;
+		if (!lastnew->next) {
+			/* shouldn’t happen, but… */
+			return;
+		}
+		firstold = lastnew->next;
+		lastold = q->fragcache_last;
+		lastnew->next = NULL;
+		q->fragcache_last = lastnew;
+		lastold->next = q->fragcache_free;
+		q->fragcache_free = firstold;
+	} else {
+		q->fragcache_last->next = q->fragcache_free;
+		q->fragcache_free = q->fragcache_used;
+		q->fragcache_used = NULL;
+		q->fragcache_last = NULL;
+	}
+}
+
+static xinline void
+janz_record_packet(struct Qdisc *sch, struct jensvq_qd *q,
+    struct sk_buff *skb, struct janz_skb *cx, struct janz_cb *cb, u64 now,
+    u64 vbw, u64 rbw)
+{
+	struct jensvq_relay r = {0};
+
+	if (!cb->bypass) {
+		r.upkts = q->bypnum;
+		r.ubytes = q->byplensum;
+	} else {
+		r.upkts = q->ue[cb->uenum].pktnum;
+		r.ubytes = q->ue[cb->uenum].pktlensum;
+		r.vbw = vbw;
+		r.rbw = rbw;
+		r.vqdelay = cx->vqdelay;
+		r.rqdelay = cx->rqdelay;
+	}
+
+	r.vts = now;
+	memcpy(&r.srcip, &cb->srcip, 32);
+	r.flags = JENS_FMK(JENSVQ_Ftype, 1) |
+	    JENS_FMK(JENSVQ_Frexnum, cb->rexnum) |
+	    JENS_FMK(JENSVQ_Frextot, cb->rextot) |
+	    JENS_FMK(JENSVQ_Fmark, cb->mark) |
+	    JENS_FMK(JENSVQ_Fecnval, cb->ecnval) |
+	    JENS_FMK(JENSVQ_Fecnenq, cb->ecnenq) |
+	    JENS_FMK(JENSVQ_Fecndeq, cb->ecndeq) |
+	    JENS_FMK(JENSVQ_Fipv, cb->ipver) |
+	    JENS_FMK(JENSVQ_Fdrop, cb->drop) |
+	    JENS_FMK(JENSVQ_Fbypass, cb->bypass) |
+	    JENS_FMK(JENSVQ_Fuenum, cb->uenum);
+	r.psize = qdisc_pkt_len(skb);
+	r.sport = cb->sport;
+	r.dport = cb->dport;
+	r.tos = cx->tosbyte;
+	r.nh = cb->nexthdr;
+	r.owdelay = ktime_get_ns() - cb->ts_arrive;
+	janz_record_write(&r, q);
+}
+
+static xinline void
+janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
+    u64 now, unsigned int ue)
+{
+	struct sk_buff *skb;
+	struct janz_skb *cx;
+	struct janz_cb *cb;
+	unsigned int pktlen;
+
+	skb = q->ue[ue].q.first;
+	if (WARN(!skb, "no skb to drop"))
+		return;
+	if (!(q->ue[ue].q.first = skb->next))
+		q->ue[ue].q.last = NULL;
+	pktlen = qdisc_pkt_len(skb);
+	/* sync with above */
+	if (pktlen > 131071U)
+		pktlen = 131071U;
+	q->ue[ue].pktlensum -= pktlen;
+	--q->ue[ue].pktnum;
+	--sch->q.qlen;
+	qdisc_qstats_backlog_dec(sch, skb);
+
+	cx = get_cx(skb);
+	cb = get_cb(skb, q);
+	cb->drop = 1;
+	janz_record_packet(sch, q, skb, cx, cb, now, 0, 0);
+	kfree_skb(skb);
+	/* ensure the next record orders totally past this one */
+	q->ue[ue].crediting = 0;
+	cb->next = q->cb_free;
+	q->cb_free = cb;
 }

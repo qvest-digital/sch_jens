@@ -198,6 +198,10 @@ struct jensvq_relay {
 };
 JANZ__SIZECHECK(jensvq_relay, 128U);
 
+#define TC_JENSVQ_RELAY_NRECORDS 128		/* per subbuffer */
+#define TC_JENSVQ_RELAY_SUBBUFSZ \
+    (TC_JENSVQ_RELAY_NRECORDS * sizeof(struct jensvq_relay))
+
 /* usage:
  *	val = JENS_GET(JENSVQ_Fuenum, flags);
  *	flags &= ~JENSVQ_Fuenum;

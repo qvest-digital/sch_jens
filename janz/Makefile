@@ -44,6 +44,7 @@ uninstall:
 unload:
 	-rmmod sch_janz
 	-rmmod sch_janzdbg
+	-rmmod sch_jensvq
 	-rmmod sch_multijens
 	-rmmod sch_jensvq2proto
 	-rmmod sch_jensvq3proto
@@ -57,6 +58,7 @@ unload:
 load: unload
 	sleep 1
 	insmod sch_janz.ko
+	insmod sch_jensvq.ko
 	insmod sch_multijens.ko
 	insmod sch_jensvq2proto.ko
 	insmod sch_jensvq3proto.ko

@@ -1,1 +1,0 @@
-less +'/^...raw_write_seqcount_latch' linux/seqlock.h

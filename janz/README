@@ -245,7 +245,7 @@ as follows via relayfs, once per event or packet sent:
 ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
 │ <-dstip-----------------------------------------------------> │
 ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-│ <-flags-----> │ <-psize-----> │ sport │ dport │ upkts │ nh│ - │
+│ <-flags-----> │ <-psize-----> │ sport │ dport │ upkts │tos│nh │
 ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
 │ <-vbw-----------------------> │ <-rbw-----------------------> │
 ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
@@ -264,6 +264,7 @@ Meaning of the fields:
 • u32 psize = raw packet size, including partial L2 framing
 • u16 sport, dport = ports if ipv ≠ 0 ∧ nh ∈ { 6, 17 }
 • u16 upkts = # of packets enqueued for this UE (without “this” one)
+• u8 tos = IPTOS octet of packet (if flags.ipv ≠ 0)
 • u8 nh = L3 protocol number if flags.ipv ≠ 0 (IP next header)
 • u64 vbw, rbw = current virtual / physical link capacity on the UE
 • u64 vqdelay = queue delay ECN marking is calculated from (ns)
@@ -301,6 +302,8 @@ For start-of-handover records, only the following fields are valid:
 For packet records with bypass flag set the UE number is not filled
 in (feel free to consider the bypass queue as UE#8); upkts/ubytes
 report the bypass’ amounts; vbw, rbw, vqdelay, rqdelay are invalid.
+
+For dropped packets, vbw, rbw, vqdelay, rqdelay are invalid.
 
 
 Control interface (not sch_jensvq)

@@ -186,8 +186,8 @@ struct jensvq_relay {
 	__u16 sport;		// source port, if ipv ≠ 0 ∧ nh ∈ { 6, 17 }
 	__u16 dport;		// destination port, dito
 	__u16 upkts;		// # of packets enqueued for this UE
+	__u8 tos;		// IPTOS byte if ipv ≠ 0
 	__u8 nh;		// L3 protocol number (next header) if ipv ≠ 0
-	__u8 reserved1;
 	__u64 vbw;		// current virtual link capacity
 	__u64 rbw;		// current physical link capacity
 	__u64 vqdelay;		// queue delay ECN marking is calculated from

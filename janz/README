@@ -290,11 +290,17 @@ The flags field is subdivided as follows:
 
 All integers are written in host-native endianness.
 
-For start-of-handover packets, only the following fields are valid:
+For padding records, none of the other fields have been filled in.
+
+For start-of-handover records, only the following fields are valid:
 • vts, hts
 • upkts, ubytes
 • flags (exactly equal to 2)
 • vbw is in CLOCK_MONOTONIC when traffic will resume at the earliest
+
+For packet records with bypass flag set the UE number is not filled
+in (feel free to consider the bypass queue as UE#8); upkts/ubytes
+report the bypass’ amounts; vbw, rbw, vqdelay, rqdelay are invalid.
 
 
 Control interface (not sch_jensvq)
@@ -384,7 +390,8 @@ This is, the u64 bits_per_second for the virtual and real queue
 times 8 (number of UEs).
 
 As a special accomodation, if rq_bps is 0 then vq_bps is the
-amount of nanoseconds to stop traffic for a handover instead.
+amount of nanoseconds to stop traffic for a handover instead
+(with a maximum of 3600 seconds).
 
 
 Performance considerations

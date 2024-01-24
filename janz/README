@@ -272,6 +272,10 @@ Meaning of the fields:
 • u64 owdelay = extralatency + queue delay + retransmissions (ns)
 • u32 ubytes = # of bytes enqueued for this UE (see upkts)
 
+Note upkts/ubytes encompass both packets from the FIFO as well as
+packets held for retransmission or behind a retransmission, i.e. it
+does not correspond to a KPI from RAN.
+
 The flags field is subdivided as follows:
 
 • 0‥1	type (00=padding/invalid, 01=packet, 10=start of handover, 11=reserved)

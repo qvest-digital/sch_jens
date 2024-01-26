@@ -76,13 +76,14 @@ struct janz_gwq_ovl {
 };
 
 /* per-packet extra data overflow buffer */
-/* struct janz_cb *cb = get_cb(cx, q); //get_cb(skb, q); */
+/* struct janz_cb *cb = get_cb(cx, q); */
 struct janz_cb {
 	struct in6_addr srcip;							//@=0
 	struct in6_addr dstip;							//@=16
 	struct janz_cb *next;	/* freelist chaining */				//@=32
 	u64 ts_enq;		/* enqueue time of packet, for owd */		//@=40
 	u64 ts_arrive;		/* (virtual) arrival timestamp, +xlatency */	//@=48
+				/* if rextot: ts of next xmit attempt */
 	u16 sport;								//@=56
 	u16 dport;								//@=58
 	u8 nexthdr;								//@=60
@@ -103,7 +104,7 @@ struct janz_cb {
 struct janz_skb {
 	/* limited to QDISC_CB_PRIV_LEN (20) bytes! */
 	u64 vqdelay;
-	u64 rqdelay;			/* rexmits except heldup: next round ktime */
+	u64 rqdelay;
 	unsigned short janz_cb_num;
 	u8 tosbyte;
 } __attribute__((__packed__));
@@ -173,12 +174,16 @@ mbCTA_BEG(jensvq_structs_check);
  mbCTA(cb_sd, offsetof(struct janz_cb, dstip) == (offsetof(struct janz_cb, srcip) + 16U));
 mbCTA_END(jensvq_structs_check);
 
-static xinline u64 us_to_ns(u32 us);
-static xinline u64 ns_to_us(u64 ns);
+static xinline u64 us_to_ns(u32 us) __attribute_const__;
+static xinline u64 ns_to_us(u64 ns) __attribute_const__;
 
-//static xinline struct janz_cb *get_cb(const struct sk_buff *skb, struct jensvq_qd *q);
-static xinline struct janz_cb *get_cb(const struct janz_skb *cx, struct jensvq_qd *q);
-static xinline struct janz_skb *get_cx(const struct sk_buff *skb);
+static xinline u64 bps_to_nspby(u64 bps) __attribute_const__;
+static xinline u64 nspby_to_bps(u64 rate) __attribute_const__;
+
+static xinline u32 vpktlen(u32 rpktlen) __attribute_const__;
+
+static xinline struct janz_cb *get_cb(const struct janz_skb *cx, struct jensvq_qd *q) __pure;
+static xinline struct janz_skb *get_cx(const struct sk_buff *skb) __pure;
 static xinline struct jensvq_ldue jensvq_readlatch(struct jensvq_qd *q, int ue);
 
 static xinline void janz_reset(struct Qdisc *sch, bool initial);
@@ -213,7 +218,9 @@ static xinline void janz_record_handover(struct Qdisc *sch, struct jensvq_qd *q,
     u64 now, u64 notbefore, unsigned int ue);
 static xinline void janz_record_packet(struct Qdisc *sch, struct jensvq_qd *q,
     struct sk_buff *skb, struct janz_skb *cx, struct janz_cb *cb, u64 now,
-    u64 vbw, u64 rbw);
+    u64 vbw, u64 rbw, int what /* 1=normal 2=drop 3=bypass */);
+static xinline void janz_record_enqdrop(struct Qdisc *sch, struct jensvq_qd *q,
+    struct sk_buff *skb, u64 now, unsigned int ue);
 
 static xinline void janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
     u64 now, unsigned int ue);
@@ -279,12 +286,29 @@ ns_to_us(u64 ns)
 	return (div_u64(ns, NSEC_PER_USEC));
 }
 
+static xinline u64
+bps_to_nspby(u64 bps)
+{
+	return (max(div64_u64(8ULL * NSEC_PER_SEC, bps), 1ULL));
+}
+
+static xinline u64
+nspby_to_bps(u64 rate)
+{
+	return (max(div64_u64(8ULL * NSEC_PER_SEC, rate), 1ULL));
+}
+
+/* to limit for accounting to prevent overflows */
+static xinline u32
+vpktlen(u32 rpktlen)
+{
+	return (rpktlen > 131071U ? 131071U : rpktlen);
+}
+
 static xinline struct janz_cb *
-//get_cb(const struct sk_buff *skb, struct jensvq_qd *q)
 get_cb(const struct janz_skb *cx, struct jensvq_qd *q)
 {
 	return (&(q->cb_base[cx->janz_cb_num]));
-	//return (&(q->cb_base[get_cx(skb)->janz_cb_num]));
 }
 
 static xinline struct janz_skb *
@@ -779,7 +803,6 @@ static ssize_t
 janz_ctlfile_write(struct file *filp, const char __user *buf,
     size_t count, loff_t *posp)
 {
-	u64 r;
 	unsigned int i, j;
 	struct jensvq_qd *q = filp->private_data;
 	struct jensvq_ctlfile_pkt data;
@@ -798,16 +821,8 @@ janz_ctlfile_write(struct file *filp, const char __user *buf,
 			data.ue[i].vq_bps += ktime_get_ns();
 		} else {
 			/* convert to ns/byte */
-			r = div64_u64(8ULL * NSEC_PER_SEC,
-			    data.ue[i].vq_bps);
-			if (r < 1U)
-				r = 1U;
-			data.ue[i].vq_bps = r;
-			r = div64_u64(8ULL * NSEC_PER_SEC,
-			    data.ue[i].rq_bps);
-			if (r < 1U)
-				r = 1U;
-			data.ue[i].rq_bps = r;
+			data.ue[i].vq_bps = bps_to_nspby(data.ue[i].vq_bps);
+			data.ue[i].rq_bps = bps_to_nspby(data.ue[i].rq_bps);
 		}
 	}
 
@@ -833,7 +848,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	struct janz_skb *cx = get_cx(skb);
 	struct janz_cb *cb;
 	u64 now;
-	unsigned int ue, pktlen;
+	unsigned int ue, rpktlen;
 	int rv = NET_XMIT_SUCCESS;
 
 	now = ktime_get_ns();
@@ -841,22 +856,24 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 
 	if (WARN(skb->next != NULL, "janz_enq passed multiple packets?!"))
 		skb->next = NULL;
-	if ((pktlen = qdisc_pkt_len(skb)) > 65535U) {
-		pr_warn("overweight packet (%u) received\n", pktlen);
-		/* sync with four occurrences below */
-		if (pktlen > 131071U)
-			pktlen = 131071U;
-	}
-	skb_orphan(skb);
+	if ((rpktlen = qdisc_pkt_len(skb)) > 65535U)
+		pr_warn("overweight packet (%u) received\n", rpktlen);
 
 	/* ensure we have space in the queue */
 	if (unlikely(sch->q.qlen >= sch->limit)) {
 		u32 prev_backlog = sch->qstats.backlog;
 
-		do {
-			janz_drop1(sch, q, now, ue);
-			qdisc_qstats_overlimit(sch);
-		} while (unlikely(sch->q.qlen >= sch->limit));
+		if (unlikely(sch->q.qlen > sch->limit)) {
+			net_warn_ratelimited("qdisc over limit");
+			goto dont_enq;
+		}
+		if (unlikely(!q->ue[ue].q.first)) {
+			net_warn_ratelimited("UE#%u starving", ue);
+ dont_enq:
+			janz_record_enqdrop(sch, q, skb, now, ue);
+			return (qdisc_drop(skb, sch, to_free));
+		}
+		janz_drop1(sch, q, now, ue);
 		qdisc_tree_reduce_backlog(sch, 0,
 		    prev_backlog - sch->qstats.backlog);
 		rv = NET_XMIT_CN;
@@ -871,6 +888,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	cb->next = NULL;
 	cb->ts_enq = now;
 
+	skb_orphan(skb);
 	if (janz_analyse(sch, q, skb, cx, cb, now)) {
 		cb->ts_arrive = now;
 		cb->bypass = 1;
@@ -882,7 +900,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 			q->byp.last->next = skb;
 			q->byp.last = skb;
 		}
-		q->byplensum += pktlen;
+		q->byplensum += vpktlen(rpktlen);
 		++q->bypnum;
 		++sch->q.qlen;
 		qdisc_qstats_backlog_inc(sch, skb);
@@ -899,7 +917,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		q->ue[ue].q.last->next = skb;
 		q->ue[ue].q.last = skb;
 	}
-	q->ue[ue].pktlensum += pktlen;
+	q->ue[ue].pktlensum += vpktlen(rpktlen);
 	++q->ue[ue].pktnum;
 	++sch->q.qlen;
 	qdisc_qstats_backlog_inc(sch, skb);
@@ -1251,20 +1269,29 @@ janz_fragcache_maint(struct jensvq_qd *q, u64 now)
 static xinline void
 janz_record_packet(struct Qdisc *sch, struct jensvq_qd *q,
     struct sk_buff *skb, struct janz_skb *cx, struct janz_cb *cb, u64 now,
-    u64 vbw, u64 rbw)
+    u64 vbw, u64 rbw, int what)
 {
 	struct jensvq_relay r = {0};
 
-	if (!cb->bypass) {
-		r.upkts = q->bypnum;
-		r.ubytes = q->byplensum;
-	} else {
+	switch (what) {
+	case 1: /* normal */
 		r.upkts = q->ue[cb->uenum].pktnum;
 		r.ubytes = q->ue[cb->uenum].pktlensum;
-		r.vbw = vbw;
-		r.rbw = rbw;
+		r.vbw = nspby_to_bps(vbw);
+		r.rbw = nspby_to_bps(rbw);
 		r.vqdelay = cx->vqdelay;
 		r.rqdelay = cx->rqdelay;
+		break;
+	case 2: /* drop */
+		r.upkts = q->ue[cb->uenum].pktnum;
+		r.ubytes = q->ue[cb->uenum].pktlensum;
+		break;
+	case 3: /* bypass */
+		r.upkts = q->bypnum;
+		r.ubytes = q->byplensum;
+		break;
+	default:
+		BUILD_BUG_ON_MSG(1, "what?");
 	}
 
 	r.vts = now;
@@ -1290,27 +1317,36 @@ janz_record_packet(struct Qdisc *sch, struct jensvq_qd *q,
 }
 
 static xinline void
+janz_record_enqdrop(struct Qdisc *sch, struct jensvq_qd *q,
+    struct sk_buff *skb, u64 now, unsigned int ue)
+{
+	struct jensvq_relay r = {0};
+
+	r.vts = now;
+	r.flags = JENS_FMK(JENSVQ_Ftype, 1) |
+	    JENS_FMK(JENSVQ_Fdrop, 1) |
+	    JENS_FMK(JENSVQ_Fuenum, ue);
+	r.psize = qdisc_pkt_len(skb);
+	r.upkts = q->ue[ue].pktnum;
+	r.ubytes = q->ue[ue].pktlensum;
+	janz_record_write(&r, q);
+}
+
+static xinline void
 janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
     u64 now, unsigned int ue)
 {
-//XXX TODO drop from rexmits if q is empty, but not the ones with cb->xmitnum == 7?
-//XXX or actually, caller needs to handle not dropping (return bool?) because…
-//XXX the q pressure may be in a different UE, after all…
 	struct sk_buff *skb;
 	struct janz_skb *cx;
 	struct janz_cb *cb;
-	unsigned int pktlen;
+	unsigned int rpktlen;
 
+	/* caller must ensure presence */
 	skb = q->ue[ue].q.first;
-	if (WARN(!skb, "no skb to drop"))
-		return;
 	if (!(q->ue[ue].q.first = skb->next))
 		q->ue[ue].q.last = NULL;
-	pktlen = qdisc_pkt_len(skb);
-	/* sync with above */
-	if (pktlen > 131071U)
-		pktlen = 131071U;
-	q->ue[ue].pktlensum -= pktlen;
+	rpktlen = qdisc_pkt_len(skb);
+	q->ue[ue].pktlensum -= vpktlen(rpktlen);
 	--q->ue[ue].pktnum;
 	--sch->q.qlen;
 	qdisc_qstats_backlog_dec(sch, skb);
@@ -1318,7 +1354,7 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 	cx = get_cx(skb);
 	cb = get_cb(cx, q);
 	cb->drop = 1;
-	janz_record_packet(sch, q, skb, cx, cb, now, 0, 0);
+	janz_record_packet(sch, q, skb, cx, cb, now, 0, 0, 2);
 	kfree_skb(skb);
 	/* ensure the next record orders totally past this one */
 	q->ue[ue].crediting = 0;
@@ -1334,7 +1370,7 @@ janz_deq(struct Qdisc *sch)
 	struct janz_skb *cx;
 	struct janz_cb *cb;
 	u64 now, mnextns, rq_notbefore, vq_notbefore;
-	unsigned int pktlen, ue;
+	unsigned int rpktlen, ue;
 	u32 rexmit_chance;
 	struct jensvq_ldue lue;
 
@@ -1348,16 +1384,13 @@ janz_deq(struct Qdisc *sch)
 		cb = get_cb(cx, q);
 		if (!(q->byp.first = skb->next))
 			q->byp.last = NULL;
-		pktlen = qdisc_pkt_len(skb);
-		/* sync with above */
-		if (pktlen > 131071U)
-			pktlen = 131071U;
-		q->byplensum -= pktlen;
+		rpktlen = qdisc_pkt_len(skb);
+		q->byplensum -= vpktlen(rpktlen);
 		--q->bypnum;
 		--sch->q.qlen;
 		qdisc_qstats_backlog_dec(sch, skb);
 		qdisc_bstats_update(sch, skb);
-		janz_record_packet(sch, q, skb, cx, cb, now, 0, 0);
+		janz_record_packet(sch, q, skb, cx, cb, now, 0, 0, 3);
 		return (skb);
 	}
 
@@ -1369,21 +1402,18 @@ janz_deq(struct Qdisc *sch)
 		skb = q->ue[ue].rexmits.first;
 		cx = get_cx(skb);
 		cb = get_cb(cx, q);
-		if (cb->xmitnum == 7) {
-			q->uecur = (ue + 1U) % JENSVQ_NUE;
+		if (cb->rexnum == 7) {
 			/* dequeue */
 			if (!(q->ue[ue].rexmits.first = skb->next))
 				q->ue[ue].rexmits.last = NULL;
-			pktlen = qdisc_pkt_len(skb);
-			/* sync with above */
-			if (pktlen > 131071U)
-				pktlen = 131071U;
-			q->ue[ue].pktlensum -= pktlen;
+			rpktlen = qdisc_pkt_len(skb);
+			q->ue[ue].pktlensum -= vpktlen(rpktlen);
 			--q->ue[ue].pktnum;
 			--sch->q.qlen;
 			qdisc_qstats_backlog_dec(sch, skb);
 			/* no qdisc_bstats_update here! */
 			/* also no janz_record_packet */
+			q->uecur = (ue + 1U) % JENSVQ_NUE;
 			return (skb);
 		}
 		/* don’t peek */
@@ -1410,19 +1440,88 @@ janz_deq(struct Qdisc *sch)
 	if (now < lue.hover) {
 		q->ue[ue].rq_notbefore = lue.hover;
 		janz_record_handover(sch, q, now, lue.hover, ue);
-		++now;
 		goto triggered_handover;
 	}
 
-//XXX TODO: rexmits
 	/* we have reached notbefore, previous packet is fully sent */
+	if (q->ue[ue].rexmits.first) {
+		/* we KNOW cb->rexnum != 7 */
+		skb = q->ue[ue].rexmits.first;
+		cx = get_cx(skb);
+		cb = get_cb(cx, q);
+		if (now < cb->ts_arrive)
+			goto rexmit_notyet;
+		/*
+		 * do the entire machinery from below but without
+		 * dequeueing the skb first, for in case we have to
+		 * transmit at least one more time (rexmit FIFO order)
+		 */
+		rpktlen = qdisc_pkt_len(skb);
+		qdisc_bstats_update(sch, skb);
+
+		/* earliest rexmit ts replaces ts_arrive */
+		rq_notbefore = q->ue[ue].crediting ?
+		    max(q->ue[ue].rq_notbefore, cb->ts_arrive) : now;
+		vq_notbefore = max(rq_notbefore, q->ue[ue].vq_notbefore);
+		q->ue[ue].vq_notbefore = vq_notbefore + (lue.vrate * (u64)rpktlen);
+		q->ue[ue].rq_notbefore = rq_notbefore + (lue.rrate * (u64)rpktlen);
+		q->ue[ue].crediting = 1;
+
+		janz_record_packet(sch, q, skb, cx, cb,
+		    rq_notbefore, lue.vrate, lue.rrate, 1);
+		if (cb->rexnum == cb->rextot) {
+			/* actually dequeue, for sending */
+			if (!(q->ue[ue].rexmits.first = skb->next))
+				q->ue[ue].rexmits.last = NULL;
+			q->ue[ue].pktlensum -= vpktlen(rpktlen);
+			--q->ue[ue].pktnum;
+			--sch->q.qlen;
+			qdisc_qstats_backlog_dec(sch, skb);
+			/* and off */
+			q->uecur = (ue + 1U) % JENSVQ_NUE;
+			return (skb);
+		}
+		/* no, keep this at the head of the rexmit FIFO */
+		++cb->rexnum;
+		/* give the other UEs the round-robin */
+		q->uecur = (ue + 1U) % JENSVQ_NUE;
+		goto redo_deq;
+
+ rexmit_notyet:
+		/* don’t peek */
+		skb = NULL;
+		cx = NULL;
+		cb = NULL;
+	}
 	if (!q->ue[ue].q.first) {
 		/* nothing to send, start subsequent packet later */
  nothing_to_send:
 		q->ue[ue].crediting = 0;
 		goto try_next_ue;
 	}
-//XXX dropcheck
+	if (now >= q->ue[ue].drop_next) {
+		bool diddrop = false;
+
+		/* drop one packet if one or more are older than 100 ms */
+		if (get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive <
+		    now - nsmul(100, NSEC_PER_MSEC)) {
+			janz_drop1(sch, q, now, ue);
+			diddrop = true;
+		}
+		/* drop all packets older than 500 ms */
+		while (q->ue[ue].q.first &&
+		    get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive <
+		    now - nsmul(500, NSEC_PER_MSEC))
+			janz_drop1(sch, q, now, ue);
+		/* check every 200 ms */
+		q->ue[ue].drop_next += DROPCHK_INTERVAL;
+		if (diddrop)
+			now = ktime_get_ns();
+		if (q->ue[ue].drop_next < now)
+			q->ue[ue].drop_next = now + DROPCHK_INTERVAL;
+		if (diddrop && !q->ue[ue].q.first)
+			goto nothing_to_send;
+	}
 	skb = q->ue[ue].q.first;
 	cx = get_cx(skb);
 	cb = get_cb(cx, q);
@@ -1433,14 +1532,10 @@ janz_deq(struct Qdisc *sch)
 	}
 	/* got skb to send */
 
-	/* round-robin */
-	q->uecur = (ue + 1U) % JENSVQ_NUE;
-
 	if (!(q->ue[ue].q.first = skb->next))
 		q->ue[ue].q.last = NULL;
-	pktlen = qdisc_pkt_len(skb);
-	/* sync with above */
-	q->ue[ue].pktlensum -= pktlen > 131071U ? 131071U : pktlen;
+	rpktlen = qdisc_pkt_len(skb);
+	q->ue[ue].pktlensum -= vpktlen(rpktlen);
 	--q->ue[ue].pktnum;
 	--sch->q.qlen;
 	qdisc_qstats_backlog_dec(sch, skb);
@@ -1449,9 +1544,9 @@ janz_deq(struct Qdisc *sch)
 	rq_notbefore = q->ue[ue].crediting ?
 	    max(q->ue[ue].rq_notbefore, cb->ts_arrive) : now;
 	vq_notbefore = max(rq_notbefore, q->ue[ue].vq_notbefore);
-	q->ue[ue].vq_notbefore = vq_notbefore + (lue.vrate * (u64)pktlen);
-	q->ue[ue].rq_notbefore = rq_notbefore + (lue.rrate * (u64)pktlen);
-	q->crediting = 1;
+	q->ue[ue].vq_notbefore = vq_notbefore + (lue.vrate * (u64)rpktlen);
+	q->ue[ue].rq_notbefore = rq_notbefore + (lue.rrate * (u64)rpktlen);
+	q->ue[ue].crediting = 1;
 
 	cx->rqdelay = rq_notbefore - cb->ts_arrive;
 	if (unlikely(cb->ts_arrive > rq_notbefore))
@@ -1481,3 +1576,59 @@ janz_deq(struct Qdisc *sch)
 				cb->ecndeq = INET_ECN_CE;
 		}
 	}
+
+	/* up to 5 retransmissions but perhaps not */
+	rexmit_chance = get_random_u32_below(100000U);
+	cb->rextot = rexmit_chance < 1U ? 5 :
+	    rexmit_chance < 10U ? 4 :
+	    rexmit_chance < 100U ? 3 :
+	    rexmit_chance < 1000U ? 2 :
+	    rexmit_chance < 10000U ? 1 : 0;
+	if (cb->rextot) {
+		/* sent-but-retransmitted */
+		janz_record_packet(sch, q, skb, cx, cb,
+		    rq_notbefore, lue.vrate, lue.rrate, 1);
+		++cb->rexnum;
+		/* next transmission not before: */
+		cb->ts_arrive = rq_notbefore + nsmul(8, NSEC_PER_MSEC);
+		/* enqueue and retry dequeueing with next UE */
+		q->ue[ue].rexmits.last->next = skb;
+		q->ue[ue].rexmits.last = skb;
+		q->ue[ue].pktlensum += vpktlen(rpktlen);
+		++q->ue[ue].pktnum;
+		++sch->q.qlen;
+		qdisc_qstats_backlog_inc(sch, skb);
+		skb = NULL;
+		cx = NULL;
+		cb = NULL;
+		q->uecur = (ue + 1U) % JENSVQ_NUE;
+		goto redo_deq;
+	}
+
+	/* held up by previous package still in retransmission? */
+	if (unlikely(q->ue[ue].rexmits.first)) {
+		/* signal this */
+		cb->rexnum = 7;
+		/* append into nōn-reorder retransmission loop */
+		q->ue[ue].rexmits.last->next = skb;
+		q->ue[ue].rexmits.last = skb;
+		q->ue[ue].pktlensum += vpktlen(rpktlen);
+		++q->ue[ue].pktnum;
+		++sch->q.qlen;
+		qdisc_qstats_backlog_inc(sch, skb);
+		/* but do report as sent already with flag */
+		janz_record_packet(sch, q, skb, cx, cb,
+		    rq_notbefore, lue.vrate, lue.rrate, 1);
+		/* don’t send this packet */
+		skb = NULL;
+		cx = NULL;
+		cb = NULL;
+		q->uecur = (ue + 1U) % JENSVQ_NUE;
+		goto redo_deq;
+	}
+
+	janz_record_packet(sch, q, skb, cx, cb,
+	    rq_notbefore, lue.vrate, lue.rrate, 1);
+	q->uecur = (ue + 1U) % JENSVQ_NUE;
+	return (skb);
+}

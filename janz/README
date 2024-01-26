@@ -258,7 +258,7 @@ as follows via relayfs, once per event or packet sent:
 
 Meaning of the fields:
 • u64 vts = virtual timestamp (ns, CLOCK_MONOTONIC, may be backdated)
-• u64 hts = human timestamp (time_t, ns, as of sending/reporting)
+• u64 hts = human timestamp (time_t, ns, as of reporting)**
 • u8[16] srcip, dstip = IP or Legacy IP addresses if ipv ≠ 0
 • u32 flags = bitfield (see below)
 • u32 psize = raw packet size, including partial L2 framing
@@ -272,9 +272,20 @@ Meaning of the fields:
 • u64 owdelay = extralatency + queue delay + retransmissions (ns)
 • u32 ubytes = # of bytes enqueued for this UE (see upkts)
 
+**) mind that vts can be set by root or backdated while hts is not;
+    vts must be used to graph when traffic was sent, not hts⚠
+
 Note upkts/ubytes encompass both packets from the FIFO as well as
 packets held for retransmission or behind a retransmission, i.e. it
 does not correspond to a KPI from RAN.
+
+Bandwidth is reported (and set via the control interface) in
+bits per second; it is internally measured in ns per byte, so
+there will be differences from rounding.
+
+owdelay does not include the delay from being held up (in the
+UE on the RAN, in the retransmission loop in sch_jensvq) behind
+a packet that is retransmitted. It corresponds to the RAN send time.
 
 The flags field is subdivided as follows:
 
@@ -300,7 +311,7 @@ For padding records, none of the other fields have been filled in.
 For start-of-handover records, only the following fields are valid:
 • vts, hts
 • upkts, ubytes
-• flags (exactly equal to 2)
+• flags (currently exactly 2)
 • vbw is in CLOCK_MONOTONIC when traffic will resume at the earliest
 
 For packet records with bypass flag set the UE number is not filled
@@ -308,6 +319,12 @@ in (feel free to consider the bypass queue as UE#8); upkts/ubytes
 report the bypass’ amounts; vbw, rbw, vqdelay, rqdelay are invalid.
 
 For dropped packets, vbw, rbw, vqdelay, rqdelay are invalid.
+
+If a UE is starving (cannot enqueue if the sum of retransmissions,
+bypass plus other UEs’ queues reaches the limit) a warning is shown
+in klog; gnet stats drops accounting counts these occurrences, and
+the record only contains the flags type=1, dropped=1, uenum, and the
+fields vts, hts, psize, upkts, ubytes.
 
 
 Control interface (not sch_jensvq)

@@ -1,0 +1,184 @@
+.\" Copyright © 2024
+.\"	mirabilos <t.glaser@qvest-digital.com>
+.\" Copyright © 2022, 2023
+.\"	mirabilos <t.glaser@tarent.de>
+.\" Licensor: Deutsche Telekom LLCTO
+.\"
+.\" Provided that these terms and disclaimer and all copyright notices
+.\" are retained or reproduced in an accompanying document, permission
+.\" is granted to deal in this work without restriction, including un‐
+.\" limited rights to use, publicly perform, distribute, sell, modify,
+.\" merge, give away, or sublicence.
+.\"
+.\" This work is provided “AS IS” and WITHOUT WARRANTY of any kind, to
+.\" the utmost extent permitted by applicable law, neither express nor
+.\" implied; without malicious intent or gross negligence. In no event
+.\" may a licensor, author or contributor be held liable for indirect,
+.\" direct, other damage, loss, or other issues arising in any way out
+.\" of dealing in the work, even if advised of the possibility of such
+.\" damage or existence of a defect, except proven that it results out
+.\" of said person’s immediate fault when using the work as intended.
+.\"-
+.if \n(.g .hlm 0
+.Dd January 29, 2024
+.Dt TC\-JENSVQ 8
+.Os Linux
+.Sh NAME
+.Nm tc\-jensvq
+.Nd bespoke virtual/real queue bandwidth-based egress traffic scheduler for the JENS network simulator
+.Sh SYNOPSIS
+.Nm tc
+.Ic qdisc ...\& Nm jensvq
+.Op Ic limit Ar PACKETS
+.Op Ic markfree Ar TIME
+.Op Ic markfull Ar TIME
+.Op Ic subbufs Ar NUMBER
+.Op Ic fragcache Ar NUMBER
+.Op Ic extralatency Ar TIME
+.Sh DESCRIPTION
+JENS is a network limitation simulator used in an
+.Pq L4S or similar
+.No AML Pq Adaptive Managed Latency
+scenario to aid in developing latency- and bandwidth-aware applications.
+The
+.Nm jensvq
+queueing discipline is a bespoke Linux kernel module developed as part of JENS
+.Pq by Deutsche Telekom LLCTO
+that provides ECN CE
+.Pq Dq congestion experienced
+marking on ECN-enabled traffic using virtual queue-based marking algorithms
+resembling the real-life PoC scenario as closely as possible
+as well as takes care of traffic shaping
+.Pq limitation of bandwidth
+by packet pacing based on the real queue.
+.Pp
+The
+.Nm jensvq
+qdisc offers nine FIFOS: eight to simulate UEs
+.Pq RAN user equipment
+and one
+.Dq bypass
+to allow packets irrelevant to the RAN but present on the
+underlying physical link for the simulation to pass quickly.
+The UEs operate mostly independent of each other and are
+scheduled in a simple round-robin fashion once the bypass
+is empty.
+Packets are sorted into UEs \&#1 to \&#7 if their netfilter
+.Dq mark
+is the respective number, UE \&#0 otherwise.
+.Pp
+Every 200 ms, if one or more packets are older than 100 ms
+then a single packet is dropped; also,
+all packets older than 500 ms are dropped.
+.Pp
+Outgoing packets are paced based on the real queue bandwidth
+and handover times set using the control interface
+.Pq see Pa janz/README ;
+that is, the next packet on the UE is withheld
+until the time necessary to achieve the requested throughput.
+ECN marking is based on the virtual queue bandwidth
+.Pq although at the time they are sent from the physical queue :
+All packets that take longer than
+.Ar markfull
+to pass the queue
+as well as a percentage of those taking more than
+.Ar markfree
+.Pq with a longer queue delay increasing the chance
+are marked as ECN CE
+.Pq Dq congestion experienced .
+.Pp
+.Nm sch_jensvq
+supports an extensive relayfs-based control and reporting interface exposed
+via debugfs; refer to the README and the provided sample applications.
+.Sh PARAMETERS
+.Bl -tag -width XX
+.It Ic limit
+is a hard limit on the real qdisc size.
+When this limit is reached, packets are dropped.
+Do make sure it isn't reached.
+This parameter can only be set at load time because memory has to be allocated.
+Default: 10240\ packets
+.It Ic markfree
+is the maximum queue delay packets are allowed to sojourn in the virtual queue
+without being ECN CE-marked.
+Default: 4\ ms
+.It Ic markfull
+is the minimum queue delay at which packets will be marked (see above)
+with 100% probability.
+Default: 14\ ms
+.It Ic subbufs
+sets the amount of 16 KiB buffers used for the reporting interface.
+This parameter can only be set at load time because memory has to be allocated.
+Default: 2048
+.It Ic fragcache
+sets the size of the IP packet fragment cache, in 64-byte structs.
+This parameter can only be set at load time because memory has to be allocated.
+Default: 1024
+.It Ic extralatency
+adds artificial network-side
+.Pq before Nm jensvq
+latency.
+Default: 0\ ms
+.El
+.Sh STATISTICS
+This qdisc reports extensively via relayfs over debugfs; therefore, regular
+.Xr tc 8
+statistics are not provided beyond the bare minimum:
+.Bl -tag -width XX -offset indent
+.It backlog Pq \fBb\fRytes
+amount of gross packet payload bytes, possibly adjusted by
+.Xr tc-stab 8 ,
+currently in the queue
+.Pq FIFOs
+.It backlog Pq \fBp\fRackets
+basically
+.Li sch\-\*(Gtq.qlen
+.It overlimits
+number of packets dropped because the queue length limit was reached
+while enqueueing a new packet
+.El
+.Pp
+Specifically, drops accounting in the gnet stats is not done,
+except for dropping to-be-enqueued packets because the limit
+is reached and the UE has no packets in the queue to drop
+(either because it is starved by other UEs or because every
+packet is in the retransmission loop).
+.Sh EXAMPLES
+Set up a queue with standard parameters and display its statistics:
+.Bd -literal -offset 4n
+$ \fBsudo tc qdisc add dev eth0 root handle 1: jensvq\fR\fC
+$ \fBsudo tc \-s qdisc show dev eth0\fR\fC
+qdisc janzXXX 1: root refcnt 2 limit 10240 rate 10000kbit \e
+    qosmode 0 markfree 4ms markfull 14ms \e
+    subbufs 1024 fragcache 1024 extralatency 0us
+ Sent 2012 bytes 12 pkt (dropped 0, overlimits 0, requeues 0)
+ backlog 0b 0p
+.Ed
+.Sh SEE ALSO
+.Xr tc 8 ,
+.Xr tc-janz 8 ,
+.Xr tc\-multijens 8
+.Pp
+.Pa /usr/share/doc/sch\-jens\-dkms/README.gz
+.Sh AUTHORS
+.An mirabilos Aq t.glaser@qvest-digital.com
+for Deutsche Telekom LLCTO
+.Sh CAVEATS
+This qdisc is only supported as the root egress qdisc on a device.
+.Pp
+This qdisc considers handles to be global, not per interface.
+.Pp
+The traffic rate is internally converted to nanoseconds per byte
+needed to transfer, limiting it to about 8 Gbit/s; the closer the
+rate gets to the extremes, the less usable it will be.
+Experiments with 128 kbit/s as a lower bound show mixed results.
+The exact bandwidth in use is reported on the relayfs channel.
+.Pp
+The
+.Ic extralatency
+is asymmetric: it is only applied on the egress channel, because
+Linux cannot delay on ingress.
+It is applied before enqueueing but does not affect sojourn time.
+Basically, it simulates extra latency on the network in front of
+the JENS node.
+Packet pacing for bandwidth limiting only applies, too, on egress.

@@ -874,6 +874,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 			return (qdisc_drop(skb, sch, to_free));
 		}
 		janz_drop1(sch, q, now, ue);
+		qdisc_qstats_overlimit(sch);
 		qdisc_tree_reduce_backlog(sch, 0,
 		    prev_backlog - sch->qstats.backlog);
 		rv = NET_XMIT_CN;

@@ -17,7 +17,9 @@ sbin/tipc
 usr/include/iproute2/
 usr/lib/tc/
 usr/libexec/jensdmp
+usr/libexec/jensvqdmp
 usr/libexec/mratedemo
 usr/libexec/ratedemo
+usr/libexec/vqdemo
 usr/share/bash-completion/
 usr/share/man/

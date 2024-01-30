@@ -13,6 +13,7 @@ Upgrading
 After upgrading the packages, the old kernel modules must be unloaded:
 
 $ sudo rmmod sch_janz
+same for other modules
 
 If either command fails, the module is either not loaded (ok) or still
 being actively used; unconfigure all queues first.
@@ -21,11 +22,8 @@ being actively used; unconfigure all queues first.
 jensdmp examples
 ----------------
 
-Build and run with:
+Run with:
 
-$ javac JensReaderDemo.java JensReaderLib.java
-$ sudo java JensReaderDemo eth0 /sys/kernel/debug/sch_janz/0001:0
-#- or run with -
 $ sudo /usr/libexec/jensdmp /sys/kernel/debug/sch_janz/0001:0
 
 This assumes tc-janz(8) with handle 1: running on eth0.

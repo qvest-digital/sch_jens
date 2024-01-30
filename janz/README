@@ -73,6 +73,10 @@ seconds) corner cases to obtain the real queue delay, which
 is roughly identical (within microseconds) to the reported
 one-way delay when no extralatency is used.
 
+The sch_jensvq qdisc allows specification of both virtual and
+real link bandwidth (instead of applying a fix factor) and
+supports 8 UEs.
+
 
 Live measurement (not sch_jensvq)
 ────────────────

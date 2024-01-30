@@ -426,5 +426,4 @@ This qdisc is not yet finished.
 
 It will operate similarly to `sch_multijens`, with a fixed number of
 eight (8) UEs, one bypass, only one FIFO (no priorisation), a much
-extended control and reporting interface. (In the beginning, handover,
-bypass and retransmission may be missing.)
+extended control and reporting interface.

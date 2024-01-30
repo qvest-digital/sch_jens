@@ -83,6 +83,7 @@ TCMODULES += q_taprio.o
 TCMODULES += q_plug.o
 TCMODULES += q_ets.o
 TCMODULES += q_janz.o
+TCMODULES += q_jensvq.o
 TCMODULES += q_multijens.o
 
 TCSO :=

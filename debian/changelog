@@ -4,8 +4,10 @@ iproute2 (5.10.0-4jens26) UNRELEASED; urgency=medium
     physical/virtual link capacity (queue bandwidth) vs. fair share)
   * dual (real/virtual) queue bwlim reporting in qsz records
   * Do not ship Java™ example/JNI lib any more, it is currently unused
+  * Add sch_jensvq with completely new control+reporting interfaces,
+    jensvqdmp and vqdemo minimal examples
 
- -- Thorsten Glaser <t.glaser@qvest-digital.com>  Fri, 12 Jan 2024 20:58:21 +0100
+ -- Thorsten Glaser <t.glaser@qvest-digital.com>  Tue, 30 Jan 2024 02:28:54 +0100
 
 iproute2 (5.10.0-4jens25) tarent; urgency=medium
 

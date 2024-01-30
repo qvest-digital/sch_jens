@@ -40,7 +40,19 @@ OBJS3?=		${SRCS3:.c=.o}
 
 CLEANFILES+=	${PROG3} ${OBJS3}
 
-all: ${PROG} ${PROG2} ${PROG3}
+PROG4=		jensvqdmp
+SRCS4?=		${PROG4}.c
+OBJS4?=		${SRCS4:.c=.o}
+
+CLEANFILES+=	${PROG4} ${OBJS4}
+
+PROG5=		vqdemo
+SRCS5?=		${PROG5}.c
+OBJS5?=		${SRCS5:.c=.o}
+
+CLEANFILES+=	${PROG5} ${OBJS5}
+
+all: ${PROG} ${PROG2} ${PROG3} ${PROG4} ${PROG5}
 
 ${PROG}: ${OBJS}
 	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS} ${LDADD}
@@ -50,6 +62,12 @@ ${PROG2}: ${OBJS2}
 
 ${PROG3}: ${OBJS3}
 	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS3} ${LDADD}
+
+${PROG4}: ${OBJS4}
+	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS4} ${LDADD}
+
+${PROG5}: ${OBJS5}
+	${CC} -o $@ ${CFLAGS} ${LDFLAGS} ${LDSTATIC} ${OBJS5} ${LDADD}
 
 .c.o:
 	${CC} -c ${CPPFLAGS} ${CFLAGS} $<
@@ -77,8 +95,15 @@ jd= #-t
 rundump: jensdmp
 	sudo ./jensdmp ${jd} /sys/kernel/debug/sch_${qtype}/0001:0
 
+runvqdump: jensvqdmp
+	sudo ./jensvqdmp /sys/kernel/debug/sch_jensvq/0001:v2-0
+
+runvqdemo: vqdemo
+	sudo ./vqdemo /sys/kernel/debug/sch_jensvq/0001:v2-c
+
 install:
 	install -m 0755 -d ${DESTDIR}/usr/libexec
-	install -m 0755 ${PROG} ${PROG2} ${PROG3} ${DESTDIR}/usr/libexec/
+	install -m 0755 ${PROG} ${PROG2} ${PROG3} ${PROG4} ${PROG5} \
+	    ${DESTDIR}/usr/libexec/
 
 .PHONY: all install run clean

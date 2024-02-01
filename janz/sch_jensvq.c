@@ -1697,8 +1697,13 @@ janz_deq(struct Qdisc *sch)
 			pr_info(JTFMT "|enq UE#%u for rexmit at " JTFMT "\n",
 			    jtfmt(now), ue, jtfmt(cb->ts_arrive));
 		/* enqueue and retry dequeueing with next UE */
-		q->ue[ue].rexmits.last->next = skb;
-		q->ue[ue].rexmits.last = skb;
+		if (!q->ue[ue].rexmits.first) {
+			q->ue[ue].rexmits.first = skb;
+			q->ue[ue].rexmits.last = skb;
+		} else {
+			q->ue[ue].rexmits.last->next = skb;
+			q->ue[ue].rexmits.last = skb;
+		}
 		q->ue[ue].pktlensum += vpktlen(rpktlen);
 		++q->ue[ue].pktnum;
 		++sch->q.qlen;

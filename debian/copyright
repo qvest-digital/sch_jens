@@ -49,7 +49,8 @@ License: GPL-2
 Files: janz/*
        tc/q_janz.c
 Copyright: 2022, 2023 mirabilos <t.glaser@tarent.de>
-           2022, 2023 Deutsche Telekom LLCTO
+           2023, 2024 mirabilos <t.glaser@qvest-digital.com>
+           2022, 2023, 2024 Deutsche Telekom LLCTO
 License: GPL-2
 Comment:
  The file janz_uapi.h has the following GPL exception:

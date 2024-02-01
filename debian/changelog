@@ -1,3 +1,10 @@
+iproute2 (5.10.0-4jens19.3) tarent; urgency=high
+
+  * Bugfix cherry-pick release
+  * skb->next bookkeeping
+
+ -- Thorsten Glaser <t.glaser@qvest-digital.com>  Thu, 01 Feb 2024 07:50:30 +0100
+
 iproute2 (5.10.0-4jens19.2) tarent; urgency=medium
 
   * Bugfix cherry-pick release

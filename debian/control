@@ -3,7 +3,7 @@ Origin: tarent
 Bugs: mailto:t.glaser@tarent.de
 Section: net
 Priority: optional
-Maintainer: Thorsten Glaser <t.glaser@tarent.de>
+Maintainer: Thorsten Glaser <t.glaser@qvest-digital.com>
 Vcs-Browser: https://github.com/tarent/sch_jens/
 Vcs-Git: git@github.com:tarent/sch_jens.git
 Standards-Version: 4.5.1

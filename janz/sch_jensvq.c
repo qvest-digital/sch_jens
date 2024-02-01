@@ -9,6 +9,7 @@
  */
 
 #undef JANZ_IP_DECODER_DEBUG
+#define JANZ_DEV_DEBUG
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -40,6 +41,15 @@
 #define nsmul(val, fac) ((u64)((u64)(val) * (u64)(fac)))
 
 #define xinline inline __attribute__((__always_inline__))
+
+#ifdef JANZ_DEV_DEBUG
+#define JANZDBG 1
+#else
+#define JANZDBG 0
+#endif
+#define JTFMT "%lu.%06u"
+#define jtfmt(x) (unsigned long)((u64)(x) / 1000000000UL), \
+		 (unsigned int)(((u64)(x) % 1000000000UL) / 1000U)
 
 struct janz_fragcomp {
 	struct in6_addr sip;			//@0    :16
@@ -160,6 +170,9 @@ struct jensvq_qd {
 	u32 byplensum;									//@8 (?@16)
 	u16 bypnum;									//  +4
 	u8 uecur;									//  +6
+#ifdef JANZ_DEV_DEBUG
+	u8 dbg_mnext:1;									//  +7:⅛
+#endif
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//?@8
 };
 
@@ -188,11 +201,13 @@ static xinline struct jensvq_ldue jensvq_readlatch(struct jensvq_qd *q, int ue);
 
 static xinline void janz_reset(struct Qdisc *sch, bool initial);
 static xinline int janz_chg(struct Qdisc *, struct nlattr *, struct netlink_ext_ack *, bool);
+static xinline int janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free);
+static xinline struct sk_buff *janz_deq(struct Qdisc *sch);
 
 static int __init janz_modinit(void);
 static void __exit janz_modexit(void);
-static int janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free);
-static struct sk_buff *janz_deq(struct Qdisc *sch);
+static int janz_enq_noinline(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free);
+static struct sk_buff *janz_deq_noinline(struct Qdisc *sch);
 static struct sk_buff *janz_peek(struct Qdisc *sch);
 static int janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack);
 static void janz_reset_noinline(struct Qdisc *sch);
@@ -223,7 +238,7 @@ static xinline void janz_record_enqdrop(struct Qdisc *sch, struct jensvq_qd *q,
     struct sk_buff *skb, u64 now, unsigned int ue);
 
 static xinline void janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
-    u64 now, unsigned int ue);
+    u64 now, const char *why, unsigned int ue);
 
 module_init(janz_modinit);
 module_exit(janz_modexit);
@@ -240,8 +255,8 @@ MODULE_DESCRIPTION(janzmoddesc_bs janzmoddesc_qd);
 static struct Qdisc_ops janz_ops __read_mostly = {
 	.id		= "jensvq",
 	.priv_size	= sizeof(struct jensvq_qd),
-	.enqueue	= janz_enq,
-	.dequeue	= janz_deq,
+	.enqueue	= janz_enq_noinline,
+	.dequeue	= janz_deq_noinline,
 	.peek		= janz_peek,
 	.init		= janz_init,
 	.reset		= janz_reset_noinline,
@@ -479,6 +494,7 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		janz_record_handover(sch, q, now, now, i);
 	}
 	sch->flags &= ~TCQ_F_CAN_BYPASS;
+	pr_info(JTFMT "|janz_init GREP success\n", jtfmt(now));
 	return (0);
 
  init_fail:
@@ -575,8 +591,8 @@ janz_reset(struct Qdisc *sch, bool initial)
 		q->ue[i].pktnum = 0;
 		q->ue[i].crediting = 0;
 		/* 10 Mbit/s */
-		q->latchdata[0].ue[i].vrate = 800;
-		q->latchdata[0].ue[i].rrate = 800;
+		q->latchdata[0].ue[i].vrate = 80000;
+		q->latchdata[0].ue[i].rrate = 80000;
 		q->latchdata[0].ue[i].hover = 0;
 		q->latchdata[1].ue[i].vrate = 800;
 		q->latchdata[1].ue[i].rrate = 800;
@@ -842,6 +858,26 @@ janz_ctlfile_write(struct file *filp, const char __user *buf,
 }
 
 static int
+janz_enq_noinline(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
+{
+	int rv;
+#ifdef JANZ_DEV_DEBUG
+	u64 now = ktime_get_ns();
+#endif
+
+	if (JANZDBG)
+		pr_info(JTFMT "|janz_enq entering\n", jtfmt(now));
+	rv = janz_enq(skb, sch, to_free);
+	if (JANZDBG)
+		pr_info(JTFMT "|janz_enq leaving, %s\n", jtfmt(now),
+		    rv == NET_XMIT_SUCCESS ? "ok" :
+		    rv == NET_XMIT_CN ? "drop-other" :
+		    rv == NET_XMIT_DROP ? "drop-this" : "unknown error");
+
+	return (rv);
+}
+
+static xinline int
 janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 {
 	struct jensvq_qd *q = qdisc_priv(sch);
@@ -862,18 +898,24 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 	/* ensure we have space in the queue */
 	if (unlikely(sch->q.qlen >= sch->limit)) {
 		u32 prev_backlog = sch->qstats.backlog;
+		const char *why;
 
 		if (unlikely(sch->q.qlen > sch->limit)) {
 			net_warn_ratelimited("qdisc over limit");
+			why = "overlimit";
 			goto dont_enq;
 		}
 		if (unlikely(!q->ue[ue].q.first)) {
 			net_warn_ratelimited("UE#%u starving", ue);
+			why = "starving";
  dont_enq:
 			janz_record_enqdrop(sch, q, skb, now, ue);
+			if (JANZDBG)
+				pr_info(JTFMT "|dropping skb %08lX from UE #%u for %s\n",
+				    jtfmt(now), (unsigned long)skb, ue, why);
 			return (qdisc_drop(skb, sch, to_free));
 		}
-		janz_drop1(sch, q, now, ue);
+		janz_drop1(sch, q, now, "full queue", ue);
 		qdisc_qstats_overlimit(sch);
 		qdisc_tree_reduce_backlog(sch, 0,
 		    prev_backlog - sch->qstats.backlog);
@@ -1335,7 +1377,7 @@ janz_record_enqdrop(struct Qdisc *sch, struct jensvq_qd *q,
 
 static xinline void
 janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
-    u64 now, unsigned int ue)
+    u64 now, const char *why, unsigned int ue)
 {
 	struct sk_buff *skb;
 	struct janz_skb *cx;
@@ -1356,6 +1398,9 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 	cb = get_cb(cx, q);
 	cb->drop = 1;
 	janz_record_packet(sch, q, skb, cx, cb, now, 0, 0, 2);
+	if (JANZDBG)
+		pr_info(JTFMT "|dropping skb %08lX from UE #%u for %s\n",
+		    jtfmt(now), (unsigned long)skb, ue, why);
 	kfree_skb(skb);
 	/* ensure the next record orders totally past this one */
 	q->ue[ue].crediting = 0;
@@ -1364,6 +1409,45 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 }
 
 static struct sk_buff *
+janz_deq_noinline(struct Qdisc *sch)
+{
+	struct sk_buff *skb;
+#ifdef JANZ_DEV_DEBUG
+	struct jensvq_qd * const q = qdisc_priv(sch);
+	u64 now = ktime_get_ns();
+#endif
+
+	if (JANZDBG) {
+		pr_info(JTFMT "|janz_deq entering\n", jtfmt(now));
+		q->dbg_mnext = 0;
+	}
+	skb = janz_deq(sch);
+	if (JANZDBG && skb) {
+		struct janz_skb *cx = get_cx(skb);
+		struct janz_cb *cb = get_cb(cx, q);
+
+		pr_info(JTFMT "|janz_deq leaving, skb=%08lX from UE#%c\n", jtfmt(now),
+		    (unsigned long)skb, cb->bypass ? 'Y' : '0' + cb->uenum);
+	} else if (JANZDBG) {
+		const char *res;
+		unsigned int ue;
+
+		res = q->dbg_mnext ?
+		    "ok not crediting but mnext" :
+		    "ok not crediting and not mnext";
+		for (ue = 0; ue < JENSVQ_NUE; ++ue)
+			if (q->ue[ue].crediting) {
+				res = q->dbg_mnext ?
+				    "ok crediting and mnext" :
+				    "GREP crediting but not mnext";
+				break;
+			}
+		pr_info(JTFMT "|janz_deq leaving, skb=nil, %s\n", jtfmt(now), res);
+	}
+	return (skb);
+}
+
+static xinline struct sk_buff *
 janz_deq(struct Qdisc *sch)
 {
 	struct jensvq_qd * const q = qdisc_priv(sch);
@@ -1377,6 +1461,8 @@ janz_deq(struct Qdisc *sch)
 
  redo_deq:
 	now = ktime_get_ns();
+	if (JANZDBG)
+		pr_info(JTFMT "|entering redo_deq\n", jtfmt(now));
 
 	/* check bypass first */
 	if (q->byp.first) {
@@ -1398,6 +1484,9 @@ janz_deq(struct Qdisc *sch)
 	mnextns = (u64)~(u64)0;
 	ue = q->uecur;
  find_ue_to_send:
+	if (JANZDBG)
+		pr_info(JTFMT "|entering find_ue_to_send, trying UE #%u\n",
+		    jtfmt(now), ue);
 	/* retransmitted packets held up? */
 	if (q->ue[ue].rexmits.first) {
 		skb = q->ue[ue].rexmits.first;
@@ -1427,12 +1516,21 @@ janz_deq(struct Qdisc *sch)
  triggered_handover:
 		mnextns = min(mnextns, q->ue[ue].rq_notbefore);
  try_next_ue:
+		if (JANZDBG)
+			pr_info(JTFMT "|entering try_next_ue, mnext=" JTFMT "\n",
+			    jtfmt(now), jtfmt(mnextns != (u64)~(u64)0 ? mnextns : 0));
 		ue = (ue + 1U) % JENSVQ_NUE;
 		if (ue != q->uecur)
 			goto find_ue_to_send;
 		/* tried every UE */
-		if (mnextns != (u64)~(u64)0)
+		if (mnextns != (u64)~(u64)0) {
+			if (JANZDBG) {
+				if (mnextns <= now)
+					pr_info(JTFMT "|GREP mnext < now\n", jtfmt(now));
+				q->dbg_mnext = 1;
+			}
 			qdisc_watchdog_schedule_ns(&q->watchdog, mnextns);
+		}
 		return (NULL);
 	}
 
@@ -1506,14 +1604,14 @@ janz_deq(struct Qdisc *sch)
 		/* drop one packet if one or more are older than 100 ms */
 		if (get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive <
 		    now - nsmul(100, NSEC_PER_MSEC)) {
-			janz_drop1(sch, q, now, ue);
+			janz_drop1(sch, q, now, "100 ms age", ue);
 			diddrop = true;
 		}
 		/* drop all packets older than 500 ms */
 		while (q->ue[ue].q.first &&
 		    get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive <
 		    now - nsmul(500, NSEC_PER_MSEC))
-			janz_drop1(sch, q, now, ue);
+			janz_drop1(sch, q, now, "500 ms age", ue);
 		/* check every 200 ms */
 		q->ue[ue].drop_next += DROPCHK_INTERVAL;
 		if (diddrop)

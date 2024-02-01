@@ -1720,8 +1720,13 @@ janz_deq(struct Qdisc *sch)
 		/* signal this */
 		cb->rexnum = 7;
 		/* append into nōn-reorder retransmission loop */
-		q->ue[ue].rexmits.last->next = skb;
-		q->ue[ue].rexmits.last = skb;
+		if (!q->ue[ue].rexmits.first) {
+			q->ue[ue].rexmits.first = skb;
+			q->ue[ue].rexmits.last = skb;
+		} else {
+			q->ue[ue].rexmits.last->next = skb;
+			q->ue[ue].rexmits.last = skb;
+		}
 		q->ue[ue].pktlensum += vpktlen(rpktlen);
 		++q->ue[ue].pktnum;
 		++sch->q.qlen;

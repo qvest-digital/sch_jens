@@ -615,8 +615,8 @@ janz_reset(struct Qdisc *sch, bool initial)
 		q->ue[i].pktnum = 0;
 		q->ue[i].crediting = 0;
 		/* 10 Mbit/s */
-		q->latchdata[0].ue[i].vrate = 80000;
-		q->latchdata[0].ue[i].rrate = 80000;
+		q->latchdata[0].ue[i].vrate = 800;
+		q->latchdata[0].ue[i].rrate = 800;
 		q->latchdata[0].ue[i].hover = 0;
 		q->latchdata[1].ue[i].vrate = 800;
 		q->latchdata[1].ue[i].rrate = 800;

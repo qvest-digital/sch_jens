@@ -1398,7 +1398,7 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 	cb = get_cb(cx, q);
 	cb->drop = 1;
 	janz_record_packet(sch, q, skb, cx, cb, now, 0, 0, 2);
-	if (JANZDBG)
+	if (JANZDBG || 1)
 		pr_info(JTFMT "|dropping skb %08lX from UE #%u for %s\n",
 		    jtfmt(now), (unsigned long)skb, ue, why);
 	kfree_skb(skb);

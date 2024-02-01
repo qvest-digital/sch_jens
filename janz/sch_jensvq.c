@@ -1633,6 +1633,10 @@ janz_deq(struct Qdisc *sch)
 	if (now >= q->ue[ue].drop_next) {
 		bool diddrop = false;
 
+		u64 age = now - get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive;
+		pr_info(JTFMT "|dropcheck UE#%u (%llu.%03u ms)\n", jtfmt(now),
+		    ue, age / 1000000ULL, (unsigned)(age % 1000000ULL));
+
 		/* drop one packet if one or more are older than 100 ms */
 		if (get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive <
 		    now - nsmul(100, NSEC_PER_MSEC)) {

@@ -254,7 +254,7 @@ static xinline void janz_record_enqdrop(struct Qdisc *sch, struct jensvq_qd *q,
     struct sk_buff *skb, u64 now, unsigned int ue);
 
 static xinline void janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
-    u64 now, const char *why, unsigned int ue);
+    struct sk_buff **to_free, u64 now, const char *why, unsigned int ue);
 
 module_init(janz_modinit);
 module_exit(janz_modexit);
@@ -931,7 +931,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 				    jtfmt(now), (unsigned long)skb, ue, why);
 			return (qdisc_drop(skb, sch, to_free));
 		}
-		janz_drop1(sch, q, now, "full queue", ue);
+		janz_drop1(sch, q, to_free, now, "full queue", ue);
 		qdisc_qstats_overlimit(sch);
 		qdisc_tree_reduce_backlog(sch, 0,
 		    prev_backlog - sch->qstats.backlog);
@@ -1393,7 +1393,7 @@ janz_record_enqdrop(struct Qdisc *sch, struct jensvq_qd *q,
 
 static xinline void
 janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
-    u64 now, const char *why, unsigned int ue)
+    struct sk_buff **to_free, u64 now, const char *why, unsigned int ue)
 {
 	struct sk_buff *skb;
 	struct janz_skb *cx;
@@ -1417,7 +1417,10 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 	if (JANZDBG || 1)
 		pr_info(JTFMT "|dropping skb %08lX from UE #%u for %s\n",
 		    jtfmt(now), (unsigned long)skb, ue, why);
-	kfree_skb(skb);
+	if (to_free)
+		__qdisc_drop(skb, to_free);
+	else
+		kfree_skb(skb);
 	cb->next = q->cb_free;
 	q->cb_free = cb;
 }
@@ -1633,14 +1636,14 @@ janz_deq(struct Qdisc *sch)
 		/* drop one packet if one or more are older than 100 ms */
 		if (get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive <
 		    now - nsmul(100, NSEC_PER_MSEC)) {
-			janz_drop1(sch, q, now, "100 ms age", ue);
+			janz_drop1(sch, q, NULL, now, "100 ms age", ue);
 			diddrop = true;
 		}
 		/* drop all packets older than 500 ms */
 		while (q->ue[ue].q.first &&
 		    get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive <
 		    now - nsmul(500, NSEC_PER_MSEC))
-			janz_drop1(sch, q, now, "500 ms age", ue);
+			janz_drop1(sch, q, NULL, now, "500 ms age", ue);
 		/* check every 200 ms */
 		q->ue[ue].drop_next += DROPCHK_INTERVAL;
 		if (diddrop)

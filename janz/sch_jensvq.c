@@ -1693,6 +1693,9 @@ janz_deq(struct Qdisc *sch)
 		++cb->rexnum;
 		/* next transmission not before: */
 		cb->ts_arrive = rq_notbefore + nsmul(8, NSEC_PER_MSEC);
+		if (JANZDBG)
+			pr_info(JTFMT "|enq UE#%u for rexmit at " JTFMT "\n",
+			    jtfmt(now), ue, jtfmt(cb->ts_arrive));
 		/* enqueue and retry dequeueing with next UE */
 		q->ue[ue].rexmits.last->next = skb;
 		q->ue[ue].rexmits.last = skb;

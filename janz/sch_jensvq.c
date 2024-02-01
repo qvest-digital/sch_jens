@@ -1524,13 +1524,15 @@ janz_deq(struct Qdisc *sch)
 			goto find_ue_to_send;
 		/* tried every UE */
 		if (mnextns != (u64)~(u64)0) {
-			if (JANZDBG || 1) {
+			if (JANZDBG) {
 				if (mnextns <= now)
 					pr_info(JTFMT "|GREP mnext < now\n", jtfmt(now));
 #ifdef JANZ_DEV_DEBUG
 				q->dbg_mnext = 1;
 #endif
-			}
+			} else if (1 && (mnextns <= now))
+				pr_info(JTFMT "|GREP mnext " JTFMT "  < now\n",
+				    jtfmt(now), jtfmt(mnextns));
 			qdisc_watchdog_schedule_ns(&q->watchdog, mnextns);
 		}
 		return (NULL);

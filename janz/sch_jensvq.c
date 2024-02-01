@@ -1478,6 +1478,8 @@ janz_deq(struct Qdisc *sch)
 		qdisc_qstats_backlog_dec(sch, skb);
 		qdisc_bstats_update(sch, skb);
 		janz_record_packet(sch, q, skb, cx, cb, now, 0, 0, 3);
+		cb->next = q->cb_free;
+		q->cb_free = cb;
 		return (skb);
 	}
 
@@ -1504,6 +1506,8 @@ janz_deq(struct Qdisc *sch)
 			/* no qdisc_bstats_update here! */
 			/* also no janz_record_packet */
 			q->uecur = (ue + 1U) % JENSVQ_NUE;
+			cb->next = q->cb_free;
+			q->cb_free = cb;
 			return (skb);
 		}
 		/* don’t peek */
@@ -1585,6 +1589,8 @@ janz_deq(struct Qdisc *sch)
 			qdisc_qstats_backlog_dec(sch, skb);
 			/* and off */
 			q->uecur = (ue + 1U) % JENSVQ_NUE;
+			cb->next = q->cb_free;
+			q->cb_free = cb;
 			return (skb);
 		}
 		/* no, keep this at the head of the rexmit FIFO */
@@ -1749,5 +1755,7 @@ janz_deq(struct Qdisc *sch)
 	janz_record_packet(sch, q, skb, cx, cb,
 	    rq_notbefore, lue.vrate, lue.rrate, 1);
 	q->uecur = (ue + 1U) % JENSVQ_NUE;
+	cb->next = q->cb_free;
+	q->cb_free = cb;
 	return (skb);
 }

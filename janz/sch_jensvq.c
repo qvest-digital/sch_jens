@@ -1400,6 +1400,15 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 	struct janz_cb *cb;
 	unsigned int rpktlen;
 
+	/* for some reason, despite caller ensuring presence… */
+	if (!sch->q.qlen || !q->ue[ue].pktnum || !q->ue[ue].q.first || !q->ue[ue].q.last) {
+		pr_err("janz_drop1(%s): qlen=%u pktnum=%u first=%08lX last=%08lX UE#%u\n",
+		    why, (unsigned)sch->q.qlen, (unsigned)q->ue[ue].pktnum,
+		    (unsigned long)q->ue[ue].q.first,
+		    (unsigned long)q->ue[ue].q.last, ue);
+		return;
+	}
+
 	/* caller must ensure presence */
 	skb = q->ue[ue].q.first;
 	if (!(q->ue[ue].q.first = skb->next))

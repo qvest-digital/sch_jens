@@ -1702,7 +1702,7 @@ janz_deq(struct Qdisc *sch)
 		    rq_notbefore, lue.vrate, lue.rrate, 1);
 		++cb->rexnum;
 		/* next transmission not before: */
-		cb->ts_arrive = q->ue[ue].rq_notbefore + nsmul(8, NSEC_PER_MSEC);
+		cb->ts_arrive = rq_notbefore + nsmul(8, NSEC_PER_MSEC);
 		if (JANZDBG)
 			pr_info(JTFMT "|enq UE#%u for rexmit at " JTFMT "\n",
 			    jtfmt(now), ue, jtfmt(cb->ts_arrive));

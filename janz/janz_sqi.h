@@ -404,6 +404,7 @@ janz_drop_pkt(struct Qdisc *sch, struct janz_priv *q, u64 now,
 	skb = q->q[qid].first;
 	if (!(q->q[qid].first = skb->next))
 		q->q[qid].last = NULL;
+	skb->next = NULL;
 	--sch->q.qlen;
 	q->pktlensum -= qdisc_pkt_len(skb);
 	qdisc_qstats_backlog_dec(sch, skb);
@@ -915,6 +916,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		q->q[qid].last->next = skb;
 		q->q[qid].last = skb;
 	}
+	BUG_ON(!!(skb->next));
 	qdisc_qstats_backlog_inc(sch, skb);
 
 	if (unlikely(overlimit)) {
@@ -1001,6 +1003,7 @@ janz_deq(struct Qdisc *sch)
  got_skb:
 	if (!(q->q[qid].first = skb->next))
 		q->q[qid].last = NULL;
+	skb->next = NULL;
 	--sch->q.qlen;
 	q->pktlensum -= qdisc_pkt_len(skb);
 	skb->next = NULL;

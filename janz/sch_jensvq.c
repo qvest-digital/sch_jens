@@ -959,6 +959,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 			q->byp.last->next = skb;
 			q->byp.last = skb;
 		}
+		BUG_ON(!!(skb->next));
 		q->byplensum += vpktlen(rpktlen);
 		++q->bypnum;
 		++sch->q.qlen;
@@ -976,6 +977,7 @@ janz_enq(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 		q->ue[ue].q.last->next = skb;
 		q->ue[ue].q.last = skb;
 	}
+	BUG_ON(!!(skb->next));
 	q->ue[ue].pktlensum += vpktlen(rpktlen);
 	++q->ue[ue].pktnum;
 	++sch->q.qlen;
@@ -1413,6 +1415,7 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 	skb = q->ue[ue].q.first;
 	if (!(q->ue[ue].q.first = skb->next))
 		q->ue[ue].q.last = NULL;
+	skb->next = NULL;
 	rpktlen = qdisc_pkt_len(skb);
 	q->ue[ue].pktlensum -= vpktlen(rpktlen);
 	checked_dec(q->ue[ue].pktnum);
@@ -1499,6 +1502,7 @@ janz_deq(struct Qdisc *sch)
 		cb = get_cb(cx, q);
 		if (!(q->byp.first = skb->next))
 			q->byp.last = NULL;
+		skb->next = NULL;
 		rpktlen = qdisc_pkt_len(skb);
 		q->byplensum -= vpktlen(rpktlen);
 		checked_dec(q->bypnum);
@@ -1526,6 +1530,7 @@ janz_deq(struct Qdisc *sch)
 			/* dequeue */
 			if (!(q->ue[ue].rexmits.first = skb->next))
 				q->ue[ue].rexmits.last = NULL;
+			skb->next = NULL;
 			rpktlen = qdisc_pkt_len(skb);
 			q->ue[ue].pktlensum -= vpktlen(rpktlen);
 			checked_dec(q->ue[ue].pktnum);
@@ -1611,6 +1616,7 @@ janz_deq(struct Qdisc *sch)
 			/* actually dequeue, for sending */
 			if (!(q->ue[ue].rexmits.first = skb->next))
 				q->ue[ue].rexmits.last = NULL;
+			skb->next = NULL;
 			q->ue[ue].pktlensum -= vpktlen(rpktlen);
 			checked_dec(q->ue[ue].pktnum);
 			checked_dec(sch->q.qlen);
@@ -1678,6 +1684,7 @@ janz_deq(struct Qdisc *sch)
 
 	if (!(q->ue[ue].q.first = skb->next))
 		q->ue[ue].q.last = NULL;
+	skb->next = NULL;
 	rpktlen = qdisc_pkt_len(skb);
 	q->ue[ue].pktlensum -= vpktlen(rpktlen);
 	checked_dec(q->ue[ue].pktnum);
@@ -1746,6 +1753,7 @@ janz_deq(struct Qdisc *sch)
 			q->ue[ue].rexmits.last->next = skb;
 			q->ue[ue].rexmits.last = skb;
 		}
+		BUG_ON(!!(skb->next));
 		q->ue[ue].pktlensum += vpktlen(rpktlen);
 		++q->ue[ue].pktnum;
 		++sch->q.qlen;
@@ -1769,6 +1777,7 @@ janz_deq(struct Qdisc *sch)
 			q->ue[ue].rexmits.last->next = skb;
 			q->ue[ue].rexmits.last = skb;
 		}
+		BUG_ON(!!(skb->next));
 		q->ue[ue].pktlensum += vpktlen(rpktlen);
 		++q->ue[ue].pktnum;
 		++sch->q.qlen;

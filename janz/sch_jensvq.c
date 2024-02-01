@@ -1549,8 +1549,10 @@ janz_deq(struct Qdisc *sch)
 		skb = q->ue[ue].rexmits.first;
 		cx = get_cx(skb);
 		cb = get_cb(cx, q);
-		if (now < cb->ts_arrive)
+		if (now < cb->ts_arrive) {
+			mnextns = min(mnextns, cb->ts_arrive);
 			goto rexmit_notyet;
+		}
 		/*
 		 * do the entire machinery from below but without
 		 * dequeueing the skb first, for in case we have to

@@ -193,7 +193,7 @@ struct jensvq_qd {
 	u32 byplensum;									//@8 (?@16)
 	u16 bypnum;									//  +4
 	u8 uecur;									//  +6
-#ifdef JANZ_DEV_DEBUG
+#if JANZDBG
 	u8 dbg_mnext:1;									//  +7:⅛
 #endif
 	struct qdisc_watchdog watchdog;	/* to schedule when traffic shaping */		//?@8
@@ -517,7 +517,8 @@ janz_init(struct Qdisc *sch, struct nlattr *opt, struct netlink_ext_ack *extack)
 		janz_record_handover(sch, q, now, now, i);
 	}
 	sch->flags &= ~TCQ_F_CAN_BYPASS;
-	pr_info(JTFMT "|janz_init GREP success\n", jtfmt(now));
+	if (JANZDBG)
+		pr_info(JTFMT "|janz_init GREP success\n", jtfmt(now));
 	return (0);
 
  init_fail:
@@ -1435,7 +1436,7 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 	cb = get_cb(cx, q);
 	cb->drop = 1;
 	janz_record_packet(sch, q, skb, cx, cb, now, 0, 0, 2);
-	if (JANZDBG || 1)
+	if (JANZDBG)
 		pr_info(JTFMT "|dropping skb %08lX from UE #%u for %s\n",
 		    jtfmt(now), (unsigned long)skb, ue, why);
 	if (to_free)
@@ -1450,7 +1451,7 @@ static struct sk_buff *
 janz_deq_noinline(struct Qdisc *sch)
 {
 	struct sk_buff *skb;
-#ifdef JANZ_DEV_DEBUG
+#if JANZDBG
 	struct jensvq_qd * const q = qdisc_priv(sch);
 	u64 now = ktime_get_ns();
 
@@ -1460,7 +1461,7 @@ janz_deq_noinline(struct Qdisc *sch)
 	}
 #endif
 	skb = janz_deq(sch);
-#ifdef JANZ_DEV_DEBUG
+#if JANZDBG
 	if (JANZDBG && skb) {
 		struct janz_skb *cx = get_cx(skb);
 		struct janz_cb *cb = get_cb(cx, q);
@@ -1573,7 +1574,7 @@ janz_deq(struct Qdisc *sch)
 			if (JANZDBG) {
 				if (mnextns <= now)
 					pr_info(JTFMT "|GREP mnext < now\n", jtfmt(now));
-#ifdef JANZ_DEV_DEBUG
+#if JANZDBG
 				q->dbg_mnext = 1;
 #endif
 			} else if (JANZCHK && (mnextns <= now))
@@ -1656,10 +1657,12 @@ janz_deq(struct Qdisc *sch)
 	}
 	if (now >= q->ue[ue].drop_next) {
 		bool diddrop = false;
-
+#if JANZDBG
 		u64 age = now - get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive;
+
 		pr_info(JTFMT "|dropcheck UE#%u (%llu.%03u ms)\n", jtfmt(now),
 		    ue, age / 1000000ULL, (unsigned)(age % 1000000ULL));
+#endif
 
 		/* drop one packet if one or more are older than 100 ms */
 		if (get_cb(get_cx(q->ue[ue].q.first), q)->ts_arrive <

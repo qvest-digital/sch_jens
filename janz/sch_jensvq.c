@@ -849,8 +849,8 @@ janz_ctlfile_write(struct file *filp, const char __user *buf,
 			q->latchdata[j].ue[i].vrate = data.ue[i].vq_bps;
 			q->latchdata[j].ue[i].rrate = data.ue[i].rq_bps;
 			if (!data.ue[i].rq_bps &&
-			    (data.ue[i].rq_bps > q->latchdata[j].ue[i].hover))
-				q->latchdata[j].ue[i].hover = data.ue[i].rq_bps;
+			    (data.ue[i].vq_bps > q->latchdata[j].ue[i].hover))
+				q->latchdata[j].ue[i].hover = data.ue[i].vq_bps;
 		}
 	}
 
@@ -1538,6 +1538,7 @@ janz_deq(struct Qdisc *sch)
 	lue = jensvq_readlatch(q, ue);
 	if (now < lue.hover) {
 		q->ue[ue].rq_notbefore = lue.hover;
+		q->ue[ue].crediting = 0;
 		janz_record_handover(sch, q, now, lue.hover, ue);
 		goto triggered_handover;
 	}

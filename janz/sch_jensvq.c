@@ -1402,8 +1402,6 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 		pr_info(JTFMT "|dropping skb %08lX from UE #%u for %s\n",
 		    jtfmt(now), (unsigned long)skb, ue, why);
 	kfree_skb(skb);
-	/* ensure the next record orders totally past this one */
-	q->ue[ue].crediting = 0;
 	cb->next = q->cb_free;
 	q->cb_free = cb;
 }

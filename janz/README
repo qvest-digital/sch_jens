@@ -279,6 +279,8 @@ Meaning of the fields:
 **) mind that vts can be set by root or backdated while hts is not;
     vts must be used to graph when traffic was sent, not hts⚠
 
+    ⚠ vts may be unordered
+
 Note upkts/ubytes encompass both packets from the FIFO as well as
 packets held for retransmission or behind a retransmission, i.e. it
 does not correspond to a KPI from RAN.

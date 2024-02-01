@@ -51,6 +51,22 @@
 #define jtfmt(x) (unsigned long)((u64)(x) / 1000000000UL), \
 		 (unsigned int)(((u64)(x) % 1000000000UL) / 1000U)
 
+#if 0
+#define checked_dec(var) do {						\
+	--(var);							\
+} while (/* CONSTCOND */ 0)
+#else
+#define checked_dec(var) do {						\
+	if (unlikely(!(var))) {						\
+		pr_err("trying to decrease %s from 0 in %s:%d\n",	\
+		    mbccS(var), __FILE__, __LINE__);			\
+		dump_stack();						\
+		break;							\
+	}								\
+	--(var);							\
+} while (/* CONSTCOND */ 0)
+#endif
+
 struct janz_fragcomp {
 	struct in6_addr sip;			//@0    :16
 	struct in6_addr dip;			//@16   :16
@@ -1390,8 +1406,8 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 		q->ue[ue].q.last = NULL;
 	rpktlen = qdisc_pkt_len(skb);
 	q->ue[ue].pktlensum -= vpktlen(rpktlen);
-	--q->ue[ue].pktnum;
-	--sch->q.qlen;
+	checked_dec(q->ue[ue].pktnum);
+	checked_dec(sch->q.qlen);
 	qdisc_qstats_backlog_dec(sch, skb);
 
 	cx = get_cx(skb);
@@ -1473,8 +1489,8 @@ janz_deq(struct Qdisc *sch)
 			q->byp.last = NULL;
 		rpktlen = qdisc_pkt_len(skb);
 		q->byplensum -= vpktlen(rpktlen);
-		--q->bypnum;
-		--sch->q.qlen;
+		checked_dec(q->bypnum);
+		checked_dec(sch->q.qlen);
 		qdisc_qstats_backlog_dec(sch, skb);
 		qdisc_bstats_update(sch, skb);
 		janz_record_packet(sch, q, skb, cx, cb, now, 0, 0, 3);
@@ -1500,8 +1516,8 @@ janz_deq(struct Qdisc *sch)
 				q->ue[ue].rexmits.last = NULL;
 			rpktlen = qdisc_pkt_len(skb);
 			q->ue[ue].pktlensum -= vpktlen(rpktlen);
-			--q->ue[ue].pktnum;
-			--sch->q.qlen;
+			checked_dec(q->ue[ue].pktnum);
+			checked_dec(sch->q.qlen);
 			qdisc_qstats_backlog_dec(sch, skb);
 			/* no qdisc_bstats_update here! */
 			/* also no janz_record_packet */
@@ -1584,8 +1600,8 @@ janz_deq(struct Qdisc *sch)
 			if (!(q->ue[ue].rexmits.first = skb->next))
 				q->ue[ue].rexmits.last = NULL;
 			q->ue[ue].pktlensum -= vpktlen(rpktlen);
-			--q->ue[ue].pktnum;
-			--sch->q.qlen;
+			checked_dec(q->ue[ue].pktnum);
+			checked_dec(sch->q.qlen);
 			qdisc_qstats_backlog_dec(sch, skb);
 			/* and off */
 			q->uecur = (ue + 1U) % JENSVQ_NUE;
@@ -1648,8 +1664,8 @@ janz_deq(struct Qdisc *sch)
 		q->ue[ue].q.last = NULL;
 	rpktlen = qdisc_pkt_len(skb);
 	q->ue[ue].pktlensum -= vpktlen(rpktlen);
-	--q->ue[ue].pktnum;
-	--sch->q.qlen;
+	checked_dec(q->ue[ue].pktnum);
+	checked_dec(sch->q.qlen);
 	qdisc_qstats_backlog_dec(sch, skb);
 	qdisc_bstats_update(sch, skb);
 

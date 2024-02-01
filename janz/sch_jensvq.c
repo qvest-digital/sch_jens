@@ -1524,7 +1524,7 @@ janz_deq(struct Qdisc *sch)
 			goto find_ue_to_send;
 		/* tried every UE */
 		if (mnextns != (u64)~(u64)0) {
-			if (JANZDBG) {
+			if (JANZDBG || 1) {
 				if (mnextns <= now)
 					pr_info(JTFMT "|GREP mnext < now\n", jtfmt(now));
 #ifdef JANZ_DEV_DEBUG

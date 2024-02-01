@@ -9,7 +9,7 @@
  */
 
 #undef JANZ_IP_DECODER_DEBUG
-#define JANZ_DEV_DEBUG
+#undef JANZ_DEV_DEBUG
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -861,12 +861,12 @@ static int
 janz_enq_noinline(struct sk_buff *skb, struct Qdisc *sch, struct sk_buff **to_free)
 {
 	int rv;
-#ifdef JANZ_DEV_DEBUG
-	u64 now = ktime_get_ns();
-#endif
+	u64 now;
 
-	if (JANZDBG)
+	if (JANZDBG) {
+		now = ktime_get_ns();
 		pr_info(JTFMT "|janz_enq entering\n", jtfmt(now));
+	}
 	rv = janz_enq(skb, sch, to_free);
 	if (JANZDBG)
 		pr_info(JTFMT "|janz_enq leaving, %s\n", jtfmt(now),
@@ -1415,13 +1415,14 @@ janz_deq_noinline(struct Qdisc *sch)
 #ifdef JANZ_DEV_DEBUG
 	struct jensvq_qd * const q = qdisc_priv(sch);
 	u64 now = ktime_get_ns();
-#endif
 
 	if (JANZDBG) {
 		pr_info(JTFMT "|janz_deq entering\n", jtfmt(now));
 		q->dbg_mnext = 0;
 	}
+#endif
 	skb = janz_deq(sch);
+#ifdef JANZ_DEV_DEBUG
 	if (JANZDBG && skb) {
 		struct janz_skb *cx = get_cx(skb);
 		struct janz_cb *cb = get_cb(cx, q);
@@ -1444,6 +1445,7 @@ janz_deq_noinline(struct Qdisc *sch)
 			}
 		pr_info(JTFMT "|janz_deq leaving, skb=nil, %s\n", jtfmt(now), res);
 	}
+#endif
 	return (skb);
 }
 
@@ -1527,7 +1529,9 @@ janz_deq(struct Qdisc *sch)
 			if (JANZDBG) {
 				if (mnextns <= now)
 					pr_info(JTFMT "|GREP mnext < now\n", jtfmt(now));
+#ifdef JANZ_DEV_DEBUG
 				q->dbg_mnext = 1;
+#endif
 			}
 			qdisc_watchdog_schedule_ns(&q->watchdog, mnextns);
 		}

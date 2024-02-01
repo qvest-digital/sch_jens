@@ -10,6 +10,7 @@
 
 #undef JANZ_IP_DECODER_DEBUG
 #undef JANZ_DEV_DEBUG
+#define JANZ_CAREFUL_CHECKS
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -51,11 +52,13 @@
 #define jtfmt(x) (unsigned long)((u64)(x) / 1000000000UL), \
 		 (unsigned int)(((u64)(x) % 1000000000UL) / 1000U)
 
-#if 0
-#define checked_dec(var) do {						\
-	--(var);							\
-} while (/* CONSTCOND */ 0)
+#ifdef JANZ_CAREFUL_CHECKS
+#define JANZCHK 1
 #else
+#define JANZCHK 0
+#endif
+
+#if JANZCHK
 #define checked_dec(var) do {						\
 	if (unlikely(!(var))) {						\
 		pr_err("trying to decrease %s from 0 in %s:%d\n",	\
@@ -63,6 +66,10 @@
 		dump_stack();						\
 		break;							\
 	}								\
+	--(var);							\
+} while (/* CONSTCOND */ 0)
+#else
+#define checked_dec(var) do {						\
 	--(var);							\
 } while (/* CONSTCOND */ 0)
 #endif
@@ -1402,6 +1409,7 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 	struct janz_cb *cb;
 	unsigned int rpktlen;
 
+#if JANZCHK
 	/* for some reason, despite caller ensuring presence… */
 	if (!sch->q.qlen || !q->ue[ue].pktnum || !q->ue[ue].q.first || !q->ue[ue].q.last) {
 		pr_err("janz_drop1(%s): qlen=%u pktnum=%u first=%08lX last=%08lX UE#%u\n",
@@ -1410,6 +1418,7 @@ janz_drop1(struct Qdisc *sch, struct jensvq_qd *q,
 		    (unsigned long)q->ue[ue].q.last, ue);
 		return;
 	}
+#endif
 
 	/* caller must ensure presence */
 	skb = q->ue[ue].q.first;
@@ -1567,7 +1576,7 @@ janz_deq(struct Qdisc *sch)
 #ifdef JANZ_DEV_DEBUG
 				q->dbg_mnext = 1;
 #endif
-			} else if (1 && (mnextns <= now))
+			} else if (JANZCHK && (mnextns <= now))
 				pr_info(JTFMT "|GREP mnext " JTFMT "  < now\n",
 				    jtfmt(now), jtfmt(mnextns));
 			qdisc_watchdog_schedule_ns(&q->watchdog, mnextns);

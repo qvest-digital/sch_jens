@@ -40,7 +40,7 @@
 #include "../janz/janz_uapi.h"
 
 /* factor to apply */
-#define FACTOR (1.5)
+#define RQ(vq) ((vq) * (1.5 + (0.75 - 5E-08 * (vq))))
 
 static volatile sig_atomic_t do_exit = 0;
 
@@ -102,7 +102,7 @@ main(int argc, char *argv[])
 
 	for (ue = 0; ue < JENSVQ_NUE; ++ue) {
 		pkt.ue[ue].vq_bps = bits_per_second;
-		pkt.ue[ue].rq_bps = (long double)bits_per_second * FACTOR;
+		pkt.ue[ue].rq_bps = RQ((long double)bits_per_second);
 	}
 
 	errno = 0;
@@ -119,7 +119,7 @@ main(int argc, char *argv[])
 		++ts.tv_sec;
 		printf("I: rate is now %06.3f Mbit/s (%06.3f real)\n",
 		    (double)bits_per_second / 1000000.,
-		    (double)((long double)bits_per_second * FACTOR / 1000000.));
+		    (double)(RQ((long double)bits_per_second) / 1000000.));
 	}
 	errno = ENOSYS;
 	while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, NULL)) {
@@ -134,8 +134,9 @@ main(int argc, char *argv[])
 		bits_per_second -= 9000;
 		/* minimum 5 Mbit/s */
 		if (bits_per_second < 5000000ULL) {
-			printf("I: rate is now %06.3f Mbit/s\n",
-			    (double)bits_per_second / 1000000.);
+			printf("I: rate is now %06.3f Mbit/s (%06.3f real)\n",
+			    (double)bits_per_second / 1000000.,
+			    (double)(RQ((long double)bits_per_second) / 1000000.));
 			direction = 0;
 		}
 	} else {
@@ -143,8 +144,9 @@ main(int argc, char *argv[])
 		bits_per_second += 9000;
 		/* maximum 15 Mbit/s */
 		if (bits_per_second > 15000000ULL) {
-			printf("I: rate is now %06.3f Mbit/s\n",
-			    (double)bits_per_second / 1000000.);
+			printf("I: rate is now %06.3f Mbit/s (%06.3f real)\n",
+			    (double)bits_per_second / 1000000.,
+			    (double)(RQ((long double)bits_per_second) / 1000000.));
 			direction = 1;
 		}
 	}
